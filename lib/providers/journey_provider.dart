@@ -3,31 +3,36 @@ import '../models/journey.dart';
 import '../services/database_helper.dart';
 
 class JourneyProvider with ChangeNotifier {
+  final DatabaseHelper _databaseHelper = DatabaseHelper.instance;
   List<Journey> _journeys = [];
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
 
   List<Journey> get journeys => _journeys;
 
   Future<void> loadJourneys() async {
-    _journeys = await _dbHelper.readAllJourneys();
+    _journeys = await _databaseHelper.readAllJourneys();
     notifyListeners();
   }
 
   Future<void> addJourney(Journey journey) async {
-    await _dbHelper.create(journey);
-    _journeys = await _dbHelper.readAllJourneys();
-    notifyListeners();
+    // Create the journey in the database
+    await _databaseHelper.createJourney(journey);
+    
+    // Reload all journeys to get the updated list
+    await loadJourneys();
   }
 
-  Future<void> updateJourney(Journey updatedJourney) async {
-    await _dbHelper.update(updatedJourney);
-    _journeys = await _dbHelper.readAllJourneys();
-    notifyListeners();
+  Future<void> updateJourney(Journey journey) async {
+    await _databaseHelper.updateJourney(journey);
+    final index = _journeys.indexWhere((j) => j.id == journey.id);
+    if (index != -1) {
+      _journeys[index] = journey;
+      notifyListeners();
+    }
   }
 
   Future<void> deleteJourney(String id) async {
-    await _dbHelper.delete(id);
-    _journeys = await _dbHelper.readAllJourneys();
+    await _databaseHelper.deleteJourney(id);
+    _journeys.removeWhere((journey) => journey.id == id);
     notifyListeners();
   }
 } 
