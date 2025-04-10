@@ -1,30 +1,30 @@
 import 'package:flutter/foundation.dart';
 import '../models/user.dart';
+import '../services/database_helper.dart';
 
 class UserProvider with ChangeNotifier {
-  final List<User> _users = [];
+  final DatabaseHelper _dbHelper = DatabaseHelper();
+  List<User> _users = [];
+
   List<User> get users => _users;
 
-  void addUser(User user) {
-    _users.add(user);
+  Future<void> loadUsers() async {
+    _users = await _dbHelper.readAllUsers();
     notifyListeners();
   }
 
-  void removeUser(String userId) {
-    _users.removeWhere((user) => user.id == userId);
-    notifyListeners();
+  Future<void> createUser(User user) async {
+    await _dbHelper.createUser(user);
+    await loadUsers();
   }
 
-  void updateUser(User updatedUser) {
-    final index = _users.indexWhere((user) => user.id == updatedUser.id);
-    if (index != -1) {
-      _users[index] = updatedUser;
-      notifyListeners();
-    }
+  Future<void> updateUser(User user) async {
+    await _dbHelper.updateUser(user);
+    await loadUsers();
   }
 
-  void clearUsers() {
-    _users.clear();
-    notifyListeners();
+  Future<void> deleteUser(String id) async {
+    await _dbHelper.deleteUser(id);
+    await loadUsers();
   }
 } 

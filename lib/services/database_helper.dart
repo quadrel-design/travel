@@ -5,10 +5,12 @@ import '../models/expense.dart';
 import '../models/user.dart';
 
 class DatabaseHelper {
-  static final DatabaseHelper instance = DatabaseHelper._init();
+  static final DatabaseHelper _instance = DatabaseHelper._internal();
   static Database? _database;
 
-  DatabaseHelper._init();
+  factory DatabaseHelper() => _instance;
+
+  DatabaseHelper._internal();
 
   Future<Database> get database async {
     if (_database != null) return _database!;
@@ -177,29 +179,27 @@ class DatabaseHelper {
 
   // Journey operations
   Future<Journey> createJourney(Journey journey) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
-      await db.transaction((txn) async {
-        // Insert journey
-        await txn.insert('journeys', {
-          'id': journey.id,
-          'title': journey.title,
-          'description': journey.description,
-          'start_date': journey.startDate.toIso8601String(),
-          'end_date': journey.endDate.toIso8601String(),
-        });
-        
-        // Insert users and journey_users relationships
-        for (final user in journey.users) {
-          await txn.insert('users', user.toJson(),
-              conflictAlgorithm: ConflictAlgorithm.ignore);
-          await txn.insert('journey_users', {
-            'journey_id': journey.id,
-            'user_id': user.id,
-          });
-        }
+      // Insert journey
+      await db.insert('journeys', {
+        'id': journey.id,
+        'title': journey.title,
+        'description': journey.description,
+        'start_date': journey.startDate.toIso8601String(),
+        'end_date': journey.endDate.toIso8601String(),
       });
+      
+      // Insert users and journey_users relationships
+      for (final user in journey.users) {
+        await db.insert('users', user.toJson(),
+            conflictAlgorithm: ConflictAlgorithm.ignore);
+        await db.insert('journey_users', {
+          'journey_id': journey.id,
+          'user_id': user.id,
+        });
+      }
       
       return journey;
     } catch (e) {
@@ -209,7 +209,7 @@ class DatabaseHelper {
   }
 
   Future<List<Journey>> readAllJourneys() async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       final journeys = await db.query('journeys');
@@ -234,7 +234,7 @@ class DatabaseHelper {
   }
 
   Future<Journey?> readJourney(String id) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       final journeys = await db.query(
@@ -264,7 +264,7 @@ class DatabaseHelper {
   }
 
   Future<int> updateJourney(Journey journey) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       return await db.transaction((txn) async {
@@ -306,7 +306,7 @@ class DatabaseHelper {
   }
 
   Future<int> deleteJourney(String id) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       return await db.delete(
@@ -322,7 +322,7 @@ class DatabaseHelper {
 
   // Expense operations
   Future<Expense> createExpense(Expense expense) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       await db.insert('expenses', expense.toMap());
@@ -334,7 +334,7 @@ class DatabaseHelper {
   }
 
   Future<List<Expense>> readExpensesForJourney(String journeyId) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       final result = await db.query(
@@ -351,7 +351,7 @@ class DatabaseHelper {
   }
 
   Future<Expense?> readExpense(String id) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       final maps = await db.query(
@@ -369,7 +369,7 @@ class DatabaseHelper {
   }
 
   Future<int> updateExpense(Expense expense) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       return await db.update(
@@ -385,7 +385,7 @@ class DatabaseHelper {
   }
 
   Future<int> deleteExpense(String id) async {
-    final db = await instance.database;
+    final db = await database;
     
     try {
       return await db.delete(
@@ -395,6 +395,62 @@ class DatabaseHelper {
       );
     } catch (e) {
       print('Error deleting expense: $e');
+      rethrow;
+    }
+  }
+
+  // User operations
+  Future<List<User>> readAllUsers() async {
+    final db = await database;
+    
+    try {
+      final result = await db.query('users');
+      return result.map((json) => User.fromJson(json)).toList();
+    } catch (e) {
+      print('Error reading users: $e');
+      rethrow;
+    }
+  }
+
+  Future<User> createUser(User user) async {
+    final db = await database;
+    
+    try {
+      await db.insert('users', user.toJson());
+      return user;
+    } catch (e) {
+      print('Error creating user: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> updateUser(User user) async {
+    final db = await database;
+    
+    try {
+      return await db.update(
+        'users',
+        user.toJson(),
+        where: 'id = ?',
+        whereArgs: [user.id],
+      );
+    } catch (e) {
+      print('Error updating user: $e');
+      rethrow;
+    }
+  }
+
+  Future<int> deleteUser(String id) async {
+    final db = await database;
+    
+    try {
+      return await db.delete(
+        'users',
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    } catch (e) {
+      print('Error deleting user: $e');
       rethrow;
     }
   }

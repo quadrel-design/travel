@@ -3,16 +3,16 @@ import '../models/expense.dart';
 import '../services/database_helper.dart';
 
 class ExpenseProvider with ChangeNotifier {
-  final DatabaseHelper _dbHelper = DatabaseHelper.instance;
+  final DatabaseHelper _dbHelper = DatabaseHelper();
   List<Expense> _expenses = [];
-  double _totalExpenses = 0.0;
+  double _totalExpenses = 0;
 
   List<Expense> get expenses => _expenses;
   double get totalExpenses => _totalExpenses;
 
   Future<void> loadExpensesForJourney(String journeyId) async {
     _expenses = await _dbHelper.readExpensesForJourney(journeyId);
-    _totalExpenses = await _dbHelper.getTotalExpensesForJourney(journeyId);
+    _calculateTotalExpenses();
     notifyListeners();
   }
 
@@ -29,5 +29,9 @@ class ExpenseProvider with ChangeNotifier {
   Future<void> deleteExpense(String id, String journeyId) async {
     await _dbHelper.deleteExpense(id);
     await loadExpensesForJourney(journeyId);
+  }
+
+  void _calculateTotalExpenses() {
+    _totalExpenses = _expenses.fold(0, (sum, expense) => sum + expense.amount);
   }
 } 

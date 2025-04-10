@@ -1,9 +1,12 @@
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 import '../models/journey.dart';
+import '../models/user.dart';
 import '../providers/journey_provider.dart';
+import '../providers/user_provider.dart';
 
-class JourneySettingsScreen extends StatelessWidget {
+class JourneySettingsScreen extends StatefulWidget {
   final Journey journey;
 
   const JourneySettingsScreen({
@@ -11,28 +14,182 @@ class JourneySettingsScreen extends StatelessWidget {
     required this.journey,
   }) : super(key: key);
 
+  @override
+  State<JourneySettingsScreen> createState() => _JourneySettingsScreenState();
+}
+
+class _JourneySettingsScreenState extends State<JourneySettingsScreen> {
   void _showDeleteConfirmation(BuildContext context) {
-    showCupertinoDialog(
+    showDialog(
       context: context,
-      builder: (context) => CupertinoAlertDialog(
+      builder: (context) => AlertDialog(
         title: const Text('Delete Journey'),
         content: Text(
-          'Are you sure you want to delete "${journey.title}"? This will also delete all associated expenses and cannot be undone.',
+          'Are you sure you want to delete "${widget.journey.title}"? This will also delete all associated expenses and cannot be undone.',
         ),
         actions: [
-          CupertinoDialogAction(
+          TextButton(
             onPressed: () => Navigator.pop(context),
             child: const Text('Cancel'),
           ),
-          CupertinoDialogAction(
-            isDestructiveAction: true,
+          TextButton(
             onPressed: () {
-              context.read<JourneyProvider>().deleteJourney(journey.id);
+              context.read<JourneyProvider>().deleteJourney(widget.journey.id);
               Navigator.pop(context); // Close dialog
               Navigator.pop(context); // Close settings
               Navigator.pop(context); // Return to journey list
             },
-            child: const Text('Delete'),
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddParticipantDialog(BuildContext context) {
+    final userProvider = context.read<UserProvider>();
+    final journeyProvider = context.read<JourneyProvider>();
+    
+    final availableUsers = userProvider.users
+        .where((user) => !widget.journey.users.any((jUser) => jUser.id == user.id))
+        .toList();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Participant'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (availableUsers.isNotEmpty) ...[
+              const Text('Select from existing users:'),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: availableUsers.length,
+                  itemBuilder: (context, index) {
+                    final user = availableUsers[index];
+                    return ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.person),
+                      ),
+                      title: Text(user.name),
+                      subtitle: Text(user.email),
+                      onTap: () {
+                        final updatedJourney = widget.journey.copyWith(
+                          users: [...widget.journey.users, user],
+                        );
+                        journeyProvider.updateJourney(updatedJourney);
+                        Navigator.pop(context);
+                      },
+                    );
+                  },
+                ),
+              ),
+              const Divider(),
+            ],
+            ListTile(
+              leading: const Icon(Icons.link),
+              title: const Text('Create Invitation Link'),
+              subtitle: const Text('Share this link to invite others'),
+              onTap: () {
+                Navigator.pop(context);
+                _createAndShareInvitationLink();
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _createAndShareInvitationLink() {
+    // Generate a unique invitation code for this journey
+    final invitationCode = '${widget.journey.id}-${DateTime.now().millisecondsSinceEpoch}';
+    final invitationLink = 'travelapp://join/${widget.journey.id}?code=$invitationCode';
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Invitation Link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Share this link to invite others to join your journey:'),
+            const SizedBox(height: 16),
+            SelectableText(
+              invitationLink,
+              style: const TextStyle(fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'When someone clicks this link, they will be able to join your journey.',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              try {
+                await Share.share(
+                  'Join my journey "${widget.journey.title}"!\n\nClick this link to join: $invitationLink',
+                  subject: 'Join my journey: ${widget.journey.title}',
+                );
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to share the invitation link'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Share'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _removeParticipant(BuildContext context, User user) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove Participant'),
+        content: Text('Are you sure you want to remove ${user.name} from this journey?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final updatedJourney = widget.journey.copyWith(
+                users: widget.journey.users.where((u) => u.id != user.id).toList(),
+              );
+              context.read<JourneyProvider>().updateJourney(updatedJourney);
+              Navigator.pop(context);
+            },
+            child: const Text('Remove'),
           ),
         ],
       ),
@@ -41,122 +198,72 @@ class JourneySettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Journey Settings'),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Journey Settings'),
       ),
-      child: SafeArea(
-        child: ListView(
-          children: [
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: CupertinoColors.systemGrey5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Journey Details',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: CupertinoColors.label.resolveFrom(context),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  _buildDetailRow('Title', journey.title),
-                  _buildDetailRow(
-                    'Duration',
-                    '${journey.startDate.toString().split(' ')[0]} - ${journey.endDate.toString().split(' ')[0]}',
-                  ),
-                  _buildDetailRow(
-                    'Participants',
-                    journey.users.isEmpty
-                        ? 'No participants yet'
-                        : '${journey.users.length} participants',
-                  ),
-                ],
-              ),
+      body: ListView(
+        children: [
+          // Participants section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Participants',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                TextButton.icon(
+                  onPressed: () => _showAddParticipantDialog(context),
+                  icon: const Icon(Icons.person_add),
+                  label: const Text('Add Participant'),
+                ),
+              ],
             ),
-            const SizedBox(height: 20),
-            Container(
-              padding: const EdgeInsets.all(16),
-              margin: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: CupertinoColors.systemBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: CupertinoColors.systemGrey5),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Participants',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: CupertinoColors.label.resolveFrom(context),
+          ),
+          Consumer<JourneyProvider>(
+            builder: (context, journeyProvider, child) {
+              final updatedJourney = journeyProvider.journeys
+                  .firstWhere((j) => j.id == widget.journey.id, orElse: () => widget.journey);
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: updatedJourney.users.length,
+                itemBuilder: (context, index) {
+                  final user = updatedJourney.users[index];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    child: ListTile(
+                      leading: const CircleAvatar(
+                        child: Icon(Icons.person),
+                      ),
+                      title: Text(user.name),
+                      subtitle: Text(user.email),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.remove_circle_outline),
+                        onPressed: () => _removeParticipant(context, user),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  if (journey.users.isEmpty)
-                    const Text(
-                      'No participants added yet',
-                      style: TextStyle(color: CupertinoColors.systemGrey),
-                    )
-                  else
-                    ...journey.users.map((user) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Row(
-                            children: [
-                              Text(user.name),
-                              const Spacer(),
-                              Text(
-                                user.email,
-                                style: const TextStyle(
-                                  color: CupertinoColors.systemGrey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        )),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-            CupertinoButton(
+                  );
+                },
+              );
+            },
+          ),
+          const Divider(),
+          // Delete journey section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextButton(
               onPressed: () => _showDeleteConfirmation(context),
               child: const Text(
                 'Delete Journey',
                 style: TextStyle(
-                  color: CupertinoColors.destructiveRed,
+                  color: Colors.red,
                 ),
               ),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: CupertinoColors.systemGrey,
-            ),
           ),
-          Text(value),
         ],
       ),
     );

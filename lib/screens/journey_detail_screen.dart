@@ -1,10 +1,13 @@
-import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/journey.dart';
 import '../models/expense.dart';
 import '../providers/expense_provider.dart';
 import 'package:intl/intl.dart';
 import 'journey_settings_screen.dart';
+import '../models/user.dart';
+import '../providers/journey_provider.dart';
+import '../providers/user_provider.dart';
 
 class JourneyDetailScreen extends StatefulWidget {
   final Journey journey;
@@ -39,155 +42,128 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
   }
 
   void _showAddExpenseModal() {
-    showCupertinoModalPopup(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => CupertinoActionSheet(
-        title: const Text('Add New Expense'),
-        message: const Text('Enter the expense details'),
-        actions: [
-          CupertinoActionSheetAction(
-            onPressed: () {
+      builder: (context) => Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: const Text('Add New Expense'),
+            onTap: () {
               Navigator.pop(context);
               _showExpenseForm();
             },
-            child: const Text('Add Expense'),
           ),
         ],
-        cancelButton: CupertinoActionSheetAction(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
       ),
     );
   }
 
   void _showExpenseForm() {
-    showCupertinoModalPopup(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => CupertinoPageScaffold(
-        navigationBar: const CupertinoNavigationBar(
-          middle: Text('New Expense'),
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              CupertinoTextField(
-                controller: _titleController,
-                placeholder: 'Title',
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoTextField(
-                controller: _descriptionController,
-                placeholder: 'Description',
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoTextField(
-                controller: _amountController,
-                placeholder: 'Amount',
-                keyboardType: TextInputType.number,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoButton(
-                onPressed: () async {
-                  final date = await showCupertinoModalPopup<DateTime>(
-                    context: context,
-                    builder: (context) => Container(
-                      height: 216,
-                      padding: const EdgeInsets.only(top: 6.0),
-                      margin: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).viewInsets.bottom,
-                      ),
-                      color: CupertinoColors.systemBackground.resolveFrom(context),
-                      child: SafeArea(
-                        top: false,
-                        child: CupertinoDatePicker(
-                          initialDateTime: _selectedDate,
-                          mode: CupertinoDatePickerMode.date,
-                          use24hFormat: true,
-                          onDateTimeChanged: (DateTime newDate) {
-                            setState(() => _selectedDate = newDate);
-                          },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: const Text('New Expense'),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _amountController,
+                    decoration: const InputDecoration(labelText: 'Amount'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Date'),
+                    subtitle: Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedDate = date);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Category'),
+                    subtitle: Text(_selectedCategory),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Select Category'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              'Transport',
+                              'Accommodation',
+                              'Food',
+                              'Activities',
+                              'Shopping',
+                              'Other',
+                            ].map((category) => ListTile(
+                              title: Text(category),
+                              onTap: () {
+                                setState(() => _selectedCategory = category);
+                                Navigator.pop(context);
+                              },
+                            )).toList(),
+                          ),
                         ),
-                      ),
-                    ),
-                  );
-                  if (date != null) {
-                    setState(() => _selectedDate = date);
-                  }
-                },
-                child: Text(
-                  'Date: ${DateFormat('MMM d, yyyy').format(_selectedDate)}',
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoButton(
-                onPressed: () {
-                  showCupertinoModalPopup(
-                    context: context,
-                    builder: (context) => CupertinoActionSheet(
-                      title: const Text('Select Category'),
-                      actions: [
-                        'Transport',
-                        'Accommodation',
-                        'Food',
-                        'Activities',
-                        'Shopping',
-                        'Other',
-                      ].map((category) => CupertinoActionSheetAction(
-                        onPressed: () {
-                          setState(() => _selectedCategory = category);
-                          Navigator.pop(context);
-                        },
-                        child: Text(category),
-                      )).toList(),
-                      cancelButton: CupertinoActionSheetAction(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                  );
-                },
-                child: Text('Category: $_selectedCategory'),
-              ),
-              const SizedBox(height: 24),
-              CupertinoButton.filled(
-                onPressed: () {
-                  if (_titleController.text.isNotEmpty &&
-                      _amountController.text.isNotEmpty) {
-                    final expense = Expense(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
-                      journeyId: widget.journey.id!,
-                      title: _titleController.text,
-                      description: _descriptionController.text,
-                      amount: double.parse(_amountController.text),
-                      date: _selectedDate,
-                      category: _selectedCategory,
-                    );
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (_titleController.text.isNotEmpty &&
+                          _amountController.text.isNotEmpty) {
+                        final expense = Expense(
+                          id: DateTime.now().millisecondsSinceEpoch.toString(),
+                          journeyId: widget.journey.id!,
+                          title: _titleController.text,
+                          description: _descriptionController.text,
+                          amount: double.parse(_amountController.text),
+                          date: _selectedDate,
+                          category: _selectedCategory,
+                        );
 
-                    context.read<ExpenseProvider>().addExpense(expense);
-                    Navigator.pop(context);
-                  }
-                },
-                child: const Text('Add Expense'),
+                        context.read<ExpenseProvider>().addExpense(expense);
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: const Text('Add Expense'),
+                  ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -200,150 +176,127 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
     _selectedCategory = expense.category;
     _selectedDate = expense.date;
 
-    showCupertinoModalPopup(
+    showModalBottomSheet(
       context: context,
-      builder: (context) => CupertinoPageScaffold(
-        navigationBar: const CupertinoNavigationBar(
-          middle: Text('Edit Expense'),
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
         ),
-        child: SafeArea(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              CupertinoTextField(
-                controller: _titleController,
-                placeholder: 'Title',
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoTextField(
-                controller: _descriptionController,
-                placeholder: 'Description',
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoTextField(
-                controller: _amountController,
-                placeholder: 'Amount',
-                keyboardType: TextInputType.number,
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: CupertinoColors.systemGrey4),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoButton(
-                onPressed: () async {
-                  final date = await showCupertinoModalPopup<DateTime>(
-                    context: context,
-                    builder: (context) => Container(
-                      height: 216,
-                      padding: const EdgeInsets.only(top: 6.0),
-                      margin: EdgeInsets.only(
-                        bottom: MediaQuery.of(context).viewInsets.bottom,
-                      ),
-                      color: CupertinoColors.systemBackground.resolveFrom(context),
-                      child: SafeArea(
-                        top: false,
-                        child: CupertinoDatePicker(
-                          initialDateTime: _selectedDate,
-                          mode: CupertinoDatePickerMode.date,
-                          use24hFormat: true,
-                          onDateTimeChanged: (DateTime newDate) {
-                            setState(() => _selectedDate = newDate);
-                          },
-                        ),
-                      ),
-                    ),
-                  );
-                  if (date != null) {
-                    setState(() => _selectedDate = date);
-                  }
-                },
-                child: Text(
-                  'Date: ${DateFormat('MMM d, yyyy').format(_selectedDate)}',
-                ),
-              ),
-              const SizedBox(height: 16),
-              CupertinoButton(
-                onPressed: () {
-                  showCupertinoModalPopup(
-                    context: context,
-                    builder: (context) => CupertinoActionSheet(
-                      title: const Text('Select Category'),
-                      actions: [
-                        'Transport',
-                        'Accommodation',
-                        'Food',
-                        'Activities',
-                        'Shopping',
-                        'Other',
-                      ].map((category) => CupertinoActionSheetAction(
-                        onPressed: () {
-                          setState(() => _selectedCategory = category);
-                          Navigator.pop(context);
-                        },
-                        child: Text(category),
-                      )).toList(),
-                      cancelButton: CupertinoActionSheetAction(
-                        onPressed: () => Navigator.pop(context),
-                        child: const Text('Cancel'),
-                      ),
-                    ),
-                  );
-                },
-                child: Text('Category: $_selectedCategory'),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppBar(
+              title: const Text('Edit Expense'),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
                 children: [
-                  CupertinoButton(
-                    onPressed: () {
-                      context.read<ExpenseProvider>().deleteExpense(
-                            expense.id,
-                            expense.journeyId,
-                          );
-                      Navigator.pop(context);
-                    },
-                    child: const Text(
-                      'Delete',
-                      style: TextStyle(color: CupertinoColors.destructiveRed),
-                    ),
+                  TextField(
+                    controller: _titleController,
+                    decoration: const InputDecoration(labelText: 'Title'),
                   ),
-                  CupertinoButton.filled(
-                    onPressed: () {
-                      if (_titleController.text.isNotEmpty &&
-                          _amountController.text.isNotEmpty) {
-                        final updatedExpense = Expense(
-                          id: expense.id,
-                          journeyId: expense.journeyId,
-                          title: _titleController.text,
-                          description: _descriptionController.text,
-                          amount: double.parse(_amountController.text),
-                          date: _selectedDate,
-                          category: _selectedCategory,
-                        );
-
-                        context.read<ExpenseProvider>().updateExpense(updatedExpense);
-                        Navigator.pop(context);
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _descriptionController,
+                    decoration: const InputDecoration(labelText: 'Description'),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _amountController,
+                    decoration: const InputDecoration(labelText: 'Amount'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Date'),
+                    subtitle: Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
+                    onTap: () async {
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: _selectedDate,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (date != null) {
+                        setState(() => _selectedDate = date);
                       }
                     },
-                    child: const Text('Save'),
+                  ),
+                  const SizedBox(height: 16),
+                  ListTile(
+                    title: const Text('Category'),
+                    subtitle: Text(_selectedCategory),
+                    onTap: () {
+                      showDialog(
+                        context: context,
+                        builder: (context) => AlertDialog(
+                          title: const Text('Select Category'),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              'Transport',
+                              'Accommodation',
+                              'Food',
+                              'Activities',
+                              'Shopping',
+                              'Other',
+                            ].map((category) => ListTile(
+                              title: Text(category),
+                              onTap: () {
+                                setState(() => _selectedCategory = category);
+                                Navigator.pop(context);
+                              },
+                            )).toList(),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          context.read<ExpenseProvider>().deleteExpense(
+                                expense.id,
+                                expense.journeyId,
+                              );
+                          Navigator.pop(context);
+                        },
+                        child: const Text(
+                          'Delete',
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                      ElevatedButton(
+                        onPressed: () {
+                          if (_titleController.text.isNotEmpty &&
+                              _amountController.text.isNotEmpty) {
+                            final updatedExpense = Expense(
+                              id: expense.id,
+                              journeyId: expense.journeyId,
+                              title: _titleController.text,
+                              description: _descriptionController.text,
+                              amount: double.parse(_amountController.text),
+                              date: _selectedDate,
+                              category: _selectedCategory,
+                            );
+
+                            context.read<ExpenseProvider>().updateExpense(updatedExpense);
+                            Navigator.pop(context);
+                          }
+                        },
+                        child: const Text('Save'),
+                      ),
+                    ],
                   ),
                 ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -351,114 +304,81 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return CupertinoPageScaffold(
-      navigationBar: CupertinoNavigationBar(
-        middle: Text(widget.journey.title),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  CupertinoPageRoute(
-                    builder: (context) => JourneySettingsScreen(
-                      journey: widget.journey,
-                    ),
-                  ),
-                );
-              },
-              child: const Icon(CupertinoIcons.settings),
-            ),
-            CupertinoButton(
-              padding: EdgeInsets.zero,
-              onPressed: _showAddExpenseModal,
-              child: const Icon(CupertinoIcons.add),
-            ),
-          ],
-        ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.journey.title),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => JourneySettingsScreen(journey: widget.journey),
+                ),
+              );
+            },
+          ),
+        ],
       ),
-      child: SafeArea(
-        child: Consumer<ExpenseProvider>(
-          builder: (context, expenseProvider, child) {
-            return Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: CupertinoColors.systemBackground,
-                    border: Border(
-                      bottom: BorderSide(
-                        color: CupertinoColors.systemGrey4,
-                      ),
-                    ),
+      body: Column(
+        children: [
+          // Journey details section
+          Card(
+            margin: const EdgeInsets.all(16),
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Journey Details',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Total Expenses',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      Text(
-                        '\$${expenseProvider.totalExpenses.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
+                  const SizedBox(height: 16),
+                  _buildDetailRow('Title', widget.journey.title),
+                  _buildDetailRow(
+                    'Duration',
+                    '${_formatDate(widget.journey.startDate)} - ${_formatDate(widget.journey.endDate)}',
                   ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: expenseProvider.expenses.length,
-                    itemBuilder: (context, index) {
-                      final expense = expenseProvider.expenses[index];
-                      return Container(
-                        margin: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: CupertinoColors.systemBackground,
-                          borderRadius: BorderRadius.circular(8),
-                          boxShadow: [
-                            BoxShadow(
-                              color: CupertinoColors.systemGrey4,
-                              blurRadius: 4,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: CupertinoListTile(
-                          title: Text(expense.title),
-                          subtitle: Text(
-                            '${DateFormat('MMM d, yyyy').format(expense.date)} - ${expense.category}',
-                          ),
-                          trailing: Text(
-                            '\$${expense.amount.toStringAsFixed(2)}',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          onTap: () {
-                            _showEditExpenseForm(expense);
-                          },
-                        ),
-                      );
-                    },
+                  _buildDetailRow(
+                    'Description',
+                    widget.journey.description.isEmpty ? 'No description' : widget.journey.description,
                   ),
-                ),
-              ],
-            );
-          },
-        ),
+                  _buildDetailRow(
+                    'Participants',
+                    widget.journey.users.isEmpty
+                        ? 'No participants yet'
+                        : '${widget.journey.users.length} participants',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.grey,
+            ),
+          ),
+          Text(value),
+        ],
+      ),
+    );
+  }
+
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 } 
