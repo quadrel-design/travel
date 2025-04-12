@@ -1,305 +1,73 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../models/journey.dart';
-import '../models/expense.dart';
-import '../providers/expense_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
-import 'journey_settings_screen.dart';
-import '../models/user.dart';
-import '../providers/journey_provider.dart';
-import '../providers/user_provider.dart';
+import '../models/journey.dart';
 
 class JourneyDetailScreen extends StatefulWidget {
   final Journey journey;
 
-  const JourneyDetailScreen({Key? key, required this.journey}) : super(key: key);
+  const JourneyDetailScreen({Key? key, required this.journey})
+      : super(key: key);
 
   @override
   State<JourneyDetailScreen> createState() => _JourneyDetailScreenState();
 }
 
 class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
-  final _titleController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _amountController = TextEditingController();
-  String _selectedCategory = 'Transport';
-  DateTime _selectedDate = DateTime.now();
+  bool _isLoading = false;
+  String? _error;
+  List<String> _images = [];
+  final _dateFormat = DateFormat('MMM d, yyyy');
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<ExpenseProvider>().loadExpensesForJourney(widget.journey.id!);
+    _loadImages();
+  }
+
+  Future<void> _loadImages() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
     });
+
+    try {
+      final response = await Supabase.instance.client
+          .from('journey_images')
+          .select()
+          .eq('journey_id', widget.journey.id);
+
+      setState(() {
+        _images = List<String>.from(
+            response.map((img) => img['image_url'] as String));
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to load images: $e';
+        _isLoading = false;
+      });
+    }
   }
 
-  @override
-  void dispose() {
-    _titleController.dispose();
-    _descriptionController.dispose();
-    _amountController.dispose();
-    super.dispose();
-  }
+  Future<void> _deleteJourney() async {
+    try {
+      await Supabase.instance.client
+          .from('journeys')
+          .delete()
+          .eq('id', widget.journey.id)
+          .eq('user_id', Supabase.instance.client.auth.currentUser!.id);
 
-  void _showAddExpenseModal() {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ListTile(
-            leading: const Icon(Icons.add),
-            title: const Text('Add New Expense'),
-            onTap: () {
-              Navigator.pop(context);
-              _showExpenseForm();
-            },
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showExpenseForm() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: const Text('New Expense'),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(labelText: 'Title'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(labelText: 'Description'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _amountController,
-                    decoration: const InputDecoration(labelText: 'Amount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    title: const Text('Date'),
-                    subtitle: Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (date != null) {
-                        setState(() => _selectedDate = date);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    title: const Text('Category'),
-                    subtitle: Text(_selectedCategory),
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Select Category'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              'Transport',
-                              'Accommodation',
-                              'Food',
-                              'Activities',
-                              'Shopping',
-                              'Other',
-                            ].map((category) => ListTile(
-                              title: Text(category),
-                              onTap: () {
-                                setState(() => _selectedCategory = category);
-                                Navigator.pop(context);
-                              },
-                            )).toList(),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (_titleController.text.isNotEmpty &&
-                          _amountController.text.isNotEmpty) {
-                        final expense = Expense(
-                          id: DateTime.now().millisecondsSinceEpoch.toString(),
-                          journeyId: widget.journey.id!,
-                          title: _titleController.text,
-                          description: _descriptionController.text,
-                          amount: double.parse(_amountController.text),
-                          date: _selectedDate,
-                          category: _selectedCategory,
-                        );
-
-                        context.read<ExpenseProvider>().addExpense(expense);
-                        Navigator.pop(context);
-                      }
-                    },
-                    child: const Text('Add Expense'),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showEditExpenseForm(Expense expense) {
-    _titleController.text = expense.title;
-    _descriptionController.text = expense.description;
-    _amountController.text = expense.amount.toString();
-    _selectedCategory = expense.category;
-    _selectedDate = expense.date;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AppBar(
-              title: const Text('Edit Expense'),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: const InputDecoration(labelText: 'Title'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _descriptionController,
-                    decoration: const InputDecoration(labelText: 'Description'),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _amountController,
-                    decoration: const InputDecoration(labelText: 'Amount'),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    title: const Text('Date'),
-                    subtitle: Text(DateFormat('MMM d, yyyy').format(_selectedDate)),
-                    onTap: () async {
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: _selectedDate,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (date != null) {
-                        setState(() => _selectedDate = date);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  ListTile(
-                    title: const Text('Category'),
-                    subtitle: Text(_selectedCategory),
-                    onTap: () {
-                      showDialog(
-                        context: context,
-                        builder: (context) => AlertDialog(
-                          title: const Text('Select Category'),
-                          content: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              'Transport',
-                              'Accommodation',
-                              'Food',
-                              'Activities',
-                              'Shopping',
-                              'Other',
-                            ].map((category) => ListTile(
-                              title: Text(category),
-                              onTap: () {
-                                setState(() => _selectedCategory = category);
-                                Navigator.pop(context);
-                              },
-                            )).toList(),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      TextButton(
-                        onPressed: () {
-                          context.read<ExpenseProvider>().deleteExpense(
-                                expense.id,
-                                expense.journeyId,
-                              );
-                          Navigator.pop(context);
-                        },
-                        child: const Text(
-                          'Delete',
-                          style: TextStyle(color: Colors.red),
-                        ),
-                      ),
-                      ElevatedButton(
-                        onPressed: () {
-                          if (_titleController.text.isNotEmpty &&
-                              _amountController.text.isNotEmpty) {
-                            final updatedExpense = Expense(
-                              id: expense.id,
-                              journeyId: expense.journeyId,
-                              title: _titleController.text,
-                              description: _descriptionController.text,
-                              amount: double.parse(_amountController.text),
-                              date: _selectedDate,
-                              category: _selectedCategory,
-                            );
-
-                            context.read<ExpenseProvider>().updateExpense(updatedExpense);
-                            Navigator.pop(context);
-                          }
-                        },
-                        child: const Text('Save'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to delete journey: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -309,76 +77,84 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
         title: Text(widget.journey.title),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.edit),
             onPressed: () {
-              Navigator.push(
+              Navigator.pushNamed(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => JourneySettingsScreen(journey: widget.journey),
-                ),
+                '/journey-edit',
+                arguments: widget.journey,
               );
             },
           ),
+          IconButton(
+            icon: const Icon(Icons.delete),
+            onPressed: _deleteJourney,
+          ),
         ],
       ),
-      body: Column(
-        children: [
-          // Journey details section
-          Card(
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
+      body: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (_isLoading)
+              const Center(child: CircularProgressIndicator())
+            else if (_error != null)
+              Center(
+                  child:
+                      Text(_error!, style: const TextStyle(color: Colors.red)))
+            else if (_images.isNotEmpty)
+              SizedBox(
+                height: 200,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _images.length,
+                  itemBuilder: (context, index) {
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Image.network(
+                        _images[index],
+                        fit: BoxFit.cover,
+                        width: 200,
+                      ),
+                    );
+                  },
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Journey Details',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    widget.journey.title,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.journey.description,
+                    style: Theme.of(context).textTheme.bodyLarge,
                   ),
                   const SizedBox(height: 16),
-                  _buildDetailRow('Title', widget.journey.title),
-                  _buildDetailRow(
-                    'Duration',
-                    '${_formatDate(widget.journey.startDate)} - ${_formatDate(widget.journey.endDate)}',
+                  Text(
+                    'Location: ${widget.journey.location}',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  _buildDetailRow(
-                    'Description',
-                    widget.journey.description.isEmpty ? 'No description' : widget.journey.description,
+                  const SizedBox(height: 8),
+                  Text(
+                    'Dates: ${_dateFormat.format(widget.journey.startDate)} - ${_dateFormat.format(widget.journey.endDate)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
-                  _buildDetailRow(
-                    'Participants',
-                    widget.journey.users.isEmpty
-                        ? 'No participants yet'
-                        : '${widget.journey.users.length} participants',
+                  const SizedBox(height: 8),
+                  Text(
+                    'Budget: \$${widget.journey.budget.toStringAsFixed(2)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
                   ),
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.grey,
-            ),
-          ),
-          Text(value),
-        ],
-      ),
-    );
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
-  }
-} 
+}

@@ -1,123 +1,142 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../models/user.dart';
-import '../providers/user_provider.dart';
+// import 'package:provider/provider.dart'; // Remove unused import
+import '../models/user.dart' as app_user;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class UserManagementScreen extends StatelessWidget {
+class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
 
   @override
+  _UserManagementScreenState createState() => _UserManagementScreenState();
+}
+
+class _UserManagementScreenState extends State<UserManagementScreen> {
+  bool _isLoading = true;
+  List<app_user.User> _users = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUsers();
+  }
+
+  Future<void> _fetchUsers() async {
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
+    try {
+      final response = await Supabase.instance.client
+          .from('users') // Assuming your table is named 'users'
+          .select();
+
+      final List<app_user.User> loadedUsers = response
+          .map((data) => app_user.User.fromJson(data))
+          .toList();
+
+      if (mounted) {
+        setState(() {
+          _users = loadedUsers;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load users: $e';
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _deleteUser(String userId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Are you sure?'),
+        content: const Text('Do you want to remove this user?'),
+        actions: <Widget>[
+          TextButton(
+            child: const Text('No'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          TextButton(
+            child: const Text('Yes'),
+            onPressed: () => Navigator.of(ctx).pop(true),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = true;
+      });
+      try {
+        await Supabase.instance.client.from('users').delete().eq('id', userId);
+
+        await _fetchUsers();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete user: $e')),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+        }
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    Widget content = const Center(child: Text('No users found.'));
+
+    if (_isLoading) {
+      content = const Center(child: CircularProgressIndicator());
+    } else if (_error != null) {
+      content = Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+    } else if (_users.isNotEmpty) {
+      content = ListView.builder(
+        itemCount: _users.length,
+        itemBuilder: (ctx, index) {
+          final user = _users[index];
+          return ListTile(
+            leading: CircleAvatar(
+              backgroundImage: user.profileImageUrl != null
+                  ? NetworkImage(user.profileImageUrl!)
+                  : null,
+              child: user.profileImageUrl == null
+                  ? const Icon(Icons.person)
+                  : null,
+            ),
+            title: Text(user.name),
+            subtitle: Text(user.email),
+            trailing: IconButton(
+              icon: const Icon(Icons.delete),
+              color: Theme.of(context).colorScheme.error,
+              onPressed: () => _deleteUser(user.id),
+            ),
+          );
+        },
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('User Management'),
-      ),
-      body: Consumer<UserProvider>(
-        builder: (context, userProvider, child) {
-          return ListView.builder(
-            itemCount: userProvider.users.length,
-            itemBuilder: (context, index) {
-              final user = userProvider.users[index];
-              return ListTile(
-                title: Text(user.name),
-                subtitle: Text(user.email),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit),
-                      onPressed: () => _showUserForm(context, user),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.delete),
-                      onPressed: () => _deleteUser(context, user),
-                    ),
-                  ],
-                ),
-              );
-            },
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showUserForm(context),
-        child: const Icon(Icons.add),
-      ),
-    );
-  }
-
-  void _showUserForm(BuildContext context, [User? user]) {
-    final nameController = TextEditingController(text: user?.name);
-    final emailController = TextEditingController(text: user?.email);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(user == null ? 'Add User' : 'Edit User'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameController,
-              decoration: const InputDecoration(labelText: 'Name'),
-            ),
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
-            ),
-          ],
-        ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              if (nameController.text.isNotEmpty && emailController.text.isNotEmpty) {
-                final newUser = User(
-                  id: user?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-                  name: nameController.text,
-                  email: emailController.text,
-                );
-
-                if (user == null) {
-                  context.read<UserProvider>().addUser(newUser);
-                } else {
-                  context.read<UserProvider>().updateUser(newUser);
-                }
-
-                Navigator.pop(context);
-              }
-            },
-            child: Text(user == null ? 'Add' : 'Update'),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _fetchUsers,
           ),
         ],
       ),
+      body: content,
     );
   }
-
-  void _deleteUser(BuildContext context, User user) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete User'),
-        content: Text('Are you sure you want to delete ${user.name}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              context.read<UserProvider>().deleteUser(user.id);
-              Navigator.pop(context);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-} 
+}

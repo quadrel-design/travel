@@ -14,4 +14,4 @@ class UserSettingsScreen extends StatelessWidget {
       ),
     );
   }
-} 
+}
