@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/journey.dart';
+import 'package:go_router/go_router.dart';
+import 'package:lucide_icons_flutter/lucide_icons.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  final String title;
+  
+  const HomeScreen({Key? key, required this.title}) : super(key: key);
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -63,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _goToCreateJourney() {
-    Navigator.of(context).pushNamed('/create-journey').then((_) {
+    context.push('/create-journey').then((_) {
       _loadJourneys();
     });
   }
@@ -97,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
             child: ListTile(
               title: Text(journey.title),
               subtitle: Text(journey.description),
-              trailing: Text(_dateFormat.format(journey.startDate)),
+              trailing: Text(_dateFormat.format(journey.start_date)),
               onTap: () {
                 Navigator.pushNamed(
                   context,
@@ -117,7 +122,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Journeys'),
+        title: Text(widget.title),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
@@ -127,10 +132,40 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       body: bodyContent,
-      floatingActionButton: FloatingActionButton(
-        onPressed: _goToCreateJourney,
-        tooltip: 'Add Journey',
-        child: const Icon(Icons.add),
+      bottomNavigationBar: BottomAppBar(
+        color: Colors.white,
+        elevation: 0,
+        padding: EdgeInsets.zero,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+             border: Border(
+                top: BorderSide(
+                  color: Colors.grey.shade400,
+                  width: 1.0,
+              ),
+             )
+          ),
+          child: Container(
+            height: kToolbarHeight,
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                ShadButton.ghost(
+                  icon: const Icon(LucideIcons.layoutDashboard, size: 20),
+                  onPressed: () {
+                    context.go('/home');
+                    print('Home button tapped');
+                  },
+                ),
+                ShadButton(
+                  icon: const Icon(LucideIcons.plus, size: 20),
+                  onPressed: _goToCreateJourney,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
