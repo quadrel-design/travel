@@ -3,6 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:go_router/go_router.dart';
+import '../widgets/app_title.dart'; // Import AppTitle
+import '../constants/app_colors.dart'; // Import color constants
+import '../repositories/auth_repository.dart'; // Import repository
+import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import generated class
+import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 
 // Convert to StatefulWidget
 class AuthScreen extends StatefulWidget {
@@ -22,12 +27,18 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isSignUp = false; // Start in Sign In mode
   bool _isLoading = false;
 
+  // Get repository instance (better with DI later)
+  final AuthRepository _authRepository = AuthRepository();
+
   @override
   void initState() {
     super.initState();
-    // Pre-fill will now happen as the initial mode is Sign In
-    _emailController.text = 'chris.wickmann@gmail.com';
-    _passwordController.text = 'Amcath1011!';
+    // Pre-fill for development using .env variables (only in debug mode)
+    if (kDebugMode) {
+      _emailController.text = dotenv.env['DEV_EMAIL'] ?? ''; 
+      _passwordController.text = dotenv.env['DEV_PASSWORD'] ?? '';
+      print('DEBUG: Pre-filled Auth fields.');
+    }
   }
 
   @override
@@ -40,11 +51,12 @@ class _AuthScreenState extends State<AuthScreen> {
   // --- Forgot Password Handler ---
   Future<void> _handleForgotPassword() async {
     final email = _emailController.text.trim();
+    final l10n = AppLocalizations.of(context)!; // Get instance
     if (email.isEmpty) {
       ShadToaster.of(context).show(
         ShadToast.destructive(
-          title: const Text('Missing Information'),
-          description: const Text('Please enter your email address first.'),
+          title: Text(l10n.missingInfoTitle),
+          description: Text(l10n.enterEmailFirstDesc),
         ),
       );
       return;
@@ -53,38 +65,40 @@ class _AuthScreenState extends State<AuthScreen> {
     setState(() { _isLoading = true; });
 
     try {
-      print('[AuthScreen] Sending password reset email to: $email');
-      await Supabase.instance.client.auth.resetPasswordForEmail(
-        email,
-        redirectTo: kIsWeb ? 'http://localhost:3000/update-password' : null,
-      );
+      // Construct redirect URL - ideally base URL from env
+      final redirectUri = kIsWeb ? Uri.parse('http://localhost:3000/update-password') : null;
+      final redirectTo = redirectUri?.toString();
+
+      print('[AuthScreen] Sending password reset email to: $email with redirect: $redirectTo');
+      await _authRepository.resetPasswordForEmail(email, redirectTo: redirectTo);
       print('[AuthScreen] Password reset email request successful.');
       if (mounted) {
         ShadToaster.of(context).show(
-          const ShadToast(
-            title: Text('Check Your Email'),
-            description: Text('Password reset email sent! Please check your inbox.'),
+           ShadToast(
+            title: Text(l10n.passwordResetEmailSentTitle),
+            description: Text(l10n.passwordResetEmailSentDesc),
           ),
         );
       }
     } on AuthException catch (e) {
-       print('[AuthScreen] Password reset failed: ${e.message}');
-       String displayMessage = 'Could not send reset email. Please try again.';
+       print('Error logging out: ${e.message}'); // Log detailed error
+       String localizedTitle = l10n.errorTitle;
+       String localizedDesc = l10n.passwordResetFailedDesc;
        if (mounted) {
           ShadToaster.of(context).show(
             ShadToast.destructive(
-              title: const Text('Error'),
-              description: Text(displayMessage),
+              title: Text(localizedTitle),
+              description: Text(localizedDesc),
             ),
           );
        }
     } catch (e) {
-      print('[AuthScreen] Unexpected error during password reset: $e');
+       print('Unexpected error during password reset: $e'); // Log detailed error
        if (mounted) {
           ShadToaster.of(context).show(
              ShadToast.destructive(
-              title: const Text('Error'),
-              description: const Text('An unexpected error occurred.'),
+              title: Text(l10n.errorTitle),
+              description: Text(l10n.logoutUnexpectedErrorDesc), // Used logout error here, might need specific one
             ),
           );
        }
@@ -100,46 +114,32 @@ class _AuthScreenState extends State<AuthScreen> {
       return; // Errors shown by ShadInputFormField
     }
     
+    final l10n = AppLocalizations.of(context)!; // Get instance
     setState(() { _isLoading = true; });
     FocusScope.of(context).unfocus();
 
     try {
       final email = _emailController.text.trim();
       final password = _passwordController.text.trim();
-      final supabase = Supabase.instance.client;
-
+      
       if (_isSignUp) {
-        // --- REMOVE Pre-Sign Up Check --- 
-        // print('[AuthScreen] Checking if user exists: $email');
-        // try {
-        //    ... (RPC call) ...
-        // } catch (rpcError) {
-        //   ... (RPC error handling) ...
-        //   return; 
-        // }
-        // if (userExists) {
-        //   ... (show existing user toast) ...
-        // } else { 
-        // --- Directly attempt Sign Up --- 
           print('[AuthScreen] Attempting Sign Up for: $email');
-          await supabase.auth.signUp(email: email, password: password);
+          await _authRepository.signUp(email, password);
           print('[AuthScreen] Sign Up call completed.');
           if (mounted) {
              ShadToaster.of(context).show(
-                const ShadToast(
-                  title: Text('Sign Up Successful'),
-                  description: Text('Please check your email to confirm.'),
+                 ShadToast(
+                  title: Text(l10n.signUpSuccessTitle),
+                  description: Text(l10n.signUpSuccessDesc),
                 ),
              );
             _formKey.currentState?.reset();
             _emailController.clear();
             _passwordController.clear();
           }
-        // }
       } else {
-        // --- Sign In Logic --- 
         print('[AuthScreen] Attempting Sign In for: $email');
-        await supabase.auth.signInWithPassword(email: email, password: password);
+        await _authRepository.signInWithPassword(email, password);
         print('[AuthScreen] Sign In call completed WITHOUT throwing.');
         if (mounted) {
           print('[AuthScreen] Sign In Successful, navigating...');
@@ -147,34 +147,30 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       }
     } on AuthException catch (e) {
-      print('[AuthScreen] Caught AuthException: ${e.message}');
-      String displayTitle = 'Authentication Error';
-      String displayMessage = e.message;
-      // --- Add handling for user already exists during sign up --- 
+      print('[AuthScreen] AuthException during submit: ${e.message}'); // Log detailed error
+      String localizedTitle = l10n.authErrorTitle;
+      String localizedDesc = e.message; // Default to raw message
       if (_isSignUp && e.message.toLowerCase().contains('user already registered')) {
-          displayTitle = 'Email Registered';
-          displayMessage = 'This email is already registered. Please sign in instead.';
+          localizedTitle = l10n.emailRegisteredTitle;
+          localizedDesc = l10n.emailRegisteredDesc;
       } else if (!_isSignUp && e.message.toLowerCase().contains('email not confirmed')) {
-        displayMessage = 'Please confirm your email before signing in.';
+        localizedDesc = l10n.emailNotConfirmedDesc;
       } else if (!_isSignUp && e.message.toLowerCase().contains('invalid login credentials')) {
-         displayTitle = 'Sign In Failed';
-         displayMessage = 'Incorrect email or password.';
+         localizedTitle = l10n.signInFailedTitle;
+         localizedDesc = l10n.invalidLoginCredentialsDesc;
       } 
       if (mounted) {
         ShadToaster.of(context).show(
-          ShadToast.destructive(
-            title: Text(displayTitle),
-            description: Text(displayMessage),
-          ),
+          ShadToast.destructive(title: Text(localizedTitle), description: Text(localizedDesc)),
         );
       }
     } catch (e) {
-       print('[AuthScreen] Caught Generic Exception: $e');
+       print('[AuthScreen] Caught Generic Exception during submit: $e'); // Log detailed error
        if (mounted) {
          ShadToaster.of(context).show(
            ShadToast.destructive(
-             title: const Text('Error'),
-             description: const Text('An unexpected error occurred. Please try again.'),
+             title: Text(l10n.errorTitle),
+             description: Text(l10n.unexpectedErrorDesc),
            ),
          );
        }
@@ -187,7 +183,7 @@ class _AuthScreenState extends State<AuthScreen> {
   Widget build(BuildContext context) {
     final errorColor = Theme.of(context).colorScheme.error;
 
-    // Define the switch button widget separately for clarity
+    // Define the switch button widget separately
     final switchAuthModeButton = !_isLoading
         ? ShadButton.link(
             onPressed: () {
@@ -198,94 +194,117 @@ class _AuthScreenState extends State<AuthScreen> {
                 _passwordController.clear();
               });
             },
-            child: Text(
-              _isSignUp
-                  ? 'Already have an account? Sign In'
-                  : 'Don\'t have an account? Sign Up',
+            // Wrap Text with Flexible to encourage wrapping
+            child: Flexible( 
+              child: Text(
+                _isSignUp
+                    ? 'Already have an account? Sign In'
+                    : 'Don\'t have an account? Sign Up',
+                 // softWrap: true, // Should be true by default
+              ),
             ),
           )
         : const SizedBox.shrink();
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TravelMouse'),
+        // Use the reusable AppTitle widget
+        title: const AppTitle(), 
       ),
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20.0),
-          child: Container( // Keep the outer container for styling
-            constraints: const BoxConstraints(minWidth: 400, maxWidth: 600),
-            padding: const EdgeInsets.all(24.0),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade400),
-              // borderRadius: BorderRadius.zero, // Keep sharp corners if desired
-            ),
-            child: Form( // Add Form widget back
-              key: _formKey, // Assign the key
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Replace ShadInput with ShadInputFormField
-                  ShadInputFormField(
-                    id: 'email',
-                    controller: _emailController,
-                    label: const Text('Email'),
-                    placeholder: const Text('Enter your email'), // Optional
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty || !v.contains('@')) {
-                        return 'Please enter a valid email address.';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  // Replace ShadInput with ShadInputFormField
-                  ShadInputFormField(
-                    id: 'password',
-                    controller: _passwordController,
-                    label: const Text('Password'),
-                    placeholder: const Text('Enter your password'), // Optional
-                    obscureText: true,
-                    validator: (v) {
-                      if (v == null || v.trim().length < 6) {
-                        return 'Password must be at least 6 characters long.';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 20), // Space before error/button
-                  // --- Buttons Row (remains the same) ---
-                   if (_isLoading)
-                     const Center(child: CircularProgressIndicator())
-                   else
-                     Padding(
-                        padding: const EdgeInsets.only(top: 8.0), // Add some space above the button row
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center, // Center the buttons horizontally
-                          children: [
-                            // Forgot Password Button (only in Sign In mode)
-                            if (!_isSignUp) ...[
-                              // Replace TextButton with ShadButton.link
-                              ShadButton.link(
-                                onPressed: _handleForgotPassword,
-                                child: const Text('Forgot Password?'),
-                              ),
-                              const SizedBox(width: 24), // Space between buttons
-                            ],
-                            // Replace ElevatedButton with ShadButton
-                            ShadButton(
-                              onPressed: _submit,
-                              child: Text(_isSignUp ? 'Sign Up' : 'Sign In'),
-                            ),
-                          ],
-                        ),
+      // Wrap body with Container for background image
+      body: Container(
+        // Set constraints to fill the screen
+        constraints: const BoxConstraints.expand(),
+        decoration: const BoxDecoration(
+          image: DecorationImage(
+            image: AssetImage('assets/images/travel_wallpaper.png'),
+            fit: BoxFit.cover, // Make image cover the whole area
+          ),
+        ),
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20.0),
+            // Add a semi-transparent overlay container for readability?
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 400, maxWidth: 600),
+              padding: const EdgeInsets.all(24.0),
+              // Add background color to form container for readability
+              decoration: BoxDecoration(
+                color: Colors.white,
+                // Use constant for border color
+                border: Border.all(color: AppColors.borderGrey),
+                borderRadius: BorderRadius.circular(8.0),
+              ),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Replace ShadInput with ShadInputFormField
+                    ShadInputFormField(
+                      id: 'email',
+                      controller: _emailController,
+                      label: const Text('Email'),
+                      placeholder: const Text('Enter your email'), // Optional
+                      keyboardType: TextInputType.emailAddress,
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty || !v.contains('@')) {
+                          return 'Please enter a valid email address.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // Replace ShadInput with ShadInputFormField
+                    ShadInputFormField(
+                      id: 'password',
+                      controller: _passwordController,
+                      label: const Text('Password'),
+                      placeholder: const Text('Enter your password'), // Optional
+                      obscureText: true,
+                      validator: (v) {
+                        if (v == null || v.trim().length < 6) {
+                          return 'Password must be at least 6 characters long.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20), // Space before error/button
+                    
+                    // --- Button Section --- 
+                    if (_isLoading)
+                      const Center(child: CircularProgressIndicator())
+                    else ...[
+                      // Main Action Button (Sign In/Sign Up)
+                      ShadButton(
+                        onPressed: _submit,
+                        child: Text(_isSignUp ? 'Sign Up' : 'Sign In'),
                       ),
-                  const SizedBox(height: 12), // Space before the switch mode button
-                  // --- Switch Mode Button (remains the same) ---
-                  if (!_isLoading) switchAuthModeButton,
-                ],
+                      const SizedBox(height: 12), // Spacing
+                      
+                      // Forgot Password Button (Left Aligned, conditional)
+                      if (!_isSignUp)
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: ShadButton.link(
+                            onPressed: _handleForgotPassword,
+                            child: const Text('Forgot Password?'),
+                            // Optional: Reduce padding for tighter alignment
+                            // padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
+                          ),
+                        ),
+                        // Add spacing only if Forgot Password button was shown
+                      if (!_isSignUp) const SizedBox(height: 8),
+
+                      // Mode Switch Button (Left Aligned, conditional)
+                      Align(
+                         alignment: Alignment.centerLeft,
+                         child: switchAuthModeButton,
+                      ),
+                    ]
+                  ],
+                ),
               ),
             ),
           ),

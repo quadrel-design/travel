@@ -1,7 +1,8 @@
+import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 
 @immutable
-class User {
+class User extends Equatable {
   final String id;
   final String email;
   final String name;
@@ -58,22 +59,11 @@ class User {
   }
 
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is User &&
-        other.id == id &&
-        other.email == email &&
-        other.name == name &&
-        other.profileImageUrl == profileImageUrl &&
-        listEquals(other.journeyIds, journeyIds);
-  }
-
-  @override
-  int get hashCode {
-    return id.hashCode ^
-        email.hashCode ^
-        name.hashCode ^
-        profileImageUrl.hashCode ^
-        journeyIds.hashCode;
-  }
+  List<Object?> get props => [
+        id,
+        email,
+        name,
+        profileImageUrl,
+        journeyIds,
+      ];
 }

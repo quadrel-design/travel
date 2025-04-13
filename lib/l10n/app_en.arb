@@ -1,0 +1,46 @@
+{
+  "@@locale": "en",
+
+  "errorTitle": "Error",
+  "unexpectedErrorDesc": "An unexpected error occurred.",
+
+  "logoutErrorTitle": "Logout Error",
+  "logoutUnexpectedErrorDesc": "An unexpected error occurred during logout.",
+
+  "missingInfoTitle": "Missing Information",
+  "enterEmailFirstDesc": "Please enter your email address first.",
+  "passwordResetEmailSentTitle": "Check Your Email",
+  "passwordResetEmailSentDesc": "Password reset email sent! Please check your inbox.",
+  "passwordResetFailedDesc": "Could not send reset email. Please try again.",
+
+  "authErrorTitle": "Authentication Error",
+  "signInFailedTitle": "Sign In Failed",
+  "emailRegisteredTitle": "Email Registered",
+  "emailRegisteredDesc": "This email is already registered. Please sign in instead.",
+  "emailNotConfirmedDesc": "Please confirm your email before signing in.",
+  "invalidLoginCredentialsDesc": "Incorrect email or password.",
+  
+  "signUpSuccessTitle": "Sign Up Successful",
+  "signUpSuccessDesc": "Please check your email to confirm.",
+  
+  "verificationErrorTitle": "Verification Error",
+  "verificationErrorDesc": "Could not verify email. Please try again.",
+
+  "journeySaveErrorTitle": "Save Error",
+  "journeySaveSuccessTitle": "Journey Saved",
+  "journeySaveSuccessDesc": "Your new journey has been created.",
+  "journeySaveMissingInfoDesc": "Please fill in all fields, including dates.",
+  "journeyDeleteSuccessDesc": "Journey deleted.",
+  "journeyDeleteErrorDesc": "Failed to delete journey: {error}",
+  "@journeyDeleteErrorDesc": {
+      "description": "Error message when deleting journey, includes details",
+      "placeholders": {
+        "error": {
+          "type": "Object"
+        }
+      }
+  },
+  "journeyImageLoadErrorDesc": "Failed to load images",
+
+  "editNotImplementedDesc": "Edit not yet implemented."
+} 

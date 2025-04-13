@@ -7,6 +7,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart'; // For generating IDs
 
 import '../models/journey.dart'; // Import Journey model
+import '../widgets/app_title.dart'; // Import AppTitle
+import '../repositories/journey_repository.dart'; // Import repository
+import '../repositories/auth_repository.dart'; // Import repository
 
 class CreateJourneyScreen extends StatefulWidget {
   const CreateJourneyScreen({super.key});
@@ -26,6 +29,10 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
   DateTime? _startDate;
   DateTime? _endDate;
   bool _isLoading = false;
+
+  // Get repository instances
+  final JourneyRepository _journeyRepository = JourneyRepository();
+  final AuthRepository _authRepository = AuthRepository();
 
   @override
   void dispose() {
@@ -51,7 +58,8 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
 
     setState(() { _isLoading = true; });
 
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    // Get user ID from repository
+    final userId = _authRepository.currentUser?.id;
     if (userId == null) {
       ShadToaster.of(context).show(
          ShadToast.destructive(
@@ -80,7 +88,8 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
     );
 
     try {
-      await Supabase.instance.client.from('journeys').insert(newJourney.toJson());
+      // Use repository method
+      await _journeyRepository.addJourney(newJourney);
       if (mounted) {
          ShadToaster.of(context).show(
            const ShadToast(
@@ -111,7 +120,8 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('TravelMouse'),
+        // Use the reusable AppTitle widget
+        title: const AppTitle(),
         actions: [
           ShadButton.ghost(
             child: const Text('Save'), 

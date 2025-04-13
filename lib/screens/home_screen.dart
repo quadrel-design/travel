@@ -5,6 +5,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import '../models/journey.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
+import '../widgets/app_title.dart';
+import '../repositories/journey_repository.dart';
+import '../repositories/auth_repository.dart';
 
 class HomeScreen extends StatefulWidget {
   final String title;
@@ -19,7 +22,9 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _isLoading = true;
   String? _error;
   List<Journey> _journeys = [];
-  final _dateFormat = DateFormat('MMM d, yyyy');
+  final _dateFormat = DateFormat('dd/MM/yyyy');
+  final JourneyRepository _journeyRepository = JourneyRepository();
+  final AuthRepository _authRepository = AuthRepository();
 
   @override
   void initState() {
@@ -28,39 +33,30 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _loadJourneys() async {
-    if (mounted && !_isLoading) {
-      setState(() {
-        _isLoading = true;
-        _error = null;
-      });
-    }
+    if (!mounted) return;
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     try {
-      final userId = Supabase.instance.client.auth.currentUser?.id;
+      final userId = _authRepository.currentUser?.id;
       if (userId == null) {
         throw Exception('User not logged in');
       }
-
-      final response = await Supabase.instance.client
-          .from('journeys')
-          .select()
-          .eq('user_id', userId)
-          .order('start_date', ascending: false);
-
-      final journeys = response
-          .map((data) => Journey.fromJson(data))
-          .toList();
+      final loadedJourneys = await _journeyRepository.fetchUserJourneys(userId);
 
       if (mounted) {
         setState(() {
-          _journeys = journeys;
+          _journeys = loadedJourneys;
           _isLoading = false;
         });
       }
     } catch (e) {
+      print("Error loading journeys: $e");
       if (mounted) {
         setState(() {
-          _error = 'Failed to load journeys: $e';
+          _error = 'Failed to load journeys';
           _isLoading = false;
         });
       }
@@ -94,26 +90,29 @@ class _HomeScreenState extends State<HomeScreen> {
       bodyContent = const Center(child: Text('No journeys yet! Start by adding one.'));
     } else {
       bodyContent = ListView.builder(
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: _journeys.length,
         itemBuilder: (context, index) {
           final journey = _journeys[index];
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: ListTile(
-              title: Text(journey.title),
-              subtitle: Text(journey.description),
-              trailing: Text(_dateFormat.format(journey.start_date)),
-              onTap: () {
-                Navigator.pushNamed(
-                  context,
-                  '/journey-detail',
-                  arguments: journey,
-                ).then((result) {
-                  if (result == true) {
-                    _loadJourneys();
-                  }
-                });
-              },
+          return GestureDetector(
+            onTap: () {
+              context.push('/journey-detail', extra: journey);
+              print('Navigating to detail for: ${journey.title}');
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: ShadCard(
+                title: Text(journey.title, style: ShadTheme.of(context).textTheme.h4),
+                description: Text(journey.description),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(
+                    'From: ${_dateFormat.format(journey.start_date)}\n'
+                    'To:     ${_dateFormat.format(journey.end_date)}',
+                    style: ShadTheme.of(context).textTheme.muted,
+                  ),
+                ),
+              ),
             ),
           );
         },
@@ -122,51 +121,22 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.title),
+        title: const AppTitle(),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadJourneys,
-            tooltip: 'Refresh Journeys',
+          ShadButton.ghost(
+            icon: const Icon(LucideIcons.circleUserRound, size: 20),
+            onPressed: () {
+              context.push('/app-settings');
+            },
           ),
         ],
       ),
       body: bodyContent,
-      bottomNavigationBar: BottomAppBar(
-        color: Colors.white,
-        elevation: 0,
-        padding: EdgeInsets.zero,
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-             border: Border(
-                top: BorderSide(
-                  color: Colors.grey.shade400,
-                  width: 1.0,
-              ),
-             )
-          ),
-          child: Container(
-            height: kToolbarHeight,
-            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                ShadButton.ghost(
-                  icon: const Icon(LucideIcons.layoutDashboard, size: 20),
-                  onPressed: () {
-                    context.go('/home');
-                    print('Home button tapped');
-                  },
-                ),
-                ShadButton(
-                  icon: const Icon(LucideIcons.plus, size: 20),
-                  onPressed: _goToCreateJourney,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      floatingActionButton: FloatingActionButton(
+         onPressed: _goToCreateJourney,
+         tooltip: 'Add Journey',
+         child: const Icon(Icons.add), 
+       ),
     );
   }
 }

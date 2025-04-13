@@ -1,6 +1,7 @@
+import 'package:equatable/equatable.dart';
 import 'package:uuid/uuid.dart';
 
-class Expense {
+class Expense extends Equatable {
   final String id;
   final String journeyId;
   final String title;
@@ -90,4 +91,21 @@ class Expense {
       receiptUrl: receiptUrl ?? this.receiptUrl,
     );
   }
+
+  // Override props for Equatable
+  @override
+  List<Object?> get props => [
+        id,
+        journeyId,
+        title,
+        amount,
+        date,
+        category,
+        paidBy,
+        sharedWith,
+        description,
+        receiptUrl,
+      ];
+
+  // Assuming no manual == or hashCode were present
 }
