@@ -42,5 +42,23 @@
   },
   "journeyImageLoadErrorDesc": "Failed to load images",
 
-  "editNotImplementedDesc": "Edit not yet implemented."
+  "editNotImplementedDesc": "Edit not yet implemented.",
+
+  "settingsGroupTitle": "Group +",
+  "settingsItemSaved": "Saved",
+  "settingsItemArchive": "Archive",
+  "settingsItemActivity": "Your Activity",
+  "settingsItemNotifications": "Notifications",
+  "settingsItemTimeManagement": "Time Management",
+  "settingsItemLogout": "Logout",
+
+  "homeScreenNoJourneys": "No journeys yet! Start by adding one.",
+  "homeScreenRetryButton": "Retry",
+  "homeScreenAddJourneyTooltip": "Add Journey",
+  "homeScreenRefreshTooltip": "Refresh Journeys",
+
+  "createJourneyTitle": "Create Journey",
+  "createJourneyErrorUserNotLoggedIn": "User not logged in.",
+  
+  "detailScreenErrorMissingData": "Error: Journey data missing"
 } 

@@ -5,20 +5,23 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/app_title.dart'; // Import AppTitle
 import '../constants/app_colors.dart'; // Import color constants
-import '../repositories/auth_repository.dart'; // Import repository
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import generated class
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
+import 'package:travel/providers/repository_providers.dart'; // Import providers
+import 'package:travel/constants/app_routes.dart'; // Import routes
 
-// Convert to StatefulWidget
-class AuthScreen extends StatefulWidget {
+// Change to ConsumerStatefulWidget
+class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
   @override
-  State<AuthScreen> createState() => _AuthScreenState();
+  // Change State link
+  ConsumerState<AuthScreen> createState() => _AuthScreenState();
 }
 
-// Create State class
-class _AuthScreenState extends State<AuthScreen> {
+// Change to ConsumerState
+class _AuthScreenState extends ConsumerState<AuthScreen> {
   // Re-introduce Form key
   final _formKey = GlobalKey<FormState>(); 
   final _emailController = TextEditingController();
@@ -27,17 +30,14 @@ class _AuthScreenState extends State<AuthScreen> {
   bool _isSignUp = false; // Start in Sign In mode
   bool _isLoading = false;
 
-  // Get repository instance (better with DI later)
-  final AuthRepository _authRepository = AuthRepository();
-
   @override
   void initState() {
     super.initState();
-    // Pre-fill for development using .env variables (only in debug mode)
     if (kDebugMode) {
-      _emailController.text = dotenv.env['DEV_EMAIL'] ?? ''; 
-      _passwordController.text = dotenv.env['DEV_PASSWORD'] ?? '';
-      print('DEBUG: Pre-filled Auth fields.');
+       // Access dotenv directly, no context needed here
+       _emailController.text = dotenv.env['DEV_EMAIL'] ?? ''; 
+       _passwordController.text = dotenv.env['DEV_PASSWORD'] ?? '';
+       print('DEBUG: Pre-filled Auth fields.');
     }
   }
 
@@ -50,8 +50,10 @@ class _AuthScreenState extends State<AuthScreen> {
 
   // --- Forgot Password Handler ---
   Future<void> _handleForgotPassword() async {
+    final l10n = AppLocalizations.of(context)!;
+    // Read repository using ref
+    final authRepository = ref.read(authRepositoryProvider);
     final email = _emailController.text.trim();
-    final l10n = AppLocalizations.of(context)!; // Get instance
     if (email.isEmpty) {
       ShadToaster.of(context).show(
         ShadToast.destructive(
@@ -70,7 +72,7 @@ class _AuthScreenState extends State<AuthScreen> {
       final redirectTo = redirectUri?.toString();
 
       print('[AuthScreen] Sending password reset email to: $email with redirect: $redirectTo');
-      await _authRepository.resetPasswordForEmail(email, redirectTo: redirectTo);
+      await authRepository.resetPasswordForEmail(email, redirectTo: redirectTo);
       print('[AuthScreen] Password reset email request successful.');
       if (mounted) {
         ShadToaster.of(context).show(
@@ -108,13 +110,23 @@ class _AuthScreenState extends State<AuthScreen> {
   }
   // --- End Forgot Password Handler ---
 
+  Future<void> _handleLogout() async { // Assuming logout might be added back later
+     // ... logic ...
+       if (mounted) {
+         context.go(AppRoutes.auth); // Use constant
+       }
+     // ...
+  }
+
   Future<void> _submit() async {
+    final l10n = AppLocalizations.of(context)!;
+    // Read repository using ref
+    final authRepository = ref.read(authRepositoryProvider);
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
       return; // Errors shown by ShadInputFormField
     }
     
-    final l10n = AppLocalizations.of(context)!; // Get instance
     setState(() { _isLoading = true; });
     FocusScope.of(context).unfocus();
 
@@ -124,7 +136,7 @@ class _AuthScreenState extends State<AuthScreen> {
       
       if (_isSignUp) {
           print('[AuthScreen] Attempting Sign Up for: $email');
-          await _authRepository.signUp(email, password);
+          await authRepository.signUp(email, password);
           print('[AuthScreen] Sign Up call completed.');
           if (mounted) {
              ShadToaster.of(context).show(
@@ -139,11 +151,11 @@ class _AuthScreenState extends State<AuthScreen> {
           }
       } else {
         print('[AuthScreen] Attempting Sign In for: $email');
-        await _authRepository.signInWithPassword(email, password);
+        await authRepository.signInWithPassword(email, password);
         print('[AuthScreen] Sign In call completed WITHOUT throwing.');
         if (mounted) {
           print('[AuthScreen] Sign In Successful, navigating...');
-          context.go('/home'); 
+          context.go(AppRoutes.home); // Use constant
         }
       }
     } on AuthException catch (e) {

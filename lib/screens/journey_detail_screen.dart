@@ -1,27 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/providers/repository_providers.dart';
+import 'package:travel/constants/app_routes.dart';
 
 import '../models/journey.dart';
 import '../repositories/journey_repository.dart';
 import '../repositories/auth_repository.dart';
 
-class JourneyDetailScreen extends StatefulWidget {
+class JourneyDetailScreen extends ConsumerStatefulWidget {
   final Journey journey;
 
   const JourneyDetailScreen({Key? key, required this.journey})
       : super(key: key);
 
   @override
-  State<JourneyDetailScreen> createState() => _JourneyDetailScreenState();
+  ConsumerState<JourneyDetailScreen> createState() => _JourneyDetailScreenState();
 }
 
-class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
-  final JourneyRepository _journeyRepository = JourneyRepository();
+class _JourneyDetailScreenState extends ConsumerState<JourneyDetailScreen> {
+  late JourneyRepository _journeyRepository;
   final AuthRepository _authRepository = AuthRepository();
 
   bool _isLoadingImages = true;
@@ -33,6 +36,12 @@ class _JourneyDetailScreenState extends State<JourneyDetailScreen> {
   void initState() {
     super.initState();
     _loadImages();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _journeyRepository = ref.read(journeyRepositoryProvider);
   }
 
   Future<void> _loadImages() async {

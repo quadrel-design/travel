@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -6,29 +7,24 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_title.dart';
 import '../repositories/auth_repository.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/providers/repository_providers.dart';
+import 'package:travel/constants/app_routes.dart';
 
-class AppSettingsScreen extends StatefulWidget {
+class AppSettingsScreen extends ConsumerWidget {
   const AppSettingsScreen({Key? key}) : super(key: key);
 
-  @override
-  State<AppSettingsScreen> createState() => _AppSettingsScreenState();
-}
-
-class _AppSettingsScreenState extends State<AppSettingsScreen> {
-
-  final AuthRepository _authRepository = AuthRepository();
-
-  Future<void> _handleLogout() async {
+  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
     final l10n = AppLocalizations.of(context)!;
+    final authRepository = ref.read(authRepositoryProvider);
     try {
-      print('[UserSettings] Signing out...');
-      await _authRepository.signOut();
-      if (mounted) {
-        context.go('/auth');
+      print('[AppSettings] Signing out...');
+      await authRepository.signOut();
+      if (context.mounted) {
+        context.go(AppRoutes.auth);
       }
     } on AuthException catch (e) {
       print('Error logging out from settings: ${e.message}');
-      if (mounted) {
+      if (context.mounted) {
          ShadToaster.of(context).show(
             ShadToast.destructive(
               title: Text(l10n.logoutErrorTitle), 
@@ -38,7 +34,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       }
     } catch (e) {
        print('Unexpected error logging out from settings: $e');
-       if (mounted) {
+       if (context.mounted) {
          ShadToaster.of(context).show(
             ShadToast.destructive(
               title: Text(l10n.errorTitle), 
@@ -50,9 +46,9 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = ShadTheme.of(context);
-    final materialTheme = Theme.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     Widget buildSettingsTile({
       required IconData leadingIcon,
@@ -73,7 +69,7 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       appBar: AppBar(
         leading: ShadButton.ghost(
           icon: const Icon(LucideIcons.chevronLeft),
-          onPressed: () => context.go('/home'),
+          onPressed: () => context.go(AppRoutes.home),
           padding: EdgeInsets.zero,
         ),
         title: const Text('App Settings'),
@@ -82,29 +78,34 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         children: [
+          Text(
+            l10n.settingsGroupTitle,
+            style: theme.textTheme.list.copyWith(/*...*/),
+          ),
+          const SizedBox(height: 16),
           buildSettingsTile(
             leadingIcon: LucideIcons.bookmark,
-            title: 'Saved',
+            title: l10n.settingsItemSaved,
             onTap: () { print('Saved tapped'); },
           ),
           buildSettingsTile(
             leadingIcon: LucideIcons.archive,
-            title: 'Archive',
+            title: l10n.settingsItemArchive,
             onTap: () { print('Archive tapped'); },
           ),
           buildSettingsTile(
             leadingIcon: LucideIcons.activity,
-            title: 'Your Activity',
+            title: l10n.settingsItemActivity,
             onTap: () { print('Activity tapped'); },
           ),
           buildSettingsTile(
             leadingIcon: LucideIcons.bell,
-            title: 'Notifications',
+            title: l10n.settingsItemNotifications,
             onTap: () { print('Notifications tapped'); },
           ),
           buildSettingsTile(
             leadingIcon: LucideIcons.timer,
-            title: 'Time Management',
+            title: l10n.settingsItemTimeManagement,
             onTap: () { print('Time Management tapped'); },
           ),
           Padding(
@@ -113,8 +114,8 @@ class _AppSettingsScreenState extends State<AppSettingsScreen> {
           ),
           buildSettingsTile(
             leadingIcon: LucideIcons.logOut,
-            title: 'Logout',
-            onTap: _handleLogout,
+            title: l10n.settingsItemLogout,
+            onTap: () => _handleLogout(context, ref),
           ),
         ],
       ),

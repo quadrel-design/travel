@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import services for formatter
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart'; // For generating IDs
+import 'package:travel/providers/repository_providers.dart'; // Import providers
+import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add import
 
 import '../models/journey.dart'; // Import Journey model
 import '../widgets/app_title.dart'; // Import AppTitle
-import '../repositories/journey_repository.dart'; // Import repository
-import '../repositories/auth_repository.dart'; // Import repository
 
-class CreateJourneyScreen extends StatefulWidget {
+class CreateJourneyScreen extends ConsumerStatefulWidget {
   const CreateJourneyScreen({super.key});
 
   @override
-  State<CreateJourneyScreen> createState() => _CreateJourneyScreenState();
+  ConsumerState<CreateJourneyScreen> createState() => _CreateJourneyScreenState();
 }
 
-class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
+class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   final _formKey = GlobalKey<ShadFormState>(); // Use ShadFormState key
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
@@ -30,10 +31,6 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
   DateTime? _endDate;
   bool _isLoading = false;
 
-  // Get repository instances
-  final JourneyRepository _journeyRepository = JourneyRepository();
-  final AuthRepository _authRepository = AuthRepository();
-
   @override
   void dispose() {
     _nameController.dispose();
@@ -44,6 +41,11 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
   }
 
   Future<void> _saveJourney() async {
+    final l10n = AppLocalizations.of(context)!;
+    // Read repositories using ref
+    final journeyRepository = ref.read(journeyRepositoryProvider);
+    final authRepository = ref.read(authRepositoryProvider);
+    
     // Validate form
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid || _startDate == null || _endDate == null) {
@@ -59,7 +61,7 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
     setState(() { _isLoading = true; });
 
     // Get user ID from repository
-    final userId = _authRepository.currentUser?.id;
+    final userId = authRepository.currentUser?.id;
     if (userId == null) {
       ShadToaster.of(context).show(
          ShadToast.destructive(
@@ -89,7 +91,7 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
 
     try {
       // Use repository method
-      await _journeyRepository.addJourney(newJourney);
+      await journeyRepository.addJourney(newJourney);
       if (mounted) {
          ShadToaster.of(context).show(
            const ShadToast(
@@ -118,6 +120,7 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!; // Get l10n
     return Scaffold(
       appBar: AppBar(
         // Use the reusable AppTitle widget
@@ -136,10 +139,9 @@ class _CreateJourneyScreenState extends State<CreateJourneyScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Page Title
               Text(
-                'Create Journey',
-                style: ShadTheme.of(context).textTheme.h2, // Use Shadcn text style
+                l10n.createJourneyTitle, // Use l10n
+                style: ShadTheme.of(context).textTheme.h2,
               ),
               const SizedBox(height: 24),
 

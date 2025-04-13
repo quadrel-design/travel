@@ -27,6 +27,8 @@ dependencies:
   equatable: ^2.0.5
   flutter_localizations:
     sdk: flutter
+  flutter_riverpod: ^2.5.1
+  logger: ^2.3.0
 
 dev_dependencies:
   flutter_test:

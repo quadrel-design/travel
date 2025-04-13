@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'screens/auth_screen.dart';
@@ -17,6 +18,8 @@ import 'constants/app_colors.dart'; // Import color constants
 import 'repositories/auth_repository.dart'; // Import AuthRepository
 // Import generated localizations delegate
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/providers/repository_providers.dart'; // Import providers
+import 'package:travel/constants/app_routes.dart'; // Import routes
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,30 +42,27 @@ void main() async {
     print('Supabase initialized');
   }
 
-  // Ensure instantiation is REMOVED from here
-  runApp(MyApp());
+  // Wrap MyApp with ProviderScope
+  runApp(const ProviderScope(child: MyApp())); 
 }
 
-// --- Instantiate Repositories BEFORE Router --- 
-final AuthRepository _authRepository = AuthRepository();
+// Update redirect function to accept repository
+String? determineRedirect(AuthRepository authRepo, String? currentRoute) {
+  final loggingIn = currentRoute == AppRoutes.auth;
+  final splashing = currentRoute == AppRoutes.splash;
 
-// --- Testable Redirect Logic --- 
-String? determineRedirect(bool loggedIn, String? currentRoute) {
-  final loggingIn = currentRoute == '/auth';
-  final splashing = currentRoute == '/splash';
-
-  print('[Redirect Check] Route: $currentRoute, LoggedIn: $loggedIn');
+  print('[Redirect Check] Route: $currentRoute, LoggedIn: ${authRepo.currentSession != null}');
 
   // If not logged in and not going to auth, redirect to auth
-  if (!loggedIn && !loggingIn) {
-     print('[Redirect Check] Decision: Go to /auth');
-    return '/auth';
+  if (authRepo.currentSession == null && !loggingIn) {
+     print('[Redirect Check] Decision: Go to ${AppRoutes.auth}');
+    return AppRoutes.auth;
   }
 
   // If logged in and on auth or splash, redirect to home
-  if (loggedIn && (loggingIn || splashing)) {
-     print('[Redirect Check] Decision: Go to /home');
-    return '/home';
+  if (authRepo.currentSession != null && (loggingIn || splashing)) {
+     print('[Redirect Check] Decision: Go to ${AppRoutes.home}');
+    return AppRoutes.home;
   }
 
   // No redirect needed
@@ -71,53 +71,60 @@ String? determineRedirect(bool loggedIn, String? currentRoute) {
 }
 
 // --- GoRouter Configuration --- 
-final _router = GoRouter(
-  initialLocation: '/splash',
-  refreshListenable: GoRouterRefreshStream(_authRepository.authStateChanges),
-  debugLogDiagnostics: true,
-  routes: [
-    // Splash screen while checking auth state initially
-    GoRoute(
-      path: '/splash',
-      builder: (context, state) => const SplashScreen(), // Create this simple widget
-    ),
-    GoRoute(
-      path: '/auth',
-      builder: (context, state) => const AuthScreen(),
-    ),
-    GoRoute(
-      path: '/home',
-      builder: (context, state) => const HomeScreen(title: 'TravelMouse'),
-      routes: [
-         // Example nested route if needed
-      ]
-    ),
-     GoRoute(
-      path: '/create-journey',
-      builder: (context, state) => const CreateJourneyScreen(),
-    ),
-    // Add the journey detail route
-    GoRoute(
-      path: '/journey-detail', // Define the path
-      builder: (context, state) {
-        // Journey type should now be recognized
-        final journey = state.extra as Journey?;
-        return journey != null 
-            ? JourneyDetailScreen(journey: journey) 
-            : const Scaffold(body: Center(child: Text('Error: Journey data missing')));
-      },
-    ),
-    // Update Settings Route Path
-    GoRoute(
-      path: '/app-settings', // Change path 
-      builder: (context, state) => const AppSettingsScreen(),
-    ),
-  ],
-  redirect: (BuildContext context, GoRouterState state) {
-    final loggedIn = _authRepository.currentSession != null;
-    return determineRedirect(loggedIn, state.matchedLocation);
-  },
-);
+// Make router accessible via a provider for easier access to Ref
+final routerProvider = Provider<GoRouter>((ref) {
+  final authRepository = ref.watch(authRepositoryProvider);
+  return GoRouter(
+    initialLocation: AppRoutes.splash,
+    refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
+    debugLogDiagnostics: true,
+    routes: [
+      // Splash screen while checking auth state initially
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const SplashScreen(), // Create this simple widget
+      ),
+      GoRoute(
+        path: AppRoutes.auth,
+        builder: (context, state) => const AuthScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.home,
+        builder: (context, state) => const HomeScreen(title: 'TravelMouse'),
+        routes: [
+           // Example nested route if needed
+        ]
+      ),
+       GoRoute(
+        path: AppRoutes.createJourney,
+        builder: (context, state) => const CreateJourneyScreen(),
+      ),
+      // Add the journey detail route
+      GoRoute(
+        path: AppRoutes.journeyDetail,
+        builder: (context, state) {
+          final journey = state.extra as Journey?;
+          final l10n = AppLocalizations.of(context)!;
+          return journey != null 
+              ? JourneyDetailScreen(journey: journey) 
+              : Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
+        },
+      ),
+      // Update Settings Route Path
+      GoRoute(
+        path: AppRoutes.appSettings,
+        builder: (context, state) => const AppSettingsScreen(),
+      ),
+    ],
+    redirect: (BuildContext context, GoRouterState state) {
+      // Read repository inside redirect via ref (obtained from provider)
+      // Note: Accessing ref directly here isn't straightforward.
+      // Alternative: Pass repository into determineRedirect.
+      final loggedIn = authRepository.currentSession != null;
+      return determineRedirect(authRepository, state.matchedLocation);
+    },
+  );
+});
 
 // Helper class to bridge Stream and Listenable for GoRouter
 class GoRouterRefreshStream extends ChangeNotifier {
@@ -134,14 +141,16 @@ class GoRouterRefreshStream extends ChangeNotifier {
 }
 // --- End GoRouter Configuration --- 
 
-class MyApp extends StatelessWidget {
+// Update MyApp to consume the router provider
+class MyApp extends ConsumerWidget { // Change to ConsumerWidget
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Use ShadApp.materialRouter and pass the router configuration
+  Widget build(BuildContext context, WidgetRef ref) { // Add WidgetRef
+    final router = ref.watch(routerProvider); // Watch the router provider
+
     return ShadApp.materialRouter(
-      routerConfig: _router, // Pass the router configuration
+      routerConfig: router, // Use the router from the provider
       theme: ShadThemeData(
         brightness: Brightness.light,
         colorScheme: const ShadSlateColorScheme.light(),
