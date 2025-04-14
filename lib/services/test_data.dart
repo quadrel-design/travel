@@ -37,10 +37,6 @@ final Journey journey1 = Journey(
   userId: user1.id,
   startDate: DateTime.now().subtract(const Duration(days: 30)),
   endDate: DateTime.now().subtract(const Duration(days: 15)),
-  imageUrls: const [
-    'https://source.unsplash.com/random/800x600?europe,city',
-    'https://source.unsplash.com/random/800x600?europe,landmark'
-  ],
   isCompleted: false,
 );
 
@@ -53,10 +49,6 @@ final Journey journey2 = Journey(
   userId: user2.id,
   startDate: DateTime.now().subtract(const Duration(days: 60)),
   endDate: DateTime.now().subtract(const Duration(days: 40)),
-  imageUrls: const [
-    'https://source.unsplash.com/random/800x600?asia,temple',
-    'https://source.unsplash.com/random/800x600?asia,food'
-  ],
   isCompleted: true,
 );
 
@@ -125,10 +117,6 @@ Future<void> insertTestJourneys(JourneyRepository journeyRepository, String user
       userId: userId,
       startDate: DateTime.now().subtract(const Duration(days: 30)),
       endDate: DateTime.now().subtract(const Duration(days: 15)),
-      imageUrls: const [
-        'https://source.unsplash.com/random/800x600?europe,city',
-        'https://source.unsplash.com/random/800x600?europe,landmark'
-      ],
       isCompleted: false,
     ),
     Journey(
@@ -140,10 +128,6 @@ Future<void> insertTestJourneys(JourneyRepository journeyRepository, String user
       userId: userId,
       startDate: DateTime.now().subtract(const Duration(days: 60)),
       endDate: DateTime.now().subtract(const Duration(days: 40)),
-      imageUrls: const [
-        'https://source.unsplash.com/random/800x600?asia,temple',
-        'https://source.unsplash.com/random/800x600?asia,food'
-      ],
       isCompleted: true,
     ),
     // Add more journeys as needed

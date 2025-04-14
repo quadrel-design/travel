@@ -11,9 +11,13 @@ import 'package:path/path.dart' as p; // For getting extension
 import 'package:travel/models/journey.dart';
 import 'package:cached_network_image/cached_network_image.dart'; // Add import
 // import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Unused import
-import 'package:travel/providers/gallery_state.dart'; // Import the new provider
-// import '../widgets/full_screen_image_viewer.dart'; // Remove this import
+import 'package:travel/providers/logging_provider.dart';
 import '../widgets/gallery_page_view.dart'; // Import the new PageView widget
+import 'package:logger/logger.dart'; // Keep logger import
+import '../widgets/full_screen_confirm_dialog.dart'; // Import the custom dialog
+// import 'package:travel/constants/supabase.dart'; // REMOVED
+// import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // REMOVED (Already changed/commented out)
+// import 'package:travel/widgets/ca_app_bar.dart'; // REMOVED
 
 // Change back to ConsumerStatefulWidget
 class JourneyGalleryScreen extends ConsumerStatefulWidget {
@@ -31,11 +35,13 @@ class _JourneyGalleryScreenState extends ConsumerState<JourneyGalleryScreen> {
   String? _imageError;
   List<String> _imageUrls = [];
   bool _isUploading = false; // Add back uploading state
+  late Logger _logger;
 
   @override
   void initState() {
     super.initState();
-    // Defer reading provider to didChangeDependencies
+    // Initialize logger here using ref (available in initState for ConsumerStatefulWidget)
+    _logger = ref.read(loggerProvider);
   }
 
   @override
@@ -123,18 +129,16 @@ class _JourneyGalleryScreenState extends ConsumerState<JourneyGalleryScreen> {
     } finally { if (mounted) setState(() { _isUploading = false; }); }
   }
 
-  // Adjusted delete logic - PageView handles its own UI updates
+  // Adjusted delete logic
   Future<void> _deleteImage(String imageUrl) async {
     bool confirm = await showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Image?'), // TODO: Localize
-        content: const Text('Are you sure you want to permanently delete this image?'), // TODO: Localize
-        actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')), // TODO: Localize
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: const Text('Delete')), // TODO: Localize
-        ],
+      // Use the custom dialog widget
+      builder: (ctx) => FullScreenConfirmDialog(
+        title: 'Delete Image?', // TODO: Localize
+        content: 'Are you sure you want to permanently delete this image?', // TODO: Localize
       ),
+      // barrierDismissible: false, // Optional: prevent dismissal by tapping outside
     ) ?? false;
 
     if (!confirm) return;
@@ -162,6 +166,7 @@ class _JourneyGalleryScreenState extends ConsumerState<JourneyGalleryScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Logger is now a member variable, no need to read here
     final theme = Theme.of(context); // Get theme for potential use
     return Scaffold(
       appBar: AppBar(
@@ -233,42 +238,108 @@ class _JourneyGalleryScreenState extends ConsumerState<JourneyGalleryScreen> {
         itemCount: _imageUrls.length,
         itemBuilder: (context, index) {
           final imageUrl = _imageUrls[index];
+          // --- Signed URL Logic Start ---
+          // Function to extract path (similar to repository delete logic)
+          String? extractPath(String url) {
+            try {
+              final uri = Uri.parse(url);
+              final bucketName = 'journey_images'; // Ensure this matches
+              final pathStartIndex = uri.path.indexOf(bucketName) + bucketName.length + 1;
+              if (pathStartIndex <= bucketName.length) return null;
+              return uri.path.substring(pathStartIndex);
+            } catch (e) {
+              _logger.e('Failed to parse path from URL: $url', error: e);
+              return null;
+            }
+          }
+
+          final imagePath = extractPath(imageUrl);
+          // --- Signed URL Logic End ---
+
           return GestureDetector(
             onTap: () async {
-              // Navigate to GalleryPageView and wait for it to pop
+              // Pass original URLs to the PageView
               await Navigator.push(
                 context,
                 MaterialPageRoute(
                   builder: (context) => GalleryPageView(
-                    imageUrls: _imageUrls, 
-                    initialIndex: index,   
-                    onDeleteImage: _deleteImage, 
+                    imageUrls: _imageUrls,
+                    initialIndex: index,
+                    onDeleteImage: _deleteImage, // Pass original URL for deletion
                     onImageDeletedSuccessfully: (deletedUrl) {
-                       print('[DEBUG] onImageDeletedSuccessfully called for: $deletedUrl (Applying setState)');
-                       if (mounted) { 
-                         setState(() {
-                           _imageUrls.remove(deletedUrl);
-                         });
+                       _logger.d('onImageDeletedSuccessfully callback received for: $deletedUrl');
+                       // Refresh the list from the repository instead of just local removal
+                       if (mounted) {
+                         _loadImages(); 
                        }
                     },
+                    logger: _logger,
                   ),
                 ),
               );
             },
-            child: Hero( 
-              tag: imageUrl, 
+            child: Hero(
+              tag: imageUrl, // Use original URL for Hero tag
               child: ClipRRect(
-                 child: CachedNetworkImage(
-                   imageUrl: imageUrl,
-                   fit: BoxFit.cover, 
-                   placeholder: (context, url) => Container( 
-                       color: theme.colorScheme.surfaceContainerHighest,
-                   ),
-                   errorWidget: (context, url, error) => Container(
-                     color: theme.colorScheme.surfaceContainerHighest, 
-                     child: Icon(Icons.error_outline, color: theme.colorScheme.onSurfaceVariant),
-                   ),
-                 ),
+                // --- Signed URL Logic Start ---
+                child: imagePath == null
+                  ? Container( // Show error if path extraction failed
+                      color: theme.colorScheme.errorContainer,
+                      child: Icon(Icons.broken_image, color: theme.colorScheme.onErrorContainer),
+                    )
+                  : FutureBuilder<String>(
+                      // Generate signed URL (e.g., valid for 1 hour)
+                      future: Supabase.instance.client.storage
+                          .from('journey_images')
+                          .createSignedUrl(imagePath, 3600),
+                      builder: (context, snapshot) {
+                        // --- Check for errors first ---
+                        if (snapshot.hasError) {
+                           _logger.e('Error creating signed URL for $imagePath', error: snapshot.error);
+                           // Show error if URL generation failed
+                           return Container(
+                              color: theme.colorScheme.errorContainer, // Restore theme color
+                              child: Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer), // Restore icon
+                           );
+                        }
+                        
+                        // --- Check if done and has data ---
+                        if (snapshot.connectionState == ConnectionState.done && snapshot.hasData) {
+                           // Once signed URL is ready, load it with CachedNetworkImage
+                           final signedUrl = snapshot.data!;
+                           if (signedUrl.isEmpty) {
+                               _logger.w('createSignedUrl returned empty string for $imagePath');
+                                return Container(
+                                  color: theme.colorScheme.errorContainer, // Restore theme color
+                                  child: Icon(Icons.error_outline, color: theme.colorScheme.onErrorContainer), // Restore icon
+                                );
+                           }
+
+                           return CachedNetworkImage(
+                             // Use the generated signedUrl
+                             imageUrl: signedUrl,
+                             fit: BoxFit.cover,
+                             placeholder: (context, url) => Container(
+                                 color: theme.colorScheme.surfaceContainerHighest, // Restore theme color
+                             ),
+                             errorWidget: (context, url, error) {
+                                // Log error with original path for clarity
+                                _logger.w('Failed to load image via signed URL for path: $imagePath', error: error);
+                                return Container(
+                                  color: theme.colorScheme.surfaceContainerHighest, // Restore theme color
+                                  child: Icon(Icons.error_outline, color: theme.colorScheme.onSurfaceVariant), // Restore icon
+                                );
+                             },
+                           );
+                        }
+
+                        // --- Otherwise, assume loading ---
+                        return Container(
+                          color: theme.colorScheme.surfaceContainerHighest, // Restore theme color
+                        );
+                      },
+                    ),
+                 // --- Signed URL Logic Start (end of FutureBuilder scope) ---
               ),
             ),
           );

@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:travel/constants/app_colors.dart'; // Use our defined colors
+
+// Import component theme files
+import 'component_themes/app_bar_theme.dart';
+import 'component_themes/card_theme.dart';
+import 'component_themes/elevated_button_theme.dart';
+import 'component_themes/input_decoration_theme.dart';
+import 'component_themes/list_tile_theme.dart';
 
 // --- Color Scheme Definition ---
 const ColorScheme antonettiColorScheme = ColorScheme(
@@ -32,79 +38,13 @@ final TextTheme antonettiTextTheme = GoogleFonts.interTextTheme(defaultTextTheme
   labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold), // Example: Button text
 );
 
-// --- Component Theme Definitions ---
-
-// ElevatedButton Theme
-final ElevatedButtonThemeData antonettiElevatedButtonTheme = ElevatedButtonThemeData(
-  style: ElevatedButton.styleFrom(
-    backgroundColor: antonettiColorScheme.primary,
-    foregroundColor: antonettiColorScheme.onPrimary,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-    textStyle: antonettiTextTheme.labelLarge, // Use defined text style
-  ),
-);
-
-// Card Theme
-final CardTheme antonettiCardTheme = CardTheme(
-  elevation: 0, // Minimal elevation
-  shape: const RoundedRectangleBorder(
-    borderRadius: BorderRadius.all(Radius.circular(12)),
-    side: BorderSide(color: Color(0xFFDAE5E5)), // Can be const if color is const
-  ),
-  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-  color: antonettiColorScheme.surface, // Non-const color
-);
-
-// InputDecoration Theme (for TextFields)
-final InputDecorationTheme antonettiInputDecorationTheme = InputDecorationTheme(
-  // Use theme outline color for default border
-  border: OutlineInputBorder(
-    borderRadius: const BorderRadius.all(Radius.circular(8)),
-    borderSide: BorderSide(color: const Color(0xFF6F7979).withAlpha(128)),
-  ),
-  // Keep focused border as primary color
-  focusedBorder: OutlineInputBorder(
-    borderRadius: const BorderRadius.all(Radius.circular(8)),
-    borderSide: BorderSide(color: antonettiColorScheme.primary, width: 1.5),
-  ),
-  // Adjust padding slightly?
-  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-  filled: true,
-  fillColor: antonettiColorScheme.surface,
-  // Ensure hint style is subtle
-  hintStyle: TextStyle(color: const Color(0xFF3F4949).withAlpha(153)), // Hardcode onSurfaceVariant color with alpha
-);
-
-// AppBar Theme (can reuse some from previous setup)
-final AppBarTheme antonettiAppBarTheme = AppBarTheme(
-   backgroundColor: antonettiColorScheme.surface, // Use surface color
-   foregroundColor: antonettiColorScheme.onSurface, // Text/icon color
-   elevation: 0,
-   // titleTextStyle: antonettiTextTheme.headlineSmall, // Apply specific style if needed
-   centerTitle: true, // Keep centered based on previous setup
-   shape: Border(
-     bottom: BorderSide(
-       color: AppColors.borderGrey,
-       width: 1.0,
-     ),
-   ),
- );
-
-// ListTile Theme
-const ListTileThemeData antonettiListTileTheme = ListTileThemeData(
-  // Customize tile appearance if needed
-  // iconColor: antonettiColorScheme.primary,
-  // dense: true, 
-  contentPadding: EdgeInsets.symmetric(horizontal: 24),
-);
-
 // --- Main ThemeData Definition ---
 final ThemeData antonettiTheme = ThemeData(
   useMaterial3: true, // Recommended for new apps
   colorScheme: antonettiColorScheme,
   textTheme: antonettiTextTheme,
   scaffoldBackgroundColor: antonettiColorScheme.surface, // Use surface for main background
+  // Use imported component themes
   elevatedButtonTheme: antonettiElevatedButtonTheme,
   cardTheme: antonettiCardTheme,
   inputDecorationTheme: antonettiInputDecorationTheme,

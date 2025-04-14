@@ -12,7 +12,6 @@ class Journey extends Equatable {
   final DateTime startDate;
   final DateTime endDate;
   final double budget;
-  final List<String> imageUrls;
   final bool isCompleted;
 
   const Journey({
@@ -24,12 +23,10 @@ class Journey extends Equatable {
     required this.startDate,
     required this.endDate,
     required this.budget,
-    this.imageUrls = const [],
     required this.isCompleted,
   });
 
   factory Journey.fromJson(Map<String, dynamic> json) {
-    final imageUrlsList = json['image_urls'];
     final startDateStr = json['start_date'];
     final endDateStr = json['end_date'];
 
@@ -42,9 +39,6 @@ class Journey extends Equatable {
       startDate: startDateStr != null ? DateTime.parse(startDateStr as String) : DateTime.now(),
       endDate: endDateStr != null ? DateTime.parse(endDateStr as String) : DateTime.now(),
       budget: (json['budget'] as num?)?.toDouble() ?? 0.0,
-      imageUrls: imageUrlsList is List 
-                    ? List<String>.from(imageUrlsList.map((item) => item.toString())) 
-                    : [],
       isCompleted: json['is_completed'] as bool? ?? false,
     );
   }
@@ -58,7 +52,6 @@ class Journey extends Equatable {
       'start_date': startDate.toIso8601String(),
       'end_date': endDate.toIso8601String(),
       'budget': budget,
-      'image_urls': imageUrls,
       'is_completed': isCompleted,
     };
   }
@@ -72,7 +65,6 @@ class Journey extends Equatable {
     DateTime? startDate,
     DateTime? endDate,
     double? budget,
-    List<String>? imageUrls,
     bool? isCompleted,
   }) {
     return Journey(
@@ -84,7 +76,6 @@ class Journey extends Equatable {
       startDate: startDate ?? this.startDate,
       endDate: endDate ?? this.endDate,
       budget: budget ?? this.budget,
-      imageUrls: imageUrls ?? this.imageUrls,
       isCompleted: isCompleted ?? this.isCompleted,
     );
   }
@@ -99,7 +90,6 @@ class Journey extends Equatable {
         startDate,
         endDate,
         budget,
-        imageUrls,
         isCompleted,
       ];
 }

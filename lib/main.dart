@@ -89,7 +89,18 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.journeyDetail,
         builder: (context, state) {
-          final journey = state.extra as Journey?;
+          Journey? journey; // Initialize as null
+          if (state.extra is Journey) {
+            journey = state.extra as Journey?;
+          } else if (state.extra is Map<String, dynamic>) {
+            // If it's a map, deserialize it
+            try {
+               journey = Journey.fromJson(state.extra as Map<String, dynamic>);
+            } catch (e) {
+               print("Error deserializing Journey from extra: $e"); 
+               // Handle error appropriately - maybe navigate back or show error screen
+            }
+          }
           final l10n = AppLocalizations.of(context)!;
           return journey != null
               ? JourneyDetailOverviewScreen(journey: journey)
@@ -98,31 +109,39 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(
             name: 'journeyInfo',
-            path: 'info', // Relative path
+            path: 'info', 
             builder: (context, state) {
-              // Correctly retrieve journey from parent state or pass differently if needed
-              final journey = state.extra as Journey?; // This might be null if not passed down
+              Journey? journey;
+              if (state.extra is Journey) {
+                journey = state.extra as Journey?;
+              } else if (state.extra is Map<String, dynamic>) {
+                try {
+                  journey = Journey.fromJson(state.extra as Map<String, dynamic>);
+                } catch (e) { print("Error deserializing Journey for info: $e"); }
+              }
               final l10n = AppLocalizations.of(context)!;
-              // Need a robust way to get journey here, maybe query params or state management
               if (journey == null) {
-                 // Handle missing journey data gracefully
                  return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
               }
               return JourneyDetailScreen(journey: journey);
             },
           ),
-          // Add the Gallery Route
-          GoRoute(
-            path: 'gallery', // Relative path from /journey-detail
-            name: 'journeyGallery', // Optional: give it a name
+           GoRoute(
+            path: 'gallery', 
+            name: 'journeyGallery',
             builder: (context, state) {
-              final journey = state.extra as Journey?;
-              // Handle missing journey data
+              Journey? journey;
+              if (state.extra is Journey) {
+                journey = state.extra as Journey?;
+              } else if (state.extra is Map<String, dynamic>) {
+                try {
+                   journey = Journey.fromJson(state.extra as Map<String, dynamic>);
+                } catch (e) { print("Error deserializing Journey for gallery: $e"); }
+              }
+              final l10n = AppLocalizations.of(context)!;
               if (journey == null) {
-                 final l10n = AppLocalizations.of(context)!;
                  return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
               }
-              // We need to create this screen next
               return JourneyGalleryScreen(journey: journey); 
             },
           ),

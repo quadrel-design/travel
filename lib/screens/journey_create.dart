@@ -130,7 +130,6 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       startDate: _startDate!,
       endDate: _endDate!,
       budget: budgetValue,
-      imageUrls: [],
       isCompleted: false,
     );
 

@@ -29,7 +29,6 @@ class _JourneyFormState extends State<JourneyForm> {
   DateTime _selectedStartDate = DateTime.now();
   DateTime _selectedEndDate = DateTime.now().add(const Duration(days: 1));
   bool _isLoading = false;
-  List<String> _imageUrls = [];
 
   @override
   void initState() {
@@ -54,7 +53,6 @@ class _JourneyFormState extends State<JourneyForm> {
       _budgetController.text = widget.journey!.budget.toString();
       _selectedStartDate = widget.journey!.startDate;
       _selectedEndDate = widget.journey!.endDate;
-      _imageUrls = List<String>.from(widget.journey!.imageUrls);
     } else {
       _selectedStartDate = DateTime.now();
     }
@@ -109,7 +107,6 @@ class _JourneyFormState extends State<JourneyForm> {
           budget: double.tryParse(_budgetController.text) ?? 0.0,
           startDate: _selectedStartDate,
           endDate: _selectedEndDate,
-          imageUrls: _imageUrls,
           isCompleted: false,
         );
 

@@ -1,6 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/journey.dart';
 import 'package:logger/logger.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../providers/logging_provider.dart';
 
 // --- Custom Exceptions ---
 class JourneyRepositoryException implements Exception {
@@ -33,7 +35,7 @@ class CouldNotDeleteImage extends JourneyRepositoryException {
 
 class JourneyRepository {
    final SupabaseClient _client = Supabase.instance.client;
-   final Logger _logger = Logger();
+   final Logger _logger = ProviderContainer().read(loggerProvider);
 
   Future<List<Journey>> fetchUserJourneys(String userId) async {
     try {
@@ -113,7 +115,7 @@ class JourneyRepository {
 
   // Method to delete an image from DB and Storage
   Future<void> deleteImage(String journeyId, String imageUrl) async {
-    print('[DEBUG] JourneyRepository deleteImage START - Journey: $journeyId, URL: $imageUrl'); // Log start
+    _logger.d('deleteImage START - Journey: $journeyId, URL: $imageUrl'); // Use debug level
     // 1. Extract storage path from URL
     // Assumes URL structure: https://<project_ref>.supabase.co/storage/v1/object/public/journey_images/<user_id>/<journey_id>/<filename>
     final uri = Uri.parse(imageUrl);
@@ -129,24 +131,24 @@ class JourneyRepository {
 
     try {
       // 2. Delete DB reference (use imageUrl to find the row)
-      print('[DEBUG] JourneyRepository deleteImage - Deleting DB reference...'); // Log DB delete
+      _logger.d('Deleting DB reference for $imageUrl');
       await _client
           .from('journey_images')
           .delete()
           .eq('image_url', imageUrl);
-      print('[DEBUG] JourneyRepository deleteImage - DB reference deleted (or did not exist).'); // Log DB delete success
+      _logger.d('DB reference deleted (or did not exist).');
 
       // 3. Delete from Storage
-      print('[DEBUG] JourneyRepository deleteImage - Deleting from Storage: $storagePath'); // Log Storage delete
+      _logger.d('Deleting from Storage: $storagePath');
       await _client.storage
           .from(bucketName)
           .remove([storagePath]);
-      print('[DEBUG] JourneyRepository deleteImage - Storage deletion success.'); // Log Storage delete success
+      _logger.d('Storage deletion success.');
 
       _logger.i('Successfully deleted image: $storagePath');
 
     } catch (e) {
-      print('[DEBUG] JourneyRepository deleteImage - FAILED: $e'); // Log failure
+      _logger.e('deleteImage FAILED for $imageUrl', error: e);
       _logger.e('Failed to delete image for journey $journeyId (URL: $imageUrl)', error: e);
       // Consider if partial deletion needs handling (e.g., DB deleted but storage failed)
       throw CouldNotDeleteImage(e);
