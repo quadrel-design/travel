@@ -7,5 +7,7 @@ class AppRoutes {
   static const createJourney = '/create-journey';
   static const journeyDetail = '/journey-detail';
   static const appSettings = '/app-settings';
+  static const String userManagement = '/user-management';
+  static const String journeyGallery = '/journey-detail/gallery';
   // Add other routes here as needed
 } 

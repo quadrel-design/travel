@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:lucide_icons_flutter/lucide_icons.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:travel/models/journey.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/widgets/app_title.dart';
@@ -61,7 +59,6 @@ class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
       final loadedJourneys = await _journeyRepository.fetchUserJourneys(userId);
       state = state.copyWith(journeys: loadedJourneys, isLoading: false);
     } catch (e) {
-      print("Error loading journeys: $e");
       state = state.copyWith(error: 'Failed to load journeys', isLoading: false);
     }
   }
@@ -127,7 +124,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final screenState = ref.watch(homeScreenProvider);
     final journeys = screenState.journeys;
-    final l10n = AppLocalizations.of(context)!; // Get l10n
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context); // Get Material theme
 
     Widget bodyContent;
     if (screenState.isLoading) {
@@ -137,42 +135,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(screenState.error!, style: const TextStyle(color: Colors.red)),
+            Text(screenState.error!, style: TextStyle(color: theme.colorScheme.error)),
             const SizedBox(height: 10),
-            ShadButton(
+            // Use Material Button (styling from theme)
+            ElevatedButton( 
               onPressed: _refreshJourneys,
-              child: Text(l10n.homeScreenRetryButton) // Use l10n
+              child: Text(l10n.homeScreenRetryButton)
             )
           ],
         ),
       );
     } else if (journeys.isEmpty) {
-      bodyContent = Center(child: Text(l10n.homeScreenNoJourneys)); // Use l10n
+      bodyContent = Center(child: Text(l10n.homeScreenNoJourneys));
     } else {
       bodyContent = ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(vertical: 8), 
         itemCount: journeys.length,
         itemBuilder: (context, index) {
           final journey = journeys[index];
-          return GestureDetector(
-            onTap: () {
-              context.push('/journey-detail', extra: journey);
-              print('Navigating to detail for: ${journey.title}');
-            },
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: ShadCard(
-                title: Text(journey.title, style: ShadTheme.of(context).textTheme.h4),
-                description: Text(journey.description),
-                child: Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
-                  child: Text(
-                    'From: ${_dateFormat.format(journey.start_date)}\n'
-                    'To:     ${_dateFormat.format(journey.end_date)}',
-                    style: ShadTheme.of(context).textTheme.muted,
-                  ),
-                ),
+          final dateRange = '${_dateFormat.format(journey.startDate)} - ${_dateFormat.format(journey.endDate)}';
+
+          return Card( 
+            // Styling (elevation, shape, margin, color) comes from antonettiCardTheme
+            child: ListTile( 
+              // Styling (padding, density, text) comes from antonettiListTileTheme & textTheme
+              title: Text(journey.title), 
+              subtitle: Text(
+                '${journey.description}\n$dateRange',
+                 maxLines: 2, 
+                 overflow: TextOverflow.ellipsis, 
               ),
+              trailing: Icon(Icons.chevron_right, color: theme.colorScheme.outline), // Material icon
+              onTap: () {
+                context.push(AppRoutes.journeyDetail, extra: journey);
+              },
             ),
           );
         },
@@ -181,23 +177,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const AppTitle(),
+        title: const AppTitle(), 
         actions: [
+          // Replace ShadButton with IconButton
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshJourneys,
-            tooltip: l10n.homeScreenRefreshTooltip, // Use l10n
-          ),
-          ShadButton.ghost(
-            icon: const Icon(LucideIcons.circleUserRound, size: 20),
-            onPressed: () => context.go(AppRoutes.appSettings),
+            icon: const Icon(Icons.settings_outlined), // Material icon
+            tooltip: 'App Settings', // TODO: Localize
+            onPressed: () => context.push(AppRoutes.appSettings),
           ),
         ],
       ),
       body: bodyContent,
       floatingActionButton: FloatingActionButton(
          onPressed: _goToCreateJourney,
-         tooltip: l10n.homeScreenAddJourneyTooltip, // Use l10n
+         tooltip: l10n.homeScreenAddJourneyTooltip,
          child: const Icon(Icons.add), 
        ),
     );

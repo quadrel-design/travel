@@ -5,45 +5,36 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'screens/journey_create.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/splash_screen.dart';
 import 'dart:async'; // Import dart:async for StreamSubscription
 import 'screens/journey_detail_screen.dart'; // Import detail screen
 import 'models/journey.dart'; // Import Journey model
-import 'screens/app_settings_screen.dart'; // Update import for settings screen
-import 'constants/app_colors.dart'; // Import color constants
+import 'screens/settings/app_settings_screen.dart'; // Update import for settings screen (using current filename)
 import 'repositories/auth_repository.dart'; // Import AuthRepository
 // Import generated localizations delegate
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/providers/repository_providers.dart'; // Import providers
 import 'package:travel/constants/app_routes.dart'; // Import routes
+import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
+import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
+import 'screens/journey_gallery_screen.dart'; // Import new gallery screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Load environment variables
   await dotenv.load();
-  if (kDebugMode) {
-    print('Environment variables loaded');
-  }
 
   // Initialize Supabase
-  if (kDebugMode) {
-    print('Initializing Supabase...');
-  }
   await Supabase.initialize(
     url: dotenv.env['SUPABASE_URL']!,
     anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
   );
-  if (kDebugMode) {
-    print('Supabase initialized');
-  }
 
   // Wrap MyApp with ProviderScope
-  runApp(const ProviderScope(child: MyApp())); 
+  runApp(const ProviderScope(child: MyApp()));
 }
 
 // Update redirect function to accept repository
@@ -51,51 +42,46 @@ String? determineRedirect(AuthRepository authRepo, String? currentRoute) {
   final loggingIn = currentRoute == AppRoutes.auth;
   final splashing = currentRoute == AppRoutes.splash;
 
-  print('[Redirect Check] Route: $currentRoute, LoggedIn: ${authRepo.currentSession != null}');
-
   // If not logged in and not going to auth, redirect to auth
   if (authRepo.currentSession == null && !loggingIn) {
-     print('[Redirect Check] Decision: Go to ${AppRoutes.auth}');
     return AppRoutes.auth;
   }
 
   // If logged in and on auth or splash, redirect to home
   if (authRepo.currentSession != null && (loggingIn || splashing)) {
-     print('[Redirect Check] Decision: Go to ${AppRoutes.home}');
     return AppRoutes.home;
   }
 
   // No redirect needed
-  print('[Redirect Check] Decision: No redirect needed.');
   return null;
 }
 
-// --- GoRouter Configuration --- 
+// --- GoRouter Configuration ---
 // Make router accessible via a provider for easier access to Ref
 final routerProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
-    debugLogDiagnostics: true,
+    debugLogDiagnostics: kDebugMode, // Only log in debug mode
     routes: [
       // Splash screen while checking auth state initially
       GoRoute(
         path: AppRoutes.splash,
-        builder: (context, state) => const SplashScreen(), // Create this simple widget
+        builder: (context, state) => const SplashScreen(), // Add const
       ),
       GoRoute(
         path: AppRoutes.auth,
-        builder: (context, state) => const AuthScreen(),
+        builder: (context, state) => const AuthScreen(), // Add const
       ),
       GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const HomeScreen(title: 'TravelMouse'),
         routes: [
-           // Example nested route if needed
-        ]
+          // Example nested route if needed
+        ],
       ),
-       GoRoute(
+      GoRoute(
         path: AppRoutes.createJourney,
         builder: (context, state) => const CreateJourneyScreen(),
       ),
@@ -105,10 +91,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) {
           final journey = state.extra as Journey?;
           final l10n = AppLocalizations.of(context)!;
-          return journey != null 
-              ? JourneyDetailScreen(journey: journey) 
+          return journey != null
+              ? JourneyDetailOverviewScreen(journey: journey)
               : Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
         },
+        routes: [
+          GoRoute(
+            name: 'journeyInfo',
+            path: 'info', // Relative path
+            builder: (context, state) {
+              // Correctly retrieve journey from parent state or pass differently if needed
+              final journey = state.extra as Journey?; // This might be null if not passed down
+              final l10n = AppLocalizations.of(context)!;
+              // Need a robust way to get journey here, maybe query params or state management
+              if (journey == null) {
+                 // Handle missing journey data gracefully
+                 return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
+              }
+              return JourneyDetailScreen(journey: journey);
+            },
+          ),
+          // Add the Gallery Route
+          GoRoute(
+            path: 'gallery', // Relative path from /journey-detail
+            name: 'journeyGallery', // Optional: give it a name
+            builder: (context, state) {
+              final journey = state.extra as Journey?;
+              // Handle missing journey data
+              if (journey == null) {
+                 final l10n = AppLocalizations.of(context)!;
+                 return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
+              }
+              // We need to create this screen next
+              return JourneyGalleryScreen(journey: journey); 
+            },
+          ),
+        ],
       ),
       // Update Settings Route Path
       GoRoute(
@@ -117,10 +135,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (BuildContext context, GoRouterState state) {
-      // Read repository inside redirect via ref (obtained from provider)
-      // Note: Accessing ref directly here isn't straightforward.
-      // Alternative: Pass repository into determineRedirect.
-      final loggedIn = authRepository.currentSession != null;
       return determineRedirect(authRepository, state.matchedLocation);
     },
   );
@@ -139,45 +153,23 @@ class GoRouterRefreshStream extends ChangeNotifier {
     super.dispose();
   }
 }
-// --- End GoRouter Configuration --- 
+// --- End GoRouter Configuration ---
 
 // Update MyApp to consume the router provider
-class MyApp extends ConsumerWidget { // Change to ConsumerWidget
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) { // Add WidgetRef
-    final router = ref.watch(routerProvider); // Watch the router provider
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
 
-    return ShadApp.materialRouter(
-      routerConfig: router, // Use the router from the provider
-      theme: ShadThemeData(
-        brightness: Brightness.light,
-        colorScheme: const ShadSlateColorScheme.light(),
-        textTheme: ShadTextTheme.fromGoogleFont(GoogleFonts.inter),
-      ),
-      materialThemeBuilder: (context, shadTheme) {
-        return shadTheme.copyWith(
-          scaffoldBackgroundColor: Colors.white,
-          textTheme: shadTheme.textTheme, 
-          appBarTheme: AppBarTheme(
-            backgroundColor: Colors.white,
-            foregroundColor: Colors.black,
-            elevation: 0,
-            titleSpacing: NavigationToolbar.kMiddleSpacing,
-            shape: Border(
-              bottom: BorderSide(
-                color: AppColors.borderGrey,
-                width: 1.0,
-              ),
-            ),
-          ),
-        );
-      },
-      // Add Localization settings
-      localizationsDelegates: AppLocalizations.localizationsDelegates, 
+    // Change to MaterialApp.router
+    return MaterialApp.router(
+      routerConfig: router,
+      // Apply the custom Material theme directly
+      theme: antonettiTheme,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      // title is set by MaterialApp generated internally or on pages
       debugShowCheckedModeBanner: false,
     );
   }

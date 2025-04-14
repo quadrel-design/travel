@@ -7,7 +7,10 @@ Color _getPrimaryVariantColor(BuildContext context) => Theme.of(context).primary
 Color _getErrorColor(BuildContext context) => Theme.of(context).colorScheme.error;
 Color? _getTextSubtitleColor(BuildContext context) => Theme.of(context).textTheme.bodySmall?.color ?? Colors.grey.shade600;
 class AppDimens { static const double radiusSmall = 4.0; }
-class AppIcons { static const IconData password_eye = Icons.visibility; static const IconData password_eye_blind = Icons.visibility_off; }
+class AppIcons { 
+  static const IconData passwordEye = Icons.visibility; 
+  static const IconData passwordEyeBlind = Icons.visibility_off; 
+}
 // Helper function replacement
 Map<String, Color> getColors(BuildContext context) {
   return {
@@ -17,12 +20,15 @@ Map<String, Color> getColors(BuildContext context) {
   };
 }
 
+// Use lowerCamelCase for constants
+const String passwordEyeIcon = 'assets/icons/eye.svg';
+const String passwordEyeBlindIcon = 'assets/icons/eye-slash.svg';
 
 class MyInputTextField extends StatefulWidget {
   final String? title;
   final String? helperText;
   final bool isSecure;
-  final int maxLength;
+  final int? maxLength;
   final String? hint;
   final TextInputType? inputType;
   final String? initValue;
@@ -33,12 +39,13 @@ class MyInputTextField extends StatefulWidget {
   final String? Function(String? value)? validator;
   final Function(String)? onTextChanged;
   final Function(String)? onSaved;
-  List<TextInputFormatter>? inputFormatters;
+  final List<TextInputFormatter>? inputFormatters;
 
-  static const int MAX_LENGTH = 500;
+  // Use lowerCamelCase for constant
+  static const int defaultMaxLength = 500;
 
-  MyInputTextField({
-    super.key, // Added super key
+  const MyInputTextField({
+    Key? key,
     this.title,
     this.hint,
     this.helperText,
@@ -47,14 +54,14 @@ class MyInputTextField extends StatefulWidget {
     this.isSecure = false,
     this.textEditingController,
     this.validator,
-    this.maxLength = MAX_LENGTH,
+    this.maxLength,
     this.onTextChanged,
     this.onSaved,
     this.inputFormatters,
     this.backColor,
     this.suffix,
     this.prefix,
-  });
+  }) : super(key: key);
 
   @override
   _MyInputTextFieldState createState() => _MyInputTextFieldState();
@@ -212,7 +219,7 @@ class _MyInputTextFieldState extends State<MyInputTextField> {
       focusColor: Colors.transparent,
       splashColor: Colors.transparent,
       padding: EdgeInsets.zero,
-      icon: Icon(_passwordVisibility ? AppIcons.password_eye : AppIcons.password_eye_blind),
+      icon: Icon(_passwordVisibility ? AppIcons.passwordEye : AppIcons.passwordEyeBlind),
       // Use icon theme color
       color: theme.iconTheme.color ?? Colors.grey.shade600, 
       onPressed: () {

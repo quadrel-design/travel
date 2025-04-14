@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:go_router/go_router.dart';
 import '../widgets/app_title.dart'; // Import AppTitle
 import '../constants/app_colors.dart'; // Import color constants
@@ -10,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:travel/providers/repository_providers.dart'; // Import providers
 import 'package:travel/constants/app_routes.dart'; // Import routes
+import 'package:travel/widgets/form_field_group.dart'; // Import the helper widget
 
 // Change to ConsumerStatefulWidget
 class AuthScreen extends ConsumerStatefulWidget {
@@ -37,7 +37,6 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
        // Access dotenv directly, no context needed here
        _emailController.text = dotenv.env['DEV_EMAIL'] ?? ''; 
        _passwordController.text = dotenv.env['DEV_PASSWORD'] ?? '';
-       print('DEBUG: Pre-filled Auth fields.');
     }
   }
 
@@ -48,6 +47,41 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     super.dispose();
   }
 
+  // Helper to show SnackBar
+  void _showErrorSnackBar(BuildContext context, String title, String message) {
+     ScaffoldMessenger.of(context).hideCurrentSnackBar(); // Hide previous ones
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(
+         content: Column(
+           mainAxisSize: MainAxisSize.min,
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+             Text(message),
+           ],
+         ),
+         backgroundColor: Theme.of(context).colorScheme.error,
+       ),
+     );
+   }
+   void _showSuccessSnackBar(BuildContext context, String title, String message) {
+     ScaffoldMessenger.of(context).hideCurrentSnackBar();
+     ScaffoldMessenger.of(context).showSnackBar(
+       SnackBar(
+         content: Column(
+           mainAxisSize: MainAxisSize.min,
+           crossAxisAlignment: CrossAxisAlignment.start,
+           children: [
+             Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+             Text(message),
+           ],
+         ),
+         // Use primary or secondary color for success?
+         backgroundColor: Theme.of(context).colorScheme.primary, 
+       ),
+     );
+   }
+
   // --- Forgot Password Handler ---
   Future<void> _handleForgotPassword() async {
     final l10n = AppLocalizations.of(context)!;
@@ -55,12 +89,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final authRepository = ref.read(authRepositoryProvider);
     final email = _emailController.text.trim();
     if (email.isEmpty) {
-      ShadToaster.of(context).show(
-        ShadToast.destructive(
-          title: Text(l10n.missingInfoTitle),
-          description: Text(l10n.enterEmailFirstDesc),
-        ),
-      );
+      _showErrorSnackBar(context, l10n.missingInfoTitle, l10n.enterEmailFirstDesc);
       return;
     }
 
@@ -71,38 +100,21 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       final redirectUri = kIsWeb ? Uri.parse('http://localhost:3000/update-password') : null;
       final redirectTo = redirectUri?.toString();
 
-      print('[AuthScreen] Sending password reset email to: $email with redirect: $redirectTo');
       await authRepository.resetPasswordForEmail(email, redirectTo: redirectTo);
-      print('[AuthScreen] Password reset email request successful.');
       if (mounted) {
-        ShadToaster.of(context).show(
-           ShadToast(
-            title: Text(l10n.passwordResetEmailSentTitle),
-            description: Text(l10n.passwordResetEmailSentDesc),
-          ),
-        );
+        _showSuccessSnackBar(context, l10n.passwordResetEmailSentTitle, l10n.passwordResetEmailSentDesc);
       }
-    } on AuthException catch (e) {
-       print('Error logging out: ${e.message}'); // Log detailed error
-       String localizedTitle = l10n.errorTitle;
-       String localizedDesc = l10n.passwordResetFailedDesc;
+    } on AuthException {
+      // print('[AuthScreen] AuthException during password reset: ${e.message}'); // Log detailed error
+      String localizedTitle = l10n.errorTitle;
+      String localizedDesc = l10n.passwordResetFailedDesc;
+      if (mounted) {
+         _showErrorSnackBar(context, localizedTitle, localizedDesc);
+      }
+    } catch (_) {
+       // Error ignored during password reset attempt (already handled by showing snackbar)
        if (mounted) {
-          ShadToaster.of(context).show(
-            ShadToast.destructive(
-              title: Text(localizedTitle),
-              description: Text(localizedDesc),
-            ),
-          );
-       }
-    } catch (e) {
-       print('Unexpected error during password reset: $e'); // Log detailed error
-       if (mounted) {
-          ShadToaster.of(context).show(
-             ShadToast.destructive(
-              title: Text(l10n.errorTitle),
-              description: Text(l10n.logoutUnexpectedErrorDesc), // Used logout error here, might need specific one
-            ),
-          );
+          _showErrorSnackBar(context, l10n.errorTitle, l10n.logoutUnexpectedErrorDesc);
        }
     } finally {
       if (mounted) { setState(() { _isLoading = false; }); }
@@ -110,21 +122,13 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
   // --- End Forgot Password Handler ---
 
-  Future<void> _handleLogout() async { // Assuming logout might be added back later
-     // ... logic ...
-       if (mounted) {
-         context.go(AppRoutes.auth); // Use constant
-       }
-     // ...
-  }
-
   Future<void> _submit() async {
     final l10n = AppLocalizations.of(context)!;
     // Read repository using ref
     final authRepository = ref.read(authRepositoryProvider);
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
-      return; // Errors shown by ShadInputFormField
+      return; // Errors shown by TextFormField
     }
     
     setState(() { _isLoading = true; });
@@ -135,31 +139,20 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       final password = _passwordController.text.trim();
       
       if (_isSignUp) {
-          print('[AuthScreen] Attempting Sign Up for: $email');
           await authRepository.signUp(email, password);
-          print('[AuthScreen] Sign Up call completed.');
           if (mounted) {
-             ShadToaster.of(context).show(
-                 ShadToast(
-                  title: Text(l10n.signUpSuccessTitle),
-                  description: Text(l10n.signUpSuccessDesc),
-                ),
-             );
+             _showSuccessSnackBar(context, l10n.signUpSuccessTitle, l10n.signUpSuccessDesc);
             _formKey.currentState?.reset();
             _emailController.clear();
             _passwordController.clear();
           }
       } else {
-        print('[AuthScreen] Attempting Sign In for: $email');
         await authRepository.signInWithPassword(email, password);
-        print('[AuthScreen] Sign In call completed WITHOUT throwing.');
         if (mounted) {
-          print('[AuthScreen] Sign In Successful, navigating...');
           context.go(AppRoutes.home); // Use constant
         }
       }
     } on AuthException catch (e) {
-      print('[AuthScreen] AuthException during submit: ${e.message}'); // Log detailed error
       String localizedTitle = l10n.authErrorTitle;
       String localizedDesc = e.message; // Default to raw message
       if (_isSignUp && e.message.toLowerCase().contains('user already registered')) {
@@ -172,19 +165,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
          localizedDesc = l10n.invalidLoginCredentialsDesc;
       } 
       if (mounted) {
-        ShadToaster.of(context).show(
-          ShadToast.destructive(title: Text(localizedTitle), description: Text(localizedDesc)),
-        );
+        _showErrorSnackBar(context, localizedTitle, localizedDesc);
       }
-    } catch (e) {
-       print('[AuthScreen] Caught Generic Exception during submit: $e'); // Log detailed error
+    } catch (_) {
        if (mounted) {
-         ShadToaster.of(context).show(
-           ShadToast.destructive(
-             title: Text(l10n.errorTitle),
-             description: Text(l10n.unexpectedErrorDesc),
-           ),
-         );
+         _showErrorSnackBar(context, l10n.errorTitle, l10n.unexpectedErrorDesc);
        }
     } finally {
       if (mounted) { setState(() { _isLoading = false; }); }
@@ -193,11 +178,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final errorColor = Theme.of(context).colorScheme.error;
+    // final errorColor = Theme.of(context).colorScheme.error; // Unused variable
 
     // Define the switch button widget separately
     final switchAuthModeButton = !_isLoading
-        ? ShadButton.link(
+        ? TextButton(
             onPressed: () {
               setState(() {
                 _isSignUp = !_isSignUp;
@@ -206,14 +191,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                 _passwordController.clear();
               });
             },
-            // Wrap Text with Flexible to encourage wrapping
-            child: Flexible( 
-              child: Text(
-                _isSignUp
-                    ? 'Already have an account? Sign In'
-                    : 'Don\'t have an account? Sign Up',
-                 // softWrap: true, // Should be true by default
-              ),
+            child: Text(
+              _isSignUp
+                  ? 'Already have an account? Sign In'
+                  : 'Don\'t have an account? Sign Up',
             ),
           )
         : const SizedBox.shrink();
@@ -253,43 +234,56 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Replace ShadInput with ShadInputFormField
-                    ShadInputFormField(
-                      id: 'email',
-                      controller: _emailController,
-                      label: const Text('Email'),
-                      placeholder: const Text('Enter your email'), // Optional
-                      keyboardType: TextInputType.emailAddress,
-                      validator: (v) {
-                        if (v == null || v.trim().isEmpty || !v.contains('@')) {
-                          return 'Please enter a valid email address.';
-                        }
-                        return null;
-                      },
+                    // --- Email Field ---
+                    FormFieldGroup(
+                      label: 'Email', // TODO: Localize
+                      child: TextFormField(
+                        controller: _emailController,
+                        decoration: const InputDecoration(
+                          // Remove labelText
+                          hintText: 'Enter your email',
+                        ),
+                        keyboardType: TextInputType.emailAddress,
+                        autocorrect: false,
+                        textCapitalization: TextCapitalization.none,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty || !value.contains('@')) {
+                            return 'Please enter a valid email address.';
+                          }
+                          return null;
+                        },
+                      ),
+                      // No description needed for email typically
                     ),
-                    const SizedBox(height: 12),
-                    // Replace ShadInput with ShadInputFormField
-                    ShadInputFormField(
-                      id: 'password',
-                      controller: _passwordController,
-                      label: const Text('Password'),
-                      placeholder: const Text('Enter your password'), // Optional
-                      obscureText: true,
-                      validator: (v) {
-                        if (v == null || v.trim().length < 6) {
-                          return 'Password must be at least 6 characters long.';
-                        }
-                        return null;
-                      },
+                    const SizedBox(height: 16), // Increase spacing between fields
+                    
+                    // --- Password Field ---
+                    FormFieldGroup(
+                      label: 'Password', // TODO: Localize
+                      child: TextFormField(
+                        controller: _passwordController,
+                         decoration: const InputDecoration(
+                          // Remove labelText
+                          hintText: 'Enter your password',
+                        ),
+                        obscureText: true,
+                        validator: (value) {
+                           if (value == null || value.trim().length < 6) {
+                            return 'Password must be at least 6 characters long.';
+                          }
+                          return null;
+                        },
+                      ),
+                      // No description needed for password typically
                     ),
-                    const SizedBox(height: 20), // Space before error/button
+                    const SizedBox(height: 20),
                     
                     // --- Button Section --- 
                     if (_isLoading)
                       const Center(child: CircularProgressIndicator())
                     else ...[
                       // Main Action Button (Sign In/Sign Up)
-                      ShadButton(
+                      ElevatedButton(
                         onPressed: _submit,
                         child: Text(_isSignUp ? 'Sign Up' : 'Sign In'),
                       ),
@@ -299,11 +293,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                       if (!_isSignUp)
                         Align(
                           alignment: Alignment.centerLeft,
-                          child: ShadButton.link(
+                          child: TextButton(
                             onPressed: _handleForgotPassword,
                             child: const Text('Forgot Password?'),
-                            // Optional: Reduce padding for tighter alignment
-                            // padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
                           ),
                         ),
                         // Add spacing only if Forgot Password button was shown

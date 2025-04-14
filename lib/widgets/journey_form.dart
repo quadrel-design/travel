@@ -6,13 +6,13 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 class JourneyForm extends StatefulWidget {
-  final Journey? initialJourney;
+  final Journey? journey;
   final Function(Journey) onSave;
   final GlobalKey<FormState> formKey;
 
   const JourneyForm({
     super.key,
-    this.initialJourney,
+    this.journey,
     required this.onSave,
     required this.formKey,
   });
@@ -26,22 +26,15 @@ class _JourneyFormState extends State<JourneyForm> {
   final _descriptionController = TextEditingController();
   final _locationController = TextEditingController();
   final _budgetController = TextEditingController();
-  DateTime _startDate = DateTime.now();
-  DateTime _endDate = DateTime.now().add(const Duration(days: 1));
+  DateTime _selectedStartDate = DateTime.now();
+  DateTime _selectedEndDate = DateTime.now().add(const Duration(days: 1));
   bool _isLoading = false;
+  List<String> _imageUrls = [];
 
   @override
   void initState() {
     super.initState();
-    if (widget.initialJourney != null) {
-      final journey = widget.initialJourney!;
-      _titleController.text = journey.title;
-      _descriptionController.text = journey.description;
-      _locationController.text = journey.location;
-      _startDate = journey.startDate;
-      _endDate = journey.endDate;
-      _budgetController.text = journey.budget.toString();
-    }
+    _loadInitialData();
   }
 
   @override
@@ -51,6 +44,20 @@ class _JourneyFormState extends State<JourneyForm> {
     _locationController.dispose();
     _budgetController.dispose();
     super.dispose();
+  }
+
+  void _loadInitialData() {
+    if (widget.journey != null) {
+      _titleController.text = widget.journey!.title;
+      _descriptionController.text = widget.journey!.description;
+      _locationController.text = widget.journey!.location;
+      _budgetController.text = widget.journey!.budget.toString();
+      _selectedStartDate = widget.journey!.startDate;
+      _selectedEndDate = widget.journey!.endDate;
+      _imageUrls = List<String>.from(widget.journey!.imageUrls);
+    } else {
+      _selectedStartDate = DateTime.now();
+    }
   }
 
   Future<void> _pickImages() async {
@@ -78,40 +85,35 @@ class _JourneyFormState extends State<JourneyForm> {
     }
   }
 
-  Future<void> _submitData() async {
+  Future<void> _submitForm() async {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    if (currentUserId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error: User not logged in.')),
+      );
+      return;
+    }
+
     if (widget.formKey.currentState?.validate() ?? false) {
       setState(() {
         _isLoading = true;
       });
 
-      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-      if (currentUserId == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('User not logged in!')),
-          );
-          setState(() { _isLoading = false; });
-        }
-        return;
-      }
-
-      List<String> finalImageUrls = widget.initialJourney?.imageUrls ?? [];
-
       try {
-        final journeyData = Journey(
-          id: widget.initialJourney?.id ?? const Uuid().v4(),
+        final newJourney = Journey(
+          id: widget.journey?.id ?? const Uuid().v4(),
           userId: currentUserId,
           title: _titleController.text,
           description: _descriptionController.text,
           location: _locationController.text,
-          startDate: _startDate,
-          endDate: _endDate,
           budget: double.tryParse(_budgetController.text) ?? 0.0,
-          imageUrls: finalImageUrls,
-          isCompleted: widget.initialJourney?.isCompleted ?? false,
+          startDate: _selectedStartDate,
+          endDate: _selectedEndDate,
+          imageUrls: _imageUrls,
+          isCompleted: false,
         );
 
-        widget.onSave(journeyData);
+        widget.onSave(newJourney);
 
       } catch (e) {
         if (mounted) {
@@ -130,8 +132,8 @@ class _JourneyFormState extends State<JourneyForm> {
   }
 
   Future<void> _selectDate(BuildContext context, bool isStartDate) async {
-     final DateTime initial = isStartDate ? _startDate : _endDate;
-     final DateTime first = isStartDate ? DateTime(2000) : _startDate;
+     final DateTime initial = isStartDate ? _selectedStartDate : _selectedEndDate;
+     final DateTime first = isStartDate ? DateTime(2000) : _selectedStartDate;
 
      final DateTime? picked = await showDatePicker(
        context: context,
@@ -143,12 +145,12 @@ class _JourneyFormState extends State<JourneyForm> {
      if (picked != null) {
        setState(() {
          if (isStartDate) {
-           _startDate = picked;
-           if (_endDate.isBefore(_startDate)) {
-              _endDate = _startDate.add(const Duration(days: 1));
+           _selectedStartDate = picked;
+           if (_selectedEndDate.isBefore(_selectedStartDate)) {
+              _selectedEndDate = _selectedStartDate.add(const Duration(days: 1));
            }
          } else {
-           _endDate = picked;
+           _selectedEndDate = picked;
          }
        });
      }
@@ -219,13 +221,13 @@ class _JourneyFormState extends State<JourneyForm> {
             const SizedBox(height: 10),
             ListTile(
                contentPadding: EdgeInsets.zero,
-               title: Text('Start Date: ${_formatDate(_startDate)}'),
+               title: Text('Start Date: ${_formatDate(_selectedStartDate)}'),
                trailing: const Icon(Icons.calendar_today),
                onTap: () => _selectDate(context, true),
             ),
             ListTile(
                contentPadding: EdgeInsets.zero,
-               title: Text('End Date: ${_formatDate(_endDate)}'),
+               title: Text('End Date: ${_formatDate(_selectedEndDate)}'),
                trailing: const Icon(Icons.calendar_today),
                onTap: () => _selectDate(context, false),
             ),
@@ -242,7 +244,7 @@ class _JourneyFormState extends State<JourneyForm> {
             ),
              const SizedBox(height: 20),
             ElevatedButton(
-              onPressed: _isLoading ? null : _submitData,
+              onPressed: _isLoading ? null : _submitForm,
               style: ElevatedButton.styleFrom(minimumSize: const Size(double.infinity, 36)),
               child: _isLoading
                   ? const SizedBox(

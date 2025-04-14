@@ -71,6 +71,10 @@
 	<string>This app needs access to your camera to allow you to take photos for your travel journeys.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>This app needs access to your photo library to allow you to select and upload images for your travel journeys.</string>
+	<key>NSCameraUsageDescription</key>
+    <string>This app needs access to your camera to take photos for your travel journeys.</string>
+	<key>NSMicrophoneUsageDescription</key>
+    <string>This app needs access to your microphone to record audio for videos attached to your travel journeys.</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>PROJECT_ID</key>
