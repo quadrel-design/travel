@@ -1,308 +1,335 @@
-/// <reference types="jsr:@supabase/functions-js/edge-runtime.d.ts" />
-// import "jsr:@supabase/functions-js/edge-runtime.d.ts"; // Keep commented if directive is used
-import { createClient } from 'npm:@supabase/supabase-js@2'; // Revert to npm: specifier
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { decode } from 'https://deno.land/std@0.208.0/encoding/base64.ts';
 
-// index.ts - REST API Version
-console.log("--- index.ts script loading (REST API Version) ---");
+console.log("Detect Invoice Text function startup (Vision + OpenAI Version)..."); // Add startup log
 
-// Helper function to get secrets
-function getEnv(key: string): string {
-  const value = Deno.env.get(key);
-  if (value === undefined) {
-    // Throw error if critical secret is missing in production
-    throw new Error(`Missing environment variable: ${key}`);
-  }
-  return value;
+// Define CORS headers (Restored)
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*', // Allow requests from any origin
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type', // Specify allowed headers
+};
+
+// Initialize Supabase client
+const supabaseAdmin = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+);
+
+// Google Cloud Vision API Configuration
+const GOOGLE_VISION_API_KEY = Deno.env.get('GOOGLE_CLOUD_API_KEY');
+const VISION_API_URL = `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`;
+
+// OpenAI API Configuration
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY'); // Fetch key from Supabase Vault
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
+const OPENAI_MODEL = 'gpt-4o-mini'; // Use the cheapest capable model
+
+interface VisionApiResponse {
+  responses: {
+    fullTextAnnotation?: {
+      text: string;
+    };
+    error?: {
+      message: string;
+    };
+  }[];
 }
 
-// --- Google Auth Helpers (JWT for Service Account) ---
-
-const GOOGLE_TOKEN_URI = "https://oauth2.googleapis.com/token";
-const GOOGLE_VISION_API_SCOPE = "https://www.googleapis.com/auth/cloud-vision";
-const GOOGLE_VISION_API_ENDPOINT = "https://vision.googleapis.com/v1/images:annotate";
-
-interface ServiceAccountCredentials {
-  type: string;
-  project_id: string;
-  private_key_id: string;
-  private_key: string;
-  client_email: string;
-  client_id: string;
-  auth_uri: string;
-  token_uri: string;
-  auth_provider_x509_cert_url: string;
-  client_x509_cert_url: string;
-  universe_domain: string;
-}
-
-// Helper to import PKCS8 private key for Web Crypto API
-async function importPrivateKey(pemKey: string): Promise<CryptoKey> {
-  // Remove PEM header/footer and line breaks
-  const pemBody = pemKey
-    .replace(/-----BEGIN PRIVATE KEY-----/, '')
-    .replace(/-----END PRIVATE KEY-----/, '')
-    .replace(/\s+/g, '');
-  const keyBuffer = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
-
-  try {
-    return await crypto.subtle.importKey(
-      "pkcs8",
-      keyBuffer,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      true, // extractable
-      ["sign"]
-    );
-  } catch (e) {
-     console.error("Failed to import private key:", e);
-     throw new Error(`Failed to import private key: ${e.message}`);
-  }
-}
-
-// Creates a signed JWT assertion
-async function createJwtAssertion(
-  creds: ServiceAccountCredentials,
-  privateKey: CryptoKey
-): Promise<string> {
-  const iat = Math.floor(Date.now() / 1000);
-  const exp = iat + 3600; // Expires in 1 hour
-
-  const header = { alg: "RS256", typ: "JWT" };
-  const payload = {
-    iss: creds.client_email,
-    scope: GOOGLE_VISION_API_SCOPE,
-    aud: GOOGLE_TOKEN_URI,
-    exp: exp,
-    iat: iat,
+interface OpenAiApiResponse {
+  choices: {
+    message: {
+      content: string;
+    };
+  }[];
+  error?: {
+    message: string;
   };
-
-  const headerBase64 = btoa(JSON.stringify(header)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const payloadBase64 = btoa(JSON.stringify(payload)).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-  const unsignedToken = `${headerBase64}.${payloadBase64}`;
-
-  const signature = await crypto.subtle.sign(
-    { name: "RSASSA-PKCS1-v1_5" },
-    privateKey,
-    new TextEncoder().encode(unsignedToken)
-  );
-
-  const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
-
-  return `${unsignedToken}.${signatureBase64}`;
 }
 
-// Fetches an OAuth 2.0 access token
-async function getAccessToken(): Promise<string> {
-  let creds: ServiceAccountCredentials;
-  let privateKey: CryptoKey;
-  let assertion: string;
+interface ExtractedAmount {
+    amount: number | null;
+    currency: string | null;
+}
 
-  try { // Add try block for granular logging
-    console.log("[getAccessToken] Attempting to get Google credentials secret...");
-    const credentialsJson = getEnv('GOOGLE_APPLICATION_CREDENTIALS_JSON');
+// Helper function to safely parse potential JSON in OpenAI response
+function tryParseJson(jsonString: string): any | null {
+  try {
+    // Sanitize potential markdown code fences if present
+    const sanitizedString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    return JSON.parse(sanitizedString);
+  } catch (error) {
+    console.error('Failed to parse JSON from OpenAI response:', error, 'Raw string:', jsonString);
+    return null; // Return null or the raw string if parsing fails
+  }
+}
 
-    console.log("[getAccessToken] Attempting to parse credentials JSON...");
-    try {
-      creds = JSON.parse(credentialsJson);
-    } catch (e) {
-      console.error("[getAccessToken] Failed to parse credentials JSON:", e);
-      throw new Error(`Invalid credentials JSON: ${e.message}`);
+// Helper function to extract amount and currency from OpenAI response
+function extractAmountDetails(content: string | null): ExtractedAmount {
+    if (!content) {
+        console.log("No content received from OpenAI to extract details.");
+        return { amount: null, currency: null };
     }
-    console.log("[getAccessToken] Credentials parsed, importing private key...");
 
-    privateKey = await importPrivateKey(creds.private_key);
-    console.log("[getAccessToken] Private key imported, creating JWT assertion...");
+    const parsedJson = tryParseJson(content);
 
-    assertion = await createJwtAssertion(creds, privateKey);
-    console.log("[getAccessToken] JWT assertion created, fetching access token...");
+    if (parsedJson && typeof parsedJson.amount === 'number' && typeof parsedJson.currency === 'string') {
+         console.log("Successfully parsed JSON:", parsedJson);
+         // Check if currency is a reasonable length (e.g., <= 3 chars for codes, or 1 for symbols)
+         if (parsedJson.currency.length > 0 && parsedJson.currency.length <= 3) {
+              return { amount: parsedJson.amount, currency: parsedJson.currency.toUpperCase() };
+         } else if (parsedJson.currency.length > 3) {
+             // Attempt to extract common symbols/codes if a longer string is returned
+             const currencyMatch = parsedJson.currency.match(/([€$£]|USD|EUR|GBP|CHF)/i);
+             if (currencyMatch) {
+                 console.warn("Extracted currency was long, using matched symbol/code:", currencyMatch[1]);
+                 return { amount: parsedJson.amount, currency: currencyMatch[1].toUpperCase() };
+             } else {
+                 console.warn("Extracted currency seems invalid:", parsedJson.currency);
+                 return { amount: parsedJson.amount, currency: null }; // Return amount but nullify invalid currency
+             }
+         } else {
+             // Allow empty string if model returns it, maybe indicates not found
+             console.warn("Extracted currency is empty string.");
+             return { amount: parsedJson.amount, currency: null };
+         }
+    } else if (parsedJson && (parsedJson.amount === null || parsedJson.currency === null)) {
+        // Handle cases where the model explicitly returns nulls in JSON
+        console.log("OpenAI explicitly returned null for amount or currency:", parsedJson);
+        return {
+            amount: typeof parsedJson.amount === 'number' ? parsedJson.amount : null,
+            currency: typeof parsedJson.currency === 'string' ? parsedJson.currency : null
+        };
+    }
+    else {
+         console.warn("OpenAI response was not in the expected JSON format or types were wrong:", content);
+         // Fallback: Try simple regex for amount only if JSON fails (less reliable)
+         // Look for numbers with decimal points or common currency symbols nearby
+         const amountMatch = content.match(/([€$£]?\s?\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{1,2})|\d+[.,]\d{1,2})/);
+         if (amountMatch) {
+             try {
+                 // Extract number part, normalize decimal separator
+                 const numStr = amountMatch[0].replace(/[€$£\s]/g, '').replace(',', '.');
+                 const potentialAmount = parseFloat(numStr);
+                 console.log("Using fallback regex, found potential amount:", potentialAmount);
+                 // Very basic currency check based on symbols found
+                 let potentialCurrency: string | null = null;
+                 if (amountMatch[0].includes('€')) potentialCurrency = 'EUR';
+                 else if (amountMatch[0].includes('$')) potentialCurrency = 'USD'; // Guess USD for $
+                 else if (amountMatch[0].includes('£')) potentialCurrency = 'GBP';
+                 return { amount: potentialAmount, currency: potentialCurrency };
+             } catch (numError) {
+                  console.error("Error parsing fallback number:", numError);
+             }
+         }
+    }
 
-  } catch (e) {
-    console.error("[getAccessToken] Error during credential/JWT processing:", e);
-    throw e; // Re-throw error to be caught by main handler
-  }
-
-  // Fetching token (keep outside initial try block for now to separate concerns)
-  const response = await fetch(GOOGLE_TOKEN_URI, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded'
-    },
-    body: new URLSearchParams({
-      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-      assertion: assertion,
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error("Failed to fetch access token:", response.status, errorText);
-    throw new Error(`Failed to get access token: ${response.status} ${errorText}`);
-  }
-
-  const tokenData = await response.json();
-  console.log("Access token fetched successfully.");
-  return tokenData.access_token;
+    console.log("Could not extract amount details.");
+    return { amount: null, currency: null };
 }
 
-// --- Invoice Keywords & Symbols ---
-const INVOICE_KEYWORDS = [
-  'invoice', 'bill', 'receipt', 'total', 'amount', 'due', 'tax', 'vat',
-  'subtotal', 'payment', 'charge', 'service', 'balance', 'paid'
-];
-const CURRENCY_SYMBOLS = /\$|€|£|¥|₹/; // Regex for common currency symbols
 
-// --- Main Request Handler ---
-Deno.serve(async (req) => {
-  const functionStartTime = Date.now();
-  console.log(`[${functionStartTime}] Function execution started.`);
-
-  // 1. CORS Preflight
+serve(async (req: Request) => {
+  console.log(`Request received: ${req.method} ${req.url}`);
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log(`[${functionStartTime}] Handling OPTIONS request.`);
-    return new Response('ok', {
-      headers: {
-        'Access-Control-Allow-Origin': '*', // Adjust for production
-        'Access-Control-Allow-Methods': 'POST',
-        'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
-      }
-    });
-  }
-
-  // 2. Validate Method
-  if (req.method !== 'POST') {
-    console.warn(`[${functionStartTime}] Received non-POST request (${req.method}).`);
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    });
+    console.log("Handling OPTIONS request");
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    console.log(`[${functionStartTime}] Processing POST request...`);
-    // 3. Parse Request Body & Get Inputs
-    let imageData: string;
-    let recordId: string; // <<< Expect recordId
-    try {
-      const body = await req.json();
-      imageData = body.imageData; 
-      recordId = body.recordId; // <<< Get recordId from body
-      if (!imageData || !recordId) { // <<< Validate both
-        throw new Error("Missing 'imageData' or 'recordId' in request body.");
-      }
-      console.log(`[${functionStartTime}] Received request for recordId: ${recordId} (Image data length: ${imageData.length})`);
-    } catch (error) {
-      console.error(`[${functionStartTime}] Request Body Error:`, error);
-      return new Response(JSON.stringify({ error: 'Invalid request body', details: error.message }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      });
+    // 1. Extract data from the request
+    console.log("Parsing request body...");
+    const { image_base64, journey_image_id } = await req.json();
+    if (!image_base64 || !journey_image_id) {
+      console.error("Missing image_base64 or journey_image_id");
+      throw new Error('Missing image_base64 or journey_image_id in request body');
+    }
+    console.log(`Received image_base64 (length: ${image_base64.length}), journey_image_id: ${journey_image_id}`);
+
+    if (!GOOGLE_VISION_API_KEY) {
+      console.error("Missing GOOGLE_CLOUD_API_KEY");
+      throw new Error('Missing GOOGLE_CLOUD_API_KEY environment variable');
+    }
+     if (!OPENAI_API_KEY) {
+      console.error("Missing OPENAI_API_KEY");
+      throw new Error('Missing OPENAI_API_KEY secret in Supabase Vault');
     }
 
-    // 4. Get Google Access Token
-    console.log(`[${functionStartTime}] Attempting to get Google access token...`);
-    const accessToken = await getAccessToken();
-    console.log(`[${functionStartTime}] Google access token obtained.`);
+    console.log(`Processing image ID: ${journey_image_id}`);
 
-    // 5. Prepare Vision API Request
-    const visionRequestBody = {
+    // 2. Call Google Vision API for OCR
+    console.log('Calling Google Vision API...');
+    const visionApiBody = {
       requests: [
         {
-          image: { content: imageData },
-          features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+          image: {
+            content: image_base64,
+          },
+          features: [
+            // Use DOCUMENT_TEXT_DETECTION for better structure if needed later,
+            // but TEXT_DETECTION is sufficient for getting the raw text block.
+            { type: 'TEXT_DETECTION' },
+          ],
         },
       ],
     };
 
-    // 6. Call Google Vision API
-    console.log(`[${functionStartTime}] Calling Google Vision API...`);
-    const visionApiStartTime = Date.now();
-    const visionResponse = await fetch(GOOGLE_VISION_API_ENDPOINT, {
+    const visionResponse = await fetch(VISION_API_URL, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json; charset=utf-8',
-      },
-      body: JSON.stringify(visionRequestBody),
+      body: JSON.stringify(visionApiBody),
+      headers: { 'Content-Type': 'application/json' },
     });
-    const visionApiEndTime = Date.now();
-    console.log(`[${functionStartTime}] Vision API call duration: ${visionApiEndTime - visionApiStartTime} ms, Status: ${visionResponse.status}`);
 
+    console.log(`Google Vision API response status: ${visionResponse.status}`);
     if (!visionResponse.ok) {
-      const errorText = await visionResponse.text();
-      console.error(`[${functionStartTime}] Google Vision API Error Response:`, errorText);
-      throw new Error(`Google Vision API failed: ${visionResponse.status} ${errorText}`);
+      const errorBody = await visionResponse.text();
+      console.error('Google Vision API error response body:', errorBody);
+      throw new Error(`Google Vision API request failed: ${visionResponse.status} ${visionResponse.statusText}`);
     }
 
-    // 7. Process Vision API Response
-    const visionResult = await visionResponse.json();
-    const detectedText = visionResult.responses?.[0]?.fullTextAnnotation?.text ?? '';
-    const hasPotentialText = detectedText.length > 0;
-    console.log(`[${functionStartTime}] Vision API text detection complete. Has Text: ${hasPotentialText}, Text Length: ${detectedText.length}`);
+    const visionResult = await visionResponse.json() as VisionApiResponse;
+    const annotation = visionResult.responses?.[0]?.fullTextAnnotation;
+    const detectedText = annotation?.text?.trim() || null;
+    const visionError = visionResult.responses?.[0]?.error?.message;
 
-    // 8. Perform Invoice Check (if text detected)
-    let isInvoiceGuess = false;
-    if (hasPotentialText) {
-      const lowerCaseText = detectedText.toLowerCase();
-      let keywordCount = 0;
-      for (const keyword of INVOICE_KEYWORDS) {
-        if (lowerCaseText.includes(keyword)) keywordCount++;
-      }
-      const hasCurrency = CURRENCY_SYMBOLS.test(lowerCaseText);
-      if (keywordCount >= 1 || hasCurrency) { // Adjust threshold if needed
-        isInvoiceGuess = true;
-      }
-      console.log(`[${functionStartTime}] Invoice Check - Keyword Count: ${keywordCount}, Has Currency: ${hasCurrency}, Result: ${isInvoiceGuess}`);
-    } else {
-      console.log(`[${functionStartTime}] Skipping invoice check as no text was detected.`);
+    if (visionError) {
+       console.error(`Vision API returned an error for image ${journey_image_id}: ${visionError}`);
+       // Decide if you want to update DB with error or just throw
+       // For now, we'll proceed without text if there's an error
     }
 
-    // 9. Update Supabase Database
-    console.log(`[${functionStartTime}] Attempting to update Supabase DB record: ${recordId}...`);
-    const supabaseUrl = getEnv('SUPABASE_URL');
-    const supabaseAnonKey = getEnv('SUPABASE_ANON_KEY'); 
-    // Use service role key for backend updates for security/simplicity
-    const supabaseServiceKey = getEnv('SUPABASE_SERVICE_ROLE_KEY'); 
+    if (!detectedText) {
+        console.log(`No text detected by Vision API for image ${journey_image_id}. Updating DB.`);
+        // Update DB indicating no text found, maybe clear other fields?
+         const { error: updateError } = await supabaseAdmin
+            .from('journey_images')
+            .update({
+                has_potential_text: false,
+                detected_text: null,
+                is_invoice_guess: false,
+                detected_total_amount: null,
+                detected_currency: null,
+                last_processed_at: new Date().toISOString(), // Add timestamp
+            })
+            .eq('id', journey_image_id);
+        if (updateError) {
+            console.error("Supabase update error (no text case):", updateError);
+            throw updateError;
+        }
+        console.log(`DB updated for no text detected: ${journey_image_id}`);
+        return new Response(JSON.stringify({ message: 'No text detected', journey_image_id }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200,
+         });
+    }
 
-    // Use service role client for update
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    console.log(`Detected text for ${journey_image_id} (length: ${detectedText.length}). First 100 chars: ${detectedText.substring(0, 100)}...`);
 
+    // 3. Basic Invoice Guess (optional, keep if useful)
+    const simpleInvoiceGuess = /(invoice|rechnung|total|amount|betrag)/i.test(detectedText);
+    console.log(`Simple invoice guess: ${simpleInvoiceGuess}`);
+
+    // 4. Call OpenAI API to extract total amount and currency
+    let extractedAmount: number | null = null;
+    let extractedCurrency: string | null = null;
+
+    console.log('Calling OpenAI API...');
+    try {
+        const openAiApiBody = {
+          model: OPENAI_MODEL,
+          messages: [
+            {
+              role: 'system',
+              content: `You are an assistant specialized in extracting the final total amount and its currency from OCR text of invoices or receipts. Respond ONLY with a JSON object containing "amount" (as a number, using '.' as decimal separator) and "currency" (as a 3-letter ISO code like EUR or USD, or a common symbol like € or $). If no clear final total amount is found, return {"amount": null, "currency": null}. Focus on the final amount due, ignoring subtotals and line item prices.`
+            },
+            {
+              role: 'user',
+              content: `Extract the final total amount and currency from the following text:\n\n${detectedText}`
+            }
+          ],
+          temperature: 0.1, // Lower temperature for more deterministic output
+          max_tokens: 60, // Slightly increased token limit for JSON structure
+          response_format: { type: "json_object" } // Request JSON output
+        };
+
+        const openAiResponse = await fetch(OPENAI_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${OPENAI_API_KEY}`
+          },
+          body: JSON.stringify(openAiApiBody)
+        });
+
+        console.log(`OpenAI API response status: ${openAiResponse.status}`);
+         if (!openAiResponse.ok) {
+          const errorBody = await openAiResponse.text();
+          console.error('OpenAI API error response body:', errorBody);
+          // Don't throw, just log and proceed without amount
+        } else {
+             const openAiResult = await openAiResponse.json() as OpenAiApiResponse;
+             if (openAiResult.error) {
+                 console.error('OpenAI API returned an error object:', openAiResult.error.message);
+             } else {
+                const messageContent = openAiResult.choices?.[0]?.message?.content;
+                console.log('OpenAI raw response content:', messageContent); // Log raw response
+                if (messageContent) {
+                    const details = extractAmountDetails(messageContent);
+                    extractedAmount = details.amount;
+                    extractedCurrency = details.currency;
+                    console.log(`Extracted amount: ${extractedAmount}, Currency: ${extractedCurrency}`);
+                } else {
+                     console.warn("No message content found in OpenAI response.");
+                }
+             }
+        }
+
+    } catch (error) {
+         console.error(`Error during OpenAI API call for image ${journey_image_id}:`, error);
+         // Proceed without amount if OpenAI fails
+    }
+
+
+    // 5. Update Supabase
+    console.log(`Updating Supabase for ${journey_image_id} with Amount: ${extractedAmount}, Currency: ${extractedCurrency}`);
     const { error: updateError } = await supabaseAdmin
       .from('journey_images')
       .update({
-        has_potential_text: hasPotentialText,
-        is_invoice_guess: isInvoiceGuess,
-        detected_text: detectedText, // Store the detected text
+        has_potential_text: true,
+        detected_text: detectedText,
+        is_invoice_guess: simpleInvoiceGuess, // Keep simple guess for now
+        detected_total_amount: extractedAmount, // Store extracted amount
+        detected_currency: extractedCurrency,   // Store extracted currency
+        last_processed_at: new Date().toISOString(), // Add timestamp
       })
-      .eq('id', recordId); // <<< Use recordId to target the update
+      .eq('id', journey_image_id);
 
     if (updateError) {
-      console.error(`[${functionStartTime}] Supabase DB Update Error for record ${recordId}:`, updateError);
-      throw new Error(`Failed to update database record: ${updateError.message}`);
+      console.error('Supabase update error:', updateError);
+      throw updateError; // Throw if DB update fails
     }
-    console.log(`[${functionStartTime}] Supabase DB record ${recordId} updated successfully.`);
 
-    // 10. Return Success Response (No body needed)
-    const functionEndTime = Date.now();
-    console.log(`[${functionStartTime}] Function execution finished successfully. Duration: ${functionEndTime - functionStartTime} ms`);
-    return new Response(null, { // Return 204 No Content or simple 200 OK
-      status: 200, // Or 204
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Content-Type': 'application/json' // Even if body is null
-      },
+    console.log(`Successfully processed and updated image ID: ${journey_image_id}`);
+
+    // 6. Return success response
+    return new Response(JSON.stringify({
+         message: 'Image processed successfully',
+         journey_image_id,
+         detected_text_length: detectedText.length,
+         is_invoice_guess: simpleInvoiceGuess,
+         detected_total_amount: extractedAmount,
+         detected_currency: extractedCurrency
+     }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
     });
 
   } catch (error) {
-    // Catch errors from any step
-    const functionEndTime = Date.now();
-    console.error(`[${functionStartTime}] Function execution failed. Duration: ${functionEndTime - functionStartTime} ms. Error:`, error);
-    return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), {
+    console.error('Unhandled Error in Edge Function:', error);
+    return new Response(JSON.stringify({ error: error.message || 'An unexpected error occurred' }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
-      },
     });
   }
 });
-
-console.log("Detect Invoice Text function startup (REST API Version)...");

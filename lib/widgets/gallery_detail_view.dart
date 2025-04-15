@@ -13,6 +13,7 @@ import '../models/journey_image_info.dart'; // Add import for the model
 import 'package:http/http.dart' as http; // Add http import for http.get
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import AppLocalizations
 import '../providers/gallery_detail_provider.dart'; // Import the new provider
+import 'package:intl/intl.dart'; // Add intl import
 
 // Change to ConsumerStatefulWidget
 class GalleryDetailView extends ConsumerStatefulWidget {
@@ -51,12 +52,7 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
   // --- End State for Signed URLs ---
 
   // --- Scan Logic State ---
-  bool _isScanning = false; // Keep local UI state
-
-  // REMOVE Realtime channel state
-  // REMOVE _stateImages (will use provider)
-  // REMOVE _currentSessionScanStatus (will use provider state directly)
-
+  bool _isScanning = false; // Use provider state instead for scan initiated
 
   @override
   void initState() {
@@ -64,24 +60,21 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     currentIndex = widget.initialIndex;
     pageController = PageController(initialPage: widget.initialIndex);
     // Fetch initial signed URLs
+    // Use the image list directly from the widget as the initial state for the provider
+    // is derived from this same list.
     _fetchSignedUrls(widget.images.length, images: widget.images);
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Optional: Could potentially re-initialize provider if needed, but .family should handle it.
   }
 
   @override
   void dispose() {
-    // REMOVE channel unsubscription
     pageController.dispose();
     super.dispose();
   }
-
-  // REMOVE _setupRealtimeListener method
-  // REMOVE _handleRealtimeUpdate method
 
   // --- Signed URL Logic Start ---
   String? _extractPath(String url) {
@@ -108,33 +101,29 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     }
   }
 
-  // fetchSignedUrls remains mostly the same, called by initState and ref.listen
   Future<void> _fetchSignedUrls(int imageCount, {required List<JourneyImageInfo> images}) async {
      if (!mounted) return;
       // Prevent refetch if already loading
-     if (_isLoadingSignedUrls && _signedUrls.isNotEmpty) {
-        widget.logger.d('Skipping signed URL fetch, already in progress.');
+     if (_isLoadingSignedUrls && _signedUrls.isNotEmpty && _signedUrls.any((url) => url != null)) {
+        widget.logger.d('Skipping signed URL fetch, already in progress or completed.');
         return;
      }
      widget.logger.d('Fetching signed URLs for $imageCount images.');
      setState(() {
        _isLoadingSignedUrls = true;
        _signedUrlError = null;
-       // Ensure _signedUrls list size matches imageCount before filling
        if (_signedUrls.length != imageCount) {
          _signedUrls = List.filled(imageCount, null);
        }
      });
 
-     List<String?> results = [];
+     List<String?> results = List.filled(imageCount, null);
      bool hadError = false;
      final imageList = images;
 
-     // Use indexed loop to handle potential mismatches more gracefully
      for (int i = 0; i < imageCount; i++) {
         if (i >= imageList.length) {
             widget.logger.w('Index $i out of bounds for imageList (length ${imageList.length}) during signed URL fetch.');
-            results.add(null);
             hadError = true;
             continue;
         }
@@ -142,22 +131,19 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
         final path = _extractPath(imageInfo.url);
         if (path == null) {
           widget.logger.w('Could not extract path for ${imageInfo.url}');
-          results.add(null);
           hadError = true;
           continue;
         }
         try {
           final signedUrl = await _generateSignedUrl(path);
-          results.add(signedUrl);
+          results[i] = signedUrl;
         } catch (e) {
-          results.add(null);
           hadError = true;
         }
       }
 
      if (!mounted) return;
      setState(() {
-       // Now results list should match imageCount
        _signedUrls = results;
        _isLoadingSignedUrls = false;
        if (hadError) {
@@ -171,32 +157,25 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
   void _handleDelete() async {
     // Get images from provider
     final images = ref.read(galleryDetailProvider(widget.images)).images;
-    // Check mount status early
     if (!mounted) return; 
     if (_isDeleting || images.isEmpty || currentIndex >= images.length) return;
 
     final imageToDelete = images[currentIndex];
     final imageUrlToDelete = imageToDelete.url;
-    final imageIdToDelete = imageToDelete.id; // Get ID
+    final imageIdToDelete = imageToDelete.id;
 
-    setState(() { _isDeleting = true; }); // Use local state for loading indicator
+    setState(() { _isDeleting = true; });
     widget.logger.i('Attempting delete via callback for: $imageUrlToDelete');
 
     try {
-      // 1. Call parent delete function (handles DB/Storage)
       await widget.onDeleteImage(imageUrlToDelete);
       widget.logger.i('Parent delete callback successful for: $imageUrlToDelete');
 
-      // 2. Call parent success callback
       widget.onImageDeletedSuccessfully(imageUrlToDelete);
 
-      // 3. Update Riverpod state AFTER parent callbacks succeed
-      // Check mounted again after await
       if (mounted) {
           ref.read(galleryDetailProvider(widget.images).notifier).handleDeletion(imageIdToDelete);
           widget.logger.i('Called handleDeletion on notifier for ID: $imageIdToDelete');
-          // No need to pop here - build method's empty check handles it
-          // No need to manually update _signedUrls - ref.listen handles it
       }
 
     } catch (e) {
@@ -207,349 +186,271 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
           );
         }
     } finally {
-        // Only set _isDeleting false if UI didn't get removed by build method's empty check
         if (mounted) setState(() { _isDeleting = false; });
     }
   }
 
   // --- Scan Logic ---
-  Future<void> _handleScan() async {
-     // Get images from provider
-    final images = ref.read(galleryDetailProvider(widget.images)).images;
-     // Check mount status early
-    if (!mounted) return; 
-    if (_isScanning || images.isEmpty || currentIndex >= images.length) return;
+  Future<void> _handleScan(String imageId, String? imageUrl) async {
+    // Use imageUrl from provider to ensure consistency
+     if (!mounted) return;
 
-    final currentImageIndex = currentIndex; // Store index
-    final imageInfo = images[currentImageIndex];
-    final imageId = imageInfo.id;
     widget.logger.i('Triggering scan for image ID: $imageId');
 
     // --- Reset status in provider state --- 
     ref.read(galleryDetailProvider(widget.images).notifier).resetScanStatus(imageId);
-    // Start local loading indicator
-    setState(() { _isScanning = true; });
+    // No need for local _isScanning state, provider state tracks initiation
     // --- End Reset --- 
 
     try {
-      // Ensure signed URLs are available before trying to download
-      if (_isLoadingSignedUrls || _signedUrls.length <= currentImageIndex || _signedUrls[currentImageIndex] == null) {
-          widget.logger.w('Scan attempted before signed URL was ready for index $currentImageIndex. Trying public URL.');
-          // Optionally try fetching signed URLs again or just use public URL
-      }
-      
-      // Use signed URL if available, otherwise fallback to original URL
-      final urlToDownload = _signedUrls.length > currentImageIndex && _signedUrls[currentImageIndex] != null 
-                            ? _signedUrls[currentImageIndex]! 
-                            : imageInfo.url;
-      widget.logger.d('Attempting to download from: $urlToDownload');
+       // Prefer signed URL if available and valid for the current image index
+       String? urlToDownload = imageUrl; // Fallback to the public URL
+       if (currentIndex < _signedUrls.length && _signedUrls[currentIndex] != null) {
+           urlToDownload = _signedUrls[currentIndex]!;
+           widget.logger.d("Using signed URL for download: $urlToDownload");
+       } else if (imageUrl != null) {
+            widget.logger.w("Signed URL not available or index mismatch for index $currentIndex. Falling back to public URL: $imageUrl");
+       } else {
+           // If both imageUrl (passed in) and signedUrl are null, we cannot proceed.
+           throw Exception('Image URL is null, cannot download.'); 
+       }
+       
+       // Explicit null check before parsing
+       if (urlToDownload == null) {
+           throw Exception('URL to download is null after checks.');
+       }
 
-      final httpResponse = await http.get(Uri.parse(urlToDownload));
+      widget.logger.d("Attempting to download from: $urlToDownload");
+      final httpResponse = await http.get(Uri.parse(urlToDownload)); // Now safe
+      widget.logger.d("Image download status: ${httpResponse.statusCode}");
+
       if (httpResponse.statusCode != 200) {
-        throw Exception('Failed to download image: ${httpResponse.statusCode}');
+        throw Exception("Failed to download image: ${httpResponse.statusCode}");
       }
-      final imageBytes = httpResponse.bodyBytes;
-      final base64Image = base64Encode(imageBytes);
-      widget.logger.d('Image downloaded and encoded for scan (ID: $imageId)');
 
+      final imageBytes = httpResponse.bodyBytes;
+      final imageBase64 = base64Encode(imageBytes);
+      widget.logger.d("Image downloaded and encoded for scan (ID: $imageId)");
+
+      // Call Supabase Edge Function
+      widget.logger.d("Invoking Edge Function 'detect-invoice-text'..."); // Use double quotes
       final response = await Supabase.instance.client.functions.invoke(
         'detect-invoice-text',
-        body: {'imageData': base64Image, 'recordId': imageId},
+        body: {
+          'image_base64': imageBase64,
+          'journey_image_id': imageId,
+        },
       );
+      widget.logger.d("Edge Function response status: ${response.status}");
 
       if (response.status != 200) {
-        widget.logger.e('Error calling edge function for scan (ID $imageId): Status ${response.status}, Data: ${response.data}');
-        // Let the Realtime listener handle the actual state based on DB, but show user error
-         if (mounted) {
-            ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Analysis request failed (${response.status}).')) // TODO: Localize
-            );
-         }
-        // Do not throw exception here, allow finally block to run
-      } else {
-        widget.logger.i('Edge function call successful for scan (ID $imageId). DB update pending.');
-        // Wait for Realtime update to set provider state and show chip
-        if (mounted) {
-          ScaffoldMessenger.of(context).hideCurrentSnackBar();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Analysis initiated.')), // TODO: Localize
-          );
-        }
+        widget.logger.e('Edge function invocation failed with status ${response.status}', error: response.data);
+        throw Exception('Failed to process image: ${response.data?['error'] ?? 'Unknown error'}');
       }
-    } catch (e) {
-      widget.logger.e('Error during scan for ID $imageId', error: e);
+
+      widget.logger.i('Edge function call successful for scan (ID $imageId). DB update pending.');
+      // No need to set state here, Realtime listener in provider handles updates
+
+    } catch (e, stackTrace) {
+      widget.logger.e('Error during scan process for image ID $imageId', error: e, stackTrace: stackTrace);
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error starting analysis: $e')), // TODO: Localize
+          SnackBar(content: Text('Error scanning image: ${e.toString()}')) // TODO: Localize
         );
+        // Optionally reset the scanInitiatedInSession state here if needed, though it might clear too early
+        // ref.read(galleryDetailProvider(widget.images).notifier).clearScanInitiation(imageId); // Example hypothetical method
       }
-      // No need to update provider state on error - rely on Realtime if function partially succeeded
-      // or let the lack of update leave hasPotentialText as null.
     } finally {
-      if (mounted) setState(() { _isScanning = false; });
+       // No need to manage local _isScanning state
     }
   }
   // --- End Scan Logic ---
 
-  void onPageChanged(int index) {
-    setState(() {
-      currentIndex = index;
-      // Potential place to reset session scan status if needed when swiping?
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
-    // *** Watch the Provider ***
-    // Pass the initial list from the widget to the provider family
+    // --- Ref.watch for state changes --- 
     final galleryState = ref.watch(galleryDetailProvider(widget.images));
-    final images = galleryState.images; // Get the current image list from state
-    final scanInitiatedInSession = galleryState.scanInitiatedInSession; // Get the set
+    final images = galleryState.images;
 
-    // *** Listen for changes in image count to refetch signed URLs ***
+    // --- Ref.listen for side effects (like refetching signed URLs) ---
     ref.listen<GalleryDetailState>(galleryDetailProvider(widget.images), (previous, next) {
-        final previousCount = previous?.images.length ?? widget.images.length;
-        final nextCount = next.images.length;
-        // Refetch if count changes (e.g., after deletion)
-        if (previousCount != nextCount) {
-            widget.logger.i('Image count changed from $previousCount to $nextCount, refetching signed URLs.');
-            _fetchSignedUrls(nextCount, images: next.images);
-        }
-        // Optional: Show snackbar on error state change
-        if (previous?.error == null && next.error != null) {
-           ScaffoldMessenger.of(context).hideCurrentSnackBar();
-           ScaffoldMessenger.of(context).showSnackBar(
-             SnackBar(content: Text('Error: ${next.error}')) // TODO: Localize
-           );
-        }
+       // If image count changes (deletion), refetch signed URLs
+       if (previous != null && previous.images.length != next.images.length) {
+         widget.logger.d('Image count changed (${previous.images.length} -> ${next.images.length}), refetching signed URLs.');
+         _fetchSignedUrls(next.images.length, images: next.images);
+       }
+       // If an error appears in the state, show a snackbar
+       if (previous?.error == null && next.error != null) {
+         ScaffoldMessenger.of(context).removeCurrentSnackBar();
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(content: Text(next.error!))
+         );
+       }
     });
+    // --- End Listeners ---
 
-    // Access l10n for title localization
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context); // Access theme for styling
-
-    // Ensure currentIndex is valid for the provider's list
-    final safeCurrentIndex = currentIndex.clamp(0, max(0, images.length - 1)).toInt();
-
-    // Handle empty state based on provider's list
+    // Handle case where images become empty (e.g., last one deleted)
     if (images.isEmpty) {
-      widget.logger.w('GalleryDetailView build: images list from provider is empty.');
-      // Check if we are in the middle of a deletion process initiated from this screen
-      if (_isDeleting) {
-         // If deleting initiated here led to empty list, allow pop to happen in _handleDelete
-         return Scaffold(
-             backgroundColor: theme.colorScheme.background,
-             body: const Center(child: CircularProgressIndicator()) // Show loading while pop happens
-         );
-      } else {
-         // If list is empty for other reasons (e.g. started empty), show message or pop.
-          // Use addPostFrameCallback to avoid calling pop during build
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted && Navigator.canPop(context)) {
-               widget.logger.i('Popping GalleryDetailView because image list is empty and not deleting.');
-               Navigator.of(context).pop();
-            }
-          });
-         return Scaffold(
-           backgroundColor: theme.colorScheme.background,
-           appBar: AppBar(title: const Text('Gallery')), // Simple AppBar
-           body: Center(child: Text('No images found.', // TODO: Localize
-               style: TextStyle(color: theme.colorScheme.onBackground))),
-         );
-      }
+      // Optionally show a message or navigate back
+      return const Scaffold(
+        body: Center(child: Text("No images remaining.")), // TODO: Localize
+      );
     }
 
-     // Get the current image info from the PROVIDER's list
-    final JourneyImageInfo currentImageInfo = images[safeCurrentIndex];
-    final imageId = currentImageInfo.id;
+    // Ensure currentIndex is valid after potential deletions
+    currentIndex = min(currentIndex, images.length - 1);
+    if (currentIndex < 0) currentIndex = 0; // Should not happen if images is not empty
 
-    // --- Define chip based on BOTH provider state AND session tracking --- 
-    Widget? statusChip;
-    // *** Only consider showing chip if scan was initiated in this session ***
-    if (scanInitiatedInSession.contains(imageId)) {
-      // Now check the actual status from the provider
-      if (currentImageInfo.hasPotentialText != null) {
-         if (currentImageInfo.hasPotentialText == true &&
-             currentImageInfo.detectedText != null &&
-             currentImageInfo.detectedText!.isNotEmpty) {
-              statusChip = const Chip(/* Success */
-                 label: Text('OCR Okay'), backgroundColor: Colors.green,
-                 labelStyle: TextStyle(color: Colors.white),
-                 padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-              );
-         } else { // hasPotentialText is false OR (true but no text)
-            statusChip = const Chip(/* Failure */
-               label: Text('OCR Failed'), backgroundColor: Colors.red,
-               labelStyle: TextStyle(color: Colors.white),
-               padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-            );
-         }
-      } else {
-          // Scan initiated, but hasPotentialText is still null (processing/pending)
-          // Optionally show a pending chip?
-          /*
-          statusChip = const Chip(
-             label: Text('Processing...'), 
-             backgroundColor: Colors.orange, 
-             labelStyle: TextStyle(color: Colors.white),
-             padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 2.0),
-          );
-          */
-          // Or show nothing until success/fail comes back
-          statusChip = null;
-      }
-    }
-    // --- End Chip Logic --- 
+    // Get current image info from provider state
+    final JourneyImageInfo currentImageInfo = images[currentIndex];
+    final bool scanInitiated = galleryState.scanInitiatedInSession.contains(currentImageInfo.id);
 
-    // --- Signed URL Loading/Error Check --- 
-    // Check based on the length of the provider's list now
-    final expectedUrlCount = images.length;
-    // Only consider URLs ready if not loading AND list length matches expected
-    final urlsReady = !_isLoadingSignedUrls && _signedUrls.length == expectedUrlCount;
-    final urlError = _signedUrlError; // Keep local error state for URLs
+    // --- Add Logging ---
+    widget.logger.d(
+      'Build Detail View: Index: $currentIndex, ImageID: ${currentImageInfo.id}, ' 
+      'scanInitiated: $scanInitiated, hasPotentialText: ${currentImageInfo.hasPotentialText}, ' 
+      'Amount: ${currentImageInfo.detectedTotalAmount}, Currency: ${currentImageInfo.detectedCurrency}'
+    );
+    // --- End Logging ---
 
+    // Prepare NumberFormat for currency
+    final currencyFormat = NumberFormat.currency(
+      locale: Localizations.localeOf(context).toString(), // Use app's locale
+      symbol: currentImageInfo.detectedCurrency ?? '', // Use detected currency or empty string
+      decimalDigits: 2
+    );
 
     return Scaffold(
-      backgroundColor: theme.colorScheme.background,
       appBar: AppBar(
-        backgroundColor: theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface,
-        foregroundColor: theme.appBarTheme.foregroundColor ?? theme.colorScheme.onSurface,
-        elevation: 0,
-        shape: const Border(),
-        title: Text(l10n.galleryDetailTitle(safeCurrentIndex + 1, images.length), // Use images.length
-            style: theme.textTheme.titleMedium),
-        centerTitle: true,
-        iconTheme: theme.appBarTheme.iconTheme ?? theme.iconTheme,
-        actions: [
-          if (currentImageInfo.url != null)
-            IconButton(
-              icon: const Icon(Icons.download),
-              onPressed: () async { // Download logic remains the same
-                 ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.downloadingImage)));
-                 try {
-                   await Future.delayed(const Duration(seconds: 1));
-                   print('Download requested for: ${currentImageInfo.url}');
-                   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.downloadComplete)));
-                 } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(l10n.downloadFailed)));
-                 }
+        title: const Text('Gallery'), // Use hardcoded default
+        elevation: 2,
+      ),
+      body: _isLoadingSignedUrls
+          ? const Center(child: CircularProgressIndicator())
+          : PhotoViewGallery.builder(
+              itemCount: images.length,
+              pageController: pageController,
+              builder: (context, index) {
+                final imageInfo = images[index];
+                final signedUrl = (index < _signedUrls.length) ? _signedUrls[index] : null;
+
+                ImageProvider imageProvider;
+                if (signedUrl != null) {
+                  imageProvider = CachedNetworkImageProvider(signedUrl);
+                } else if (imageInfo.localPath != null && imageInfo.localPath!.isNotEmpty) {
+                   // If signed URL failed but we have a local path (e.g., just picked)
+                   try {
+                     imageProvider = FileImage(File(imageInfo.localPath!));
+                   } catch (e) {
+                     widget.logger.w('Error creating FileImage from ${imageInfo.localPath}', error: e);
+                     imageProvider = const AssetImage('assets/placeholder.png'); // Placeholder
+                   }
+                } else {
+                   widget.logger.w('Missing signed URL and local path for index $index, url: ${imageInfo.url}');
+                   // Fallback or error placeholder
+                   imageProvider = const AssetImage('assets/placeholder.png'); // Placeholder
+                }
+
+                return PhotoViewGalleryPageOptions(
+                  imageProvider: imageProvider,
+                  minScale: PhotoViewComputedScale.contained * 0.8,
+                  maxScale: PhotoViewComputedScale.covered * 2,
+                  heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id),
+                );
               },
-            ),
-        ],
-      ),
-      // Wrap body content in a Stack
-      body: Stack(
-        children: [
-          // --- Main Content: Loading / Error / Gallery ---
-          // Check for URL errors first
-          if (urlError != null && _signedUrls.every((url) => url == null))
-             Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(urlError, style: const TextStyle(color: Colors.red)),
-                ),
-              )
-          // Then check if URLs are ready
-          else if (!urlsReady)
-              const Center(child: CircularProgressIndicator())
-          // Otherwise, show the gallery
-          else
-              PhotoViewGallery.builder(
-                      scrollPhysics: const BouncingScrollPhysics(),
-                      builder: (BuildContext context, int index) {
-                        // Index check should use provider list length
-                        if (index >= images.length) {
-                          widget.logger.w('PhotoViewGallery builder: index $index out of bounds for images list (length ${images.length}).');
-                          return PhotoViewGalleryPageOptions(
-                            imageProvider: const AssetImage('assets/placeholder.png'),
-                            heroAttributes: PhotoViewHeroAttributes(tag: "error_$index"),
-                          );
-                        }
-                        final imageInfo = images[index]; // Get image from provider state
-                        final signedUrl = _signedUrls.length > index ? _signedUrls[index] : null;
-
-                        // Determine image provider
-                        ImageProvider imageProvider;
-                        if (signedUrl != null && signedUrl.isNotEmpty) {
-                          imageProvider = CachedNetworkImageProvider(signedUrl);
-                        } else if (imageInfo.localPath != null) {
-                           // Handle local path if needed (though unlikely if coming from provider)
-                           widget.logger.w('Displaying local path image: ${imageInfo.localPath}');
-                           imageProvider = FileImage(File(imageInfo.localPath!));
-                        }
-                         else {
-                          // Fallback if URL/signed URL is missing/invalid
-                           widget.logger.w('Using placeholder for image ID ${imageInfo.id} - No valid signed URL or local path.');
-                           imageProvider = const AssetImage('assets/placeholder.png');
-                         }
-
-
-                        return PhotoViewGalleryPageOptions(
-                          imageProvider: imageProvider,
-                          initialScale: PhotoViewComputedScale.contained,
-                          heroAttributes: PhotoViewHeroAttributes(
-                              tag: imageInfo.id ?? 'image_$index'), // Use image ID or index if ID null
-                          minScale: PhotoViewComputedScale.contained * 0.8,
-                          maxScale: PhotoViewComputedScale.covered * 2,
-                        );
-                      },
-                      itemCount: images.length, // Use provider list length
-                      loadingBuilder: (context, event) => Center(
-                        child: SizedBox(
-                          width: 20.0, height: 20.0,
-                          child: CircularProgressIndicator(
-                            value: event == null ? 0 : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
-                          ),
-                        ),
-                      ),
-                      pageController: pageController,
-                      onPageChanged: onPageChanged,
-                      backgroundDecoration: BoxDecoration(color: theme.canvasColor),
-                    ),
-
-            // --- Positioned Status Chip ---
-            if (statusChip != null)
-              Positioned(
-                top: 24.0, left: 24.0,
-                child: Material(
-                   elevation: 2.0,
-                   borderRadius: BorderRadius.circular(16.0),
-                   child: statusChip, // Chip defined earlier based on provider state
-                )
+              onPageChanged: (index) {
+                setState(() {
+                  currentIndex = index;
+                });
+              },
+              loadingBuilder: (context, event) => const Center(
+                child: CircularProgressIndicator(),
               ),
-        ],
-      ),
-      // --- Bottom Navigation Bar ---
-      bottomNavigationBar: Container(
-            color: theme.bottomAppBarTheme.color ?? theme.colorScheme.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: SafeArea(
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              backgroundDecoration: const BoxDecoration(
+                color: Colors.black,
+              ),
+            ),
+      bottomNavigationBar: BottomAppBar(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              Row( // Row for status indicators
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Scan Button
-                  _isScanning // Use local _isScanning state for button display
-                    ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0)))
-                    : IconButton(
-                        icon: const Icon(Icons.document_scanner_outlined),
-                        tooltip: l10n.scanButtonTooltip,
-                        // Disable scan if already processed successfully? Consider adding check on currentImageInfo.hasPotentialText
-                        onPressed: currentImageInfo.hasPotentialText == true ? null : _handleScan, // Disable if already successfully scanned
+                  // Chip for Scan Status / Result
+                  if (currentImageInfo.hasPotentialText == true || scanInitiated)
+                    Chip(
+                      avatar: scanInitiated && currentImageInfo.hasPotentialText == null
+                          ? const SizedBox( // Show spinner if scan initiated but result not yet back
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : Icon(
+                              currentImageInfo.isInvoiceGuess ? Icons.receipt_long : Icons.notes,
+                              color: Colors.grey.shade600,
+                            ),
+                      label: Text(
+                        scanInitiated && currentImageInfo.hasPotentialText == null
+                          ? 'Scanning...' // Use hardcoded default
+                          : currentImageInfo.isInvoiceGuess 
+                              ? 'Invoice?' // Use hardcoded default 
+                              : 'Text?', // Use hardcoded default
+                        style: TextStyle(color: Colors.grey.shade700)
+                        ),
+                      backgroundColor: Colors.grey.shade300,
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                    ),
+                  const SizedBox(width: 8), // Spacing
+
+                  // NEW Chip for Detected Amount
+                  if (currentImageInfo.detectedTotalAmount != null)
+                    Chip(
+                      label: Text(
+                        currencyFormat.format(currentImageInfo.detectedTotalAmount),
+                        style: TextStyle(color: Colors.black87, fontWeight: FontWeight.bold),
                       ),
-                  // Delete Button
-                  _isDeleting // Use local _isDeleting state for button display
-                    ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0)))
-                    : IconButton(
-                        icon: Icon(Icons.delete_outline, color: theme.colorScheme.error),
-                        tooltip: l10n.deleteButtonTooltip,
-                        onPressed: _handleDelete,
-                      ),
+                      backgroundColor: Colors.white,
+                      side: BorderSide(color: Colors.grey.shade400), // Optional border
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
+                    ),
                 ],
               ),
-            ),
+
+              Row( // Row for action buttons
+                mainAxisSize: MainAxisSize.min,
+                 children: [
+                    // Conditionally show Scan Button or Loading Indicator
+                    if (!scanInitiated) // New condition: Show if not currently initiated
+                       IconButton(
+                         icon: const Icon(Icons.document_scanner_outlined),
+                         tooltip: 'Scan for text', // Use hardcoded default
+                         onPressed: () => _handleScan(currentImageInfo.id, currentImageInfo.url),
+                       )
+                    // No need for separate loading indicator, chip handles it
+                    ,
+
+                    // Delete Button (show loading overlay if _isDeleting)
+                    if (_isDeleting)
+                      const Padding(
+                        padding: EdgeInsets.all(8.0),
+                        child: SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3)),
+                      )
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        tooltip: 'Delete', // Use hardcoded default
+                        onPressed: _handleDelete,
+                      ),
+                 ],
+              )
+            ],
           ),
+        ),
+      ),
     );
   }
 } 

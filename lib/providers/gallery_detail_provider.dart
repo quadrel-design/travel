@@ -105,7 +105,7 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
 
     try {
       final updatedImageInfo = JourneyImageInfo.fromMap(updatedRecord);
-       _logger.d('Processing update for image ID: ${updatedImageInfo.id}, hasPotentialText: ${updatedImageInfo.hasPotentialText}');
+       _logger.d('Processing update for image ID: ${updatedImageInfo.id}, hasPotentialText: ${updatedImageInfo.hasPotentialText}, Amount: ${updatedImageInfo.detectedTotalAmount}, Currency: ${updatedImageInfo.detectedCurrency}');
 
       final currentImages = List<JourneyImageInfo>.from(state.images); // Create mutable copy
       final index = currentImages.indexWhere((img) => img.id == updatedImageInfo.id);
@@ -120,6 +120,8 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
              hasPotentialText: updatedImageInfo.hasPotentialText,
              detectedText: updatedImageInfo.detectedText,
              isInvoiceGuess: updatedImageInfo.isInvoiceGuess,
+             detectedTotalAmount: updatedImageInfo.detectedTotalAmount,
+             detectedCurrency: updatedImageInfo.detectedCurrency,
              localPath: existingLocalPath // Keep localPath
          );
          // Update state immutably
@@ -150,6 +152,8 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
           hasPotentialText: null, // Reset persistent status
           detectedText: null,
           isInvoiceGuess: img.isInvoiceGuess,
+          detectedTotalAmount: null,
+          detectedCurrency: null,
           localPath: img.localPath);
        currentInitiated.add(imageId); // Mark as initiated in this session
        state = state.copyWith(images: currentImages, scanInitiatedInSession: currentInitiated, clearError: true);

@@ -6,6 +6,8 @@ class JourneyImageInfo extends Equatable {
   final bool? hasPotentialText;
   final String? detectedText;
   final bool isInvoiceGuess;
+  final double? detectedTotalAmount;
+  final String? detectedCurrency;
 
   final String? localPath;
 
@@ -15,16 +17,26 @@ class JourneyImageInfo extends Equatable {
     this.hasPotentialText,
     this.detectedText,
     this.isInvoiceGuess = false,
+    this.detectedTotalAmount,
+    this.detectedCurrency,
     this.localPath,
   });
 
   factory JourneyImageInfo.fromMap(Map<String, dynamic> map) {
+    num? parseNumeric(dynamic value) {
+       if (value is num) return value;
+       if (value is String) return num.tryParse(value);
+       return null;
+    }
+
     return JourneyImageInfo(
       id: map['id'] as String? ?? '',
       url: map['image_url'] as String? ?? '',
       hasPotentialText: map['has_potential_text'] as bool?,
       detectedText: map['detected_text'] as String?,
       isInvoiceGuess: map['is_invoice_guess'] as bool? ?? false,
+      detectedTotalAmount: parseNumeric(map['detected_total_amount'])?.toDouble(),
+      detectedCurrency: map['detected_currency'] as String?,
     );
   }
 
@@ -35,6 +47,8 @@ class JourneyImageInfo extends Equatable {
         hasPotentialText,
         detectedText,
         isInvoiceGuess,
+        detectedTotalAmount,
+        detectedCurrency,
         localPath,
       ];
 } 
