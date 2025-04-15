@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/journey.dart';
+import '../models/journey_image_info.dart';
 import 'package:logger/logger.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/logging_provider.dart';
@@ -74,7 +75,7 @@ class JourneyRepository {
       }
    }
    
-   Future<List<String>> fetchJourneyImages(
+   Future<List<JourneyImageInfo>> fetchJourneyImages(
      String journeyId, {
      int? limit, 
      int? offset,
@@ -82,7 +83,7 @@ class JourneyRepository {
       try {
         var query = _client
             .from('journey_images')
-            .select('image_url')
+            .select('id, image_url, is_invoice_guess, has_potential_text, detected_text')
             .eq('journey_id', journeyId)
             .order('created_at', ascending: true);
 
@@ -92,7 +93,7 @@ class JourneyRepository {
 
         final response = await query;
         
-         return List<String>.from(response.map((img) => img['image_url'] as String));
+         return response.map((data) => JourneyImageInfo.fromMap(data)).toList();
       } catch (e) {
          _logger.e('Failed to fetch images for journey: $journeyId', error: e);
          throw CouldNotFetchJourneyImages(e);
@@ -100,28 +101,32 @@ class JourneyRepository {
    }
 
   // Method to add image reference to the DB table
-  Future<void> addImageReference(String journeyId, String imageUrl) async {
+  Future<void> addImageReference(
+    String journeyId,
+    String imageUrl,
+    {required String id}
+  ) async {
     try {
+      // Insert only basic info
       await _client.from('journey_images').insert({
+        'id': id,
         'journey_id': journeyId,
         'image_url': imageUrl,
+        // Removed analysis flags
       });
-      _logger.i('Added image reference to DB for journey $journeyId');
+      _logger.i('Added image reference to DB with ID: $id for journey $journeyId');
     } catch (e) {
-       _logger.e('Failed to add image reference for journey $journeyId', error: e);
+       _logger.e('Failed to add image reference for journey $journeyId (ID: $id)', error: e);
        throw CouldNotAddImageReference(e);
     }
   }
 
   // Method to delete an image from DB and Storage
   Future<void> deleteImage(String journeyId, String imageUrl) async {
-    _logger.d('deleteImage START - Journey: $journeyId, URL: $imageUrl'); // Use debug level
-    // 1. Extract storage path from URL
-    // Assumes URL structure: https://<project_ref>.supabase.co/storage/v1/object/public/journey_images/<user_id>/<journey_id>/<filename>
+    _logger.d('deleteImage START - Journey: $journeyId, URL: $imageUrl');
     final uri = Uri.parse(imageUrl);
-    // Find the start of the path after bucket name
-    final bucketName = 'journey_images'; // Make sure this matches your bucket
-    final pathStartIndex = uri.path.indexOf(bucketName) + bucketName.length + 1; // +1 for the slash
+    final bucketName = 'journey_images';
+    final pathStartIndex = uri.path.indexOf(bucketName) + bucketName.length + 1;
     if (pathStartIndex <= bucketName.length) {
         _logger.e('Could not parse storage path from URL: $imageUrl');
         throw CouldNotDeleteImage('Invalid image URL format');
@@ -130,7 +135,6 @@ class JourneyRepository {
     _logger.i('Attempting to delete image. Journey: $journeyId, URL: $imageUrl, Path: $storagePath');
 
     try {
-      // 2. Delete DB reference (use imageUrl to find the row)
       _logger.d('Deleting DB reference for $imageUrl');
       await _client
           .from('journey_images')
@@ -138,7 +142,6 @@ class JourneyRepository {
           .eq('image_url', imageUrl);
       _logger.d('DB reference deleted (or did not exist).');
 
-      // 3. Delete from Storage
       _logger.d('Deleting from Storage: $storagePath');
       await _client.storage
           .from(bucketName)
@@ -150,7 +153,6 @@ class JourneyRepository {
     } catch (e) {
       _logger.e('deleteImage FAILED for $imageUrl', error: e);
       _logger.e('Failed to delete image for journey $journeyId (URL: $imageUrl)', error: e);
-      // Consider if partial deletion needs handling (e.g., DB deleted but storage failed)
       throw CouldNotDeleteImage(e);
     }
   }

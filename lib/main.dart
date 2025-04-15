@@ -10,16 +10,17 @@ import 'package:go_router/go_router.dart';
 import 'screens/splash_screen.dart';
 import 'dart:async'; // Import dart:async for StreamSubscription
 import 'screens/journey_detail_screen.dart'; // Import detail screen
+import 'screens/gallery_overview_screen.dart'; // Import renamed gallery screen
 import 'models/journey.dart'; // Import Journey model
 import 'screens/settings/app_settings_screen.dart'; // Update import for settings screen (using current filename)
 import 'repositories/auth_repository.dart'; // Import AuthRepository
+import 'repositories/journey_repository.dart';
 // Import generated localizations delegate
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/providers/repository_providers.dart'; // Import providers
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
 import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
-import 'screens/journey_gallery_screen.dart'; // Import new gallery screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -142,7 +143,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               if (journey == null) {
                  return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
               }
-              return JourneyGalleryScreen(journey: journey); 
+              return GalleryOverviewScreen(journey: journey); 
             },
           ),
         ],

@@ -31,8 +31,8 @@ class Journey extends Equatable {
     final endDateStr = json['end_date'];
 
     return Journey(
-      id: json['id'] as String,
-      userId: json['user_id'] as String,
+      id: json['id'] as String? ?? '',
+      userId: json['user_id'] as String? ?? '',
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       location: json['location'] as String? ?? '',

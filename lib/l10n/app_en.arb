@@ -60,5 +60,38 @@
   "createJourneyTitle": "Create Journey",
   "createJourneyErrorUserNotLoggedIn": "User not logged in.",
   
-  "detailScreenErrorMissingData": "Error: Journey data missing"
+  "detailScreenErrorMissingData": "Error: Journey data missing",
+
+  "galleryDetailTitle": "Image {index} of {total}",
+  "@galleryDetailTitle": {
+      "description": "Title for the image detail view showing current index and total count",
+      "placeholders": {
+          "index": {
+              "type": "int"
+          },
+          "total": {
+              "type": "int"
+          }
+      }
+  },
+  "downloadingImage": "Downloading image...",
+  "@downloadingImage": {
+      "description": "Snackbar message when image download starts"
+  },
+  "downloadComplete": "Download complete.",
+  "@downloadComplete": {
+      "description": "Snackbar message when image download finishes successfully"
+  },
+  "downloadFailed": "Download failed.",
+  "@downloadFailed": {
+      "description": "Snackbar message when image download fails"
+  },
+  "scanButtonTooltip": "Scan for Text",
+  "@scanButtonTooltip": {
+      "description": "Tooltip for the button that triggers text scanning"
+  },
+  "deleteButtonTooltip": "Delete Image",
+  "@deleteButtonTooltip": {
+      "description": "Tooltip for the button that deletes the current image"
+  }
 } 

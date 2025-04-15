@@ -1,0 +1,6 @@
+{
+    "imports": {
+      "@google-cloud/vision": "npm:@google-cloud/vision@4.0.0",
+      "gcp-metadata": "npm:gcp-metadata@6.1.0"
+    }
+  }

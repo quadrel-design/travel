@@ -1,36 +1,38 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:logger/logger.dart'; // Import logger
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
+import '../models/journey_image_info.dart'; // Add import for the model
+import 'package:http/http.dart' as http; // Add http import for http.get
 // import 'photo_app_bar.dart'; // Remove import
 // import 'full_screen_image_viewer.dart'; // Not needed anymore
 
-class GalleryPageView extends StatefulWidget {
-  final List<String> imageUrls;
-  final int initialIndex;
-  final Future<void> Function(String) onDeleteImage; // Expects original URL
-  final Function(String) onImageDeletedSuccessfully; // Callback with original URL
-  final Logger logger; // Receive logger instance
-
-  const GalleryPageView({
+class GalleryDetailView extends StatefulWidget {
+  const GalleryDetailView({
     super.key,
-    required this.imageUrls,
-    required this.initialIndex,
-    required this.onDeleteImage,
-    required this.onImageDeletedSuccessfully,
-    required this.logger, // Add logger to constructor
-  });
+    this.initialIndex = 0,
+    required this.images,
+  })
+  // Removed redundant pageController initialization here
+  ;
+
+  final int initialIndex;
+  final List<JourneyImageInfo> images;
 
   @override
-  State<GalleryPageView> createState() => _GalleryPageViewState();
+  State<StatefulWidget> createState() {
+    return _GalleryDetailViewState(); // Rename State class reference
+  }
 }
 
-class _GalleryPageViewState extends State<GalleryPageView> {
-  late PageController _pageController;
-  late int _currentIndex;
+class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State class
+  late PageController pageController;
+  late int currentIndex;
   bool _isDeleting = false; // Track deletion state
 
   // --- State for Signed URLs ---
@@ -39,18 +41,23 @@ class _GalleryPageViewState extends State<GalleryPageView> {
   String? _signedUrlError;
   // --- End State for Signed URLs ---
 
+  // --- Scan Logic ---
+  // Add state for scanning
+  bool _isScanning = false; 
+
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
+    currentIndex = widget.initialIndex;
+    // Initialize pageController here where widget is accessible
+    pageController = PageController(initialPage: widget.initialIndex);
     // Fetch signed URLs when the widget initializes
     _fetchSignedUrls();
   }
 
   @override
   void dispose() {
-    _pageController.dispose();
+    pageController.dispose();
     super.dispose();
   }
 
@@ -88,15 +95,18 @@ class _GalleryPageViewState extends State<GalleryPageView> {
     setState(() {
       _isLoadingSignedUrls = true;
       _signedUrlError = null;
-      _signedUrls = List.filled(widget.imageUrls.length, null); // Initialize with nulls
+      // Use widget.images.length
+      _signedUrls = List.filled(widget.images.length, null); 
     });
 
     List<String?> results = [];
     bool hadError = false;
-    for (final originalUrl in widget.imageUrls) {
-      final path = _extractPath(originalUrl);
+    // Iterate over the JourneyImageInfo objects
+    for (final imageInfo in widget.images) {
+      // Extract path from imageInfo.url
+      final path = _extractPath(imageInfo.url); 
       if (path == null) {
-        widget.logger.w('Could not extract path for $originalUrl');
+        widget.logger.w('Could not extract path for ${imageInfo.url}');
         results.add(null); // Mark as error
         hadError = true;
         continue;
@@ -123,9 +133,11 @@ class _GalleryPageViewState extends State<GalleryPageView> {
   // --- Signed URL Logic End ---
 
   void _handleDelete() async {
-    if (_isDeleting || widget.imageUrls.isEmpty || _currentIndex >= widget.imageUrls.length) return; // Add boundary check
-    final imageUrlToDelete = widget.imageUrls[_currentIndex]; // Get original URL
-    final currentSignedUrlIndex = _currentIndex; // Store index before potential async gaps
+    // Use widget.images list for checks and getting URL
+    if (_isDeleting || widget.images.isEmpty || currentIndex >= widget.images.length) return;
+    final imageToDelete = widget.images[currentIndex]; // Get JourneyImageInfo
+    final imageUrlToDelete = imageToDelete.url; // Get URL from object
+    final currentSignedUrlIndex = currentIndex;
 
     setState(() { _isDeleting = true; });
     widget.logger.i('Attempting delete via callback for: $imageUrlToDelete');
@@ -165,85 +177,247 @@ class _GalleryPageViewState extends State<GalleryPageView> {
         }
     } finally {
         // Only set _isDeleting false if we didn't pop
-        // Since we always pop now, this might not be reached often, but good practice
         if (mounted) setState(() { _isDeleting = false; });
     }
   }
 
+  // --- Scan Logic ---
+  Future<void> _handleScan() async {
+    // Check state and index validity
+    if (_isScanning || widget.images.isEmpty || currentIndex >= widget.images.length) return;
+
+    final imageInfo = widget.images[currentIndex]; // Get current image info
+    widget.logger.i('Triggering scan for image ID: ${imageInfo.id}');
+    setState(() { _isScanning = true; });
+
+    try {
+      // 1. Get Image Data (Re-download)
+      final httpResponse = await http.get(Uri.parse(imageInfo.url)); // Assumes http import
+      if (httpResponse.statusCode != 200) {
+        throw Exception('Failed to download image: ${httpResponse.statusCode}');
+      }
+      final imageBytes = httpResponse.bodyBytes;
+      final base64Image = base64Encode(imageBytes); // Assumes dart:convert import
+      widget.logger.d('Image downloaded and encoded for scan (ID: ${imageInfo.id})');
+
+      // 2. Call Edge Function
+      final response = await Supabase.instance.client.functions.invoke(
+        'detect-invoice-text', 
+        body: {
+          'imageData': base64Image,
+          'recordId': imageInfo.id
+        },
+      );
+
+      if (response.status != 200) {
+        widget.logger.e(
+          'Error calling edge function for scan (ID ${imageInfo.id}): Status ${response.status}, Data: ${response.data}',
+        );
+        throw Exception('Text detection failed: ${response.status}');
+      } else {
+        widget.logger.i('Edge function call successful for scan (ID ${imageInfo.id}). DB should update.');
+        // No UI update needed here - parent screen's Realtime listener handles it
+        if (mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Analysis initiated.')), // TODO: Localize
+          );
+        }
+      }
+    } catch (e) {
+      widget.logger.e('Error during scan for ID ${imageInfo.id}', error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting analysis: $e')), // TODO: Localize
+        );
+      }
+    } finally {
+      if (mounted) setState(() { _isScanning = false; });
+    }
+  }
+  // --- End Scan Logic ---
+
+  void onPageChanged(int index) {
+    setState(() {
+      currentIndex = index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Access l10n for title localization
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context); // Access theme for styling
+
+    // Get the current image info based on the page index
+    // Ensure index is within bounds, handle potential empty list
+    final JourneyImageInfo? currentImageInfo =
+        widget.images.isNotEmpty && currentIndex < widget.images.length
+            ? widget.images[currentIndex]
+            : null;
+
+    // Check if signedUrls is empty before building Scaffold content
+    // This prevents errors if all images are deleted while viewing
+    if (_signedUrls.isEmpty) {
+      // Optionally return a different scaffold or an empty container
+      // Or, if the pop logic handles this, it might be okay, but safer to check.
+      widget.logger.w('GalleryPageView build called with empty _signedUrls. Returning empty Scaffold.');
+      return Scaffold(
+        // Change background and text color for empty state
+        backgroundColor: theme.colorScheme.background, // Use theme background
+        appBar: AppBar(title: const Text('Gallery')), // Simple AppBar
+        body: Center(
+          child: Text(
+            'No images left.', 
+            style: TextStyle(color: theme.colorScheme.onBackground) // Use theme text color
+          ),
+        ),
+      );
+    }
+    
+    // Ensure currentIndex is valid for the potentially reduced _signedUrls list
+    final safeCurrentIndex = currentIndex.clamp(0, _signedUrls.length - 1);
+
     return Scaffold(
-      extendBodyBehindAppBar: true, // Allow body content behind AppBar
-      backgroundColor: Colors.black, // Black background for gallery view
+      // Change Scaffold background
+      backgroundColor: theme.colorScheme.background, // Use theme background 
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white), // White back button
+        backgroundColor: theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface, 
+        foregroundColor: theme.appBarTheme.foregroundColor ?? theme.colorScheme.onSurface,
+        elevation: 0, 
+        // Explicitly remove any border shape
+        shape: const Border(), 
+        title: Text(l10n.galleryDetailTitle(safeCurrentIndex + 1, widget.images.length), style: theme.textTheme.titleMedium),
+        centerTitle: true,
+        // Use AppBar specific icon theme or fallback
+        iconTheme: theme.appBarTheme.iconTheme ?? theme.iconTheme, 
+        actions: [
+          // Add Download Button
+          if (currentImageInfo != null && currentImageInfo.url != null)
+            IconButton(
+              icon: const Icon(Icons.download),
+              onPressed: () async {
+                 // Placeholder for download logic
+                 ScaffoldMessenger.of(context).showSnackBar(
+                   SnackBar(content: Text(l10n.downloadingImage)),
+                 );
+                 try {
+                   // Simulate download
+                   await Future.delayed(const Duration(seconds: 1)); 
+                   // Replace with actual download logic using image_downloader or similar
+                   print('Download requested for: ${currentImageInfo.url}');
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     SnackBar(content: Text(l10n.downloadComplete)),
+                   );
+                 } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                     SnackBar(content: Text(l10n.downloadFailed)),
+                   );
+                 }
+              },
+            ),
+        ],
       ),
-      // --- Loading/Error Handling for Signed URLs ---
       body: _isLoadingSignedUrls
         ? const Center(child: CircularProgressIndicator())
-        : _signedUrlError != null && _signedUrls.every((url) => url == null) // Show error only if ALL failed
+        : _signedUrlError != null && _signedUrls.every((url) => url == null)
             ? Center(
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
+                  // Error text color (red) should be fine on white
                   child: Text(_signedUrlError!, style: const TextStyle(color: Colors.red)),
                 ),
               )
             : PhotoViewGallery.builder(
-                pageController: _pageController,
-                itemCount: _signedUrls.length, // Use count of signed URLs
-                builder: (context, index) {
-                  final originalImageUrl = widget.imageUrls[index]; // Still needed for tag/delete
-                  final signedUrl = _signedUrls[index];
+                scrollPhysics: const BouncingScrollPhysics(),
+                builder: (BuildContext context, int index) {
+                   if (index >= widget.images.length) {
+                     // Handle potential index out of bounds error gracefully
+                     return const Center(child: Text("Error: Image not found"));
+                   }
+                   final imageInfo = widget.images[index];
+                   final imageUrl = imageInfo.url;
 
-                  // Handle case where specific signed URL failed
-                  if (signedUrl == null) {
-                     return PhotoViewGalleryPageOptions.customChild(
-                        child: const Center(child: Icon(Icons.error_outline, color: Colors.white, size: 50)),
-                        heroAttributes: PhotoViewHeroAttributes(tag: originalImageUrl),
-                        minScale: PhotoViewComputedScale.contained,
-                        maxScale: PhotoViewComputedScale.contained,
-                     );
-                  }
+                   // Determine if the overlay should be shown
+                   final bool showOverlay =
+                       imageInfo.hasPotentialText == true ||
+                       (imageInfo.detectedText != null && imageInfo.detectedText!.isNotEmpty);
 
-                  // If successful, create PageOptions with the signed URL
                   return PhotoViewGalleryPageOptions(
-                    imageProvider: CachedNetworkImageProvider(signedUrl),
-                    heroAttributes: PhotoViewHeroAttributes(tag: originalImageUrl),
+                    imageProvider: imageUrl != null
+                        ? CachedNetworkImageProvider(_signedUrls[index]!)
+                        : imageInfo.localPath != null
+                            ? FileImage(File(imageInfo.localPath!)) // Use FileImage for local paths
+                            : const AssetImage('assets/placeholder.png') as ImageProvider, // Fallback placeholder
+                    initialScale: PhotoViewComputedScale.contained,
+                    heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id ?? "image_$index"), // Use image ID or index as tag
                     minScale: PhotoViewComputedScale.contained * 0.8,
                     maxScale: PhotoViewComputedScale.covered * 2,
+                    // Wrap with Stack to potentially add overlay
+                    child: Stack(
+                      children: [
+                         // The actual image is implicitly handled by PhotoViewGalleryPageOptions
+                         // Add the overlay conditionally
+                         if (showOverlay)
+                           Positioned.fill(
+                             child: Container(
+                               decoration: BoxDecoration(
+                                 shape: BoxShape.circle,
+                                 color: Colors.white.withOpacity(0.7), // Semi-transparent white circle
+                               ),
+                               child: const Icon(
+                                 Icons.check_circle,
+                                 color: Colors.green,
+                                 size: 50.0, // Adjust size as needed
+                               ),
+                             ),
+                           ),
+                      ],
+                    ),
                   );
                 },
-                loadingBuilder: (context, event) => const Center(
+                itemCount: widget.images.length,
+                loadingBuilder: (context, event) => Center(
                   child: SizedBox(
                     width: 20.0,
                     height: 20.0,
-                    child: CircularProgressIndicator(),
+                    child: CircularProgressIndicator(
+                      value: event == null
+                          ? 0
+                          : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
+                    ),
                   ),
                 ),
-                backgroundDecoration: const BoxDecoration(color: Colors.black),
-                onPageChanged: (index) {
-                  setState(() {
-                    _currentIndex = index;
-                  });
-                },
+                pageController: pageController,
+                onPageChanged: onPageChanged,
+                backgroundDecoration: BoxDecoration(
+                  color: theme.canvasColor, // Use theme background color
+                ),
               ),
-      bottomNavigationBar: _isDeleting
-        ? const LinearProgressIndicator() // Show progress bar while deleting
-        : Container(
-            // Semi-transparent black background for the delete button
-            color: Colors.black.withOpacity(0.5),
-            padding: const EdgeInsets.all(8.0),
-            child: SafeArea( // Ensure button is not under system UI
+      bottomNavigationBar: Container(
+            color: theme.bottomAppBarTheme.color ?? theme.colorScheme.surface,
+            padding: const EdgeInsets.symmetric(horizontal: 8.0), 
+            child: SafeArea( 
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween, 
                 children: [
-                  IconButton(
-                    icon: const Icon(Icons.delete_outline, color: Colors.white),
-                    tooltip: 'Delete Image', // TODO: Localize
-                    onPressed: _handleDelete,
-                  ),
+                  // --- Add Scan Button --- 
+                  _isScanning
+                    ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0)))
+                    : IconButton(
+                        icon: const Icon(Icons.document_scanner_outlined),
+                        tooltip: 'Scan for Text', // TODO: Localize
+                        onPressed: _handleScan,
+                      ),
+                  // --- Keep Delete Button --- 
+                  _isDeleting 
+                    ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0))) 
+                    : IconButton(
+                        icon: Icon(Icons.delete_outline, color: theme.colorScheme.error), 
+                        tooltip: 'Delete Image', 
+                        onPressed: _handleDelete,
+                      ),
                 ],
               ),
             ),

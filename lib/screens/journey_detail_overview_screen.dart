@@ -9,27 +9,17 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
 
   const JourneyDetailOverviewScreen({super.key, required this.journey});
 
-  // Updated helper function for the new card style
+  // Restore the helper function
+  // /*
   Widget _buildOverviewLinkCard(BuildContext context, {
-    // Remove icon parameter
     required String label,
     required VoidCallback onTap
   }) {
-    // final theme = Theme.of(context); // REMOVED
-    // final borderColor = theme.dividerColor; // No longer needed
-    // final cardColor = Colors.white; 
-
     return Card(
-      // Explicit styling removed - will now use antonettiCardTheme defaults
       clipBehavior: Clip.antiAlias, // Keep clipBehavior
-      // elevation: 0, // REMOVED
-      // color: Colors.white, // REMOVED
-      // shape: RoundedRectangleBorder( // REMOVED
-      //   borderRadius: BorderRadius.circular(8.0),
-      // ), // REMOVED
+      // No explicit styling - uses theme
       child: InkWell(
         onTap: onTap,
-        // borderRadius: BorderRadius.circular(12), // InkWell uses Card shape
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Center(
@@ -43,14 +33,15 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
       ),
     );
   }
+  // */
 
   @override
   Widget build(BuildContext context) {
     // final theme = Theme.of(context); 
 
     return Scaffold(
-      // Set background color for the page
-      backgroundColor: Colors.grey.shade200, // Example grey background
+      // Restore grey background color
+      backgroundColor: Colors.grey.shade200, 
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.chevron_left),
@@ -61,6 +52,12 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
         centerTitle: true,
         // Consider matching AppBar style (e.g., white background) if desired
       ),
+      // Remove placeholder body
+      // body: const Center(
+      //   child: Text('Overview Content Placeholder'), 
+      // ),
+      // Restore GridView body
+      // /*
       body: Padding(
         // Use 1.0 padding to match spacing
         padding: const EdgeInsets.all(1.0), 
@@ -70,7 +67,7 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
           crossAxisSpacing: 1.0,
           mainAxisSpacing: 1.0,
           children: [
-            // Use the updated helper function
+            // Restore _buildOverviewLinkCard calls
             _buildOverviewLinkCard(context, 
               label: 'Info', // TODO: Localize
               onTap: () { 
@@ -101,6 +98,7 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
           ],
         ),
       ),
+      // */
     );
   }
 } 
