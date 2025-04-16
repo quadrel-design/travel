@@ -83,7 +83,7 @@ class JourneyRepository {
       try {
         var query = _client
             .from('journey_images')
-            .select('id, image_url, is_invoice_guess, has_potential_text, detected_text, detected_total_amount, detected_currency')
+            .select('id, image_url, is_invoice_guess, has_potential_text, detected_text, detected_total_amount, detected_currency, last_processed_at')
             .eq('journey_id', journeyId)
             .order('created_at', ascending: true);
 

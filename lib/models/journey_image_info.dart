@@ -1,4 +1,7 @@
 import 'package:equatable/equatable.dart';
+// Remove provider imports if they were added here
+// import 'package:flutter_riverpod/flutter_riverpod.dart';
+// import 'package:travel/providers/logging_provider.dart';
 
 class JourneyImageInfo extends Equatable {
   final String id;
@@ -27,6 +30,9 @@ class JourneyImageInfo extends Equatable {
   });
 
   factory JourneyImageInfo.fromMap(Map<String, dynamic> map) {
+    // Remove logger instance
+    // final logger = ProviderContainer().read(loggerProvider); 
+
     num? parseNumeric(dynamic value) {
        if (value is num) return value;
        if (value is String) return num.tryParse(value);
@@ -34,10 +40,26 @@ class JourneyImageInfo extends Equatable {
     }
 
     DateTime? parseTimestamp(dynamic value) {
+      if (value == null) return null;
       if (value is String) {
-        return DateTime.tryParse(value);
+        final parsedDate = DateTime.tryParse(value);
+        if (parsedDate == null) {
+            // Use print instead of logger
+            print('WARNING [JourneyImageInfo.fromMap]: Failed to parse timestamp string: $value');
+        }
+        return parsedDate;
+      } else {
+         // Use print instead of logger
+         print('WARNING [JourneyImageInfo.fromMap]: Unexpected type for timestamp: ${value.runtimeType}, value: $value');
+         return null;
       }
-      return null;
+    }
+
+    final processedTimestamp = parseTimestamp(map['last_processed_at']);
+    // Log if timestamp is null after parsing
+    if (processedTimestamp == null && map['last_processed_at'] != null) {
+        // Use print instead of logger
+        print('WARNING [JourneyImageInfo.fromMap]: Timestamp parsed as null. Original value: ${map['last_processed_at']} (Type: ${map['last_processed_at']?.runtimeType})');
     }
 
     return JourneyImageInfo(
@@ -48,7 +70,9 @@ class JourneyImageInfo extends Equatable {
       isInvoiceGuess: map['is_invoice_guess'] as bool? ?? false,
       detectedTotalAmount: parseNumeric(map['detected_total_amount'])?.toDouble(),
       detectedCurrency: map['detected_currency'] as String?,
-      lastProcessedAt: parseTimestamp(map['last_processed_at']),
+      lastProcessedAt: processedTimestamp,
+      scanInitiated: map['scan_initiated'] as bool? ?? false,
+      localPath: map['local_path'] as String?,
     );
   }
 

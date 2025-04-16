@@ -71,15 +71,15 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
             _buildOverviewLinkCard(context, 
               label: 'Info', // TODO: Localize
               onTap: () { 
-                context.push('${AppRoutes.journeyDetail}/info', extra: journey);
+                // --- Construct path with ID for sub-route --- 
+                context.push('${AppRoutes.journeyDetail}/${journey.id}/info', extra: journey);
               }
             ),
              _buildOverviewLinkCard(context, 
               label: 'Expenses', // TODO: Localize
               onTap: () { 
-                // --- Navigate to Expenses screen --- 
+                // This one was correct
                 context.push('${AppRoutes.journeyDetail}/${journey.id}/expenses');
-                // --- End Navigation ---
               }
             ),
              _buildOverviewLinkCard(context, 
@@ -93,7 +93,8 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
               label: 'Images', // TODO: Localize
               onTap: () { 
                 ScaffoldMessenger.of(context).removeCurrentSnackBar();
-                context.push('${AppRoutes.journeyDetail}/gallery', extra: journey);
+                // --- Construct path with ID for sub-route --- 
+                context.push('${AppRoutes.journeyDetail}/${journey.id}/gallery', extra: journey);
               }
             ),
           ],
