@@ -3,15 +3,23 @@ import 'package:travel/repositories/auth_repository.dart';
 import 'package:travel/repositories/journey_repository.dart';
 import 'package:travel/models/journey_image_info.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../providers/logging_provider.dart'; // Import logger provider
 
 // Provider for AuthRepository
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
+  // Inject SupabaseClient and Logger
+  // final supabaseClient = Supabase.instance.client;
+  // final logger = ref.watch(loggerProvider);
+  // return AuthRepository(supabaseClient, logger); // Constructor takes no args based on error
   return AuthRepository();
 });
 
 // Provider for JourneyRepository
 final journeyRepositoryProvider = Provider<JourneyRepository>((ref) {
-  return JourneyRepository();
+  // Inject SupabaseClient and Logger
+  final supabaseClient = Supabase.instance.client;
+  final logger = ref.watch(loggerProvider);
+  return JourneyRepository(supabaseClient, logger);
 });
 
 // --- Change Provider for Detected Sums to StreamProvider --- 
@@ -66,4 +74,8 @@ final journeyImagesStreamProvider = StreamProvider.autoDispose
     // --- End Detailed Logging --- 
   });
 });
+// --- End Provider --- 
+
+// --- Add Provider for Gallery Upload State --- 
+final galleryUploadStateProvider = StateProvider<bool>((ref) => false);
 // --- End Provider --- 

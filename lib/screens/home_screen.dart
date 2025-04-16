@@ -56,7 +56,8 @@ class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
       if (userId == null) {
         throw Exception('User not logged in');
       }
-      final loadedJourneys = await _journeyRepository.fetchUserJourneys(userId);
+      final loadedJourneys = await _journeyRepository.getJourneys();
+      if (!mounted) return;
       state = state.copyWith(journeys: loadedJourneys, isLoading: false);
     } catch (e) {
       state = state.copyWith(error: 'Failed to load journeys', isLoading: false);

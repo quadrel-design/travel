@@ -114,7 +114,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: 'gallery',
             builder: (context, state) {
               final journey = state.extra as Journey?;
-               if (journey == null) return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
+               if (journey == null) {
+                 print('Error: Journey object missing for gallery route');
+                 return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
+               }
               return GalleryOverviewScreen(journey: journey);
             },
           ),
@@ -143,6 +146,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (BuildContext context, GoRouterState state) {
       return determineRedirect(authRepository, state.matchedLocation);
     },
+    errorBuilder: (context, state) => _buildErrorScreen(context, state),
   );
 });
 
@@ -180,3 +184,26 @@ class MyApp extends ConsumerWidget {
     );
   }
 }
+
+// --- Simple Error Screen Widget ---
+Widget _buildErrorScreen(BuildContext context, GoRouterState state) {
+  // final l10n = AppLocalizations.of(context)!;
+  print('GoRouter navigation error: ${state.error}'); // Use simple print for now
+
+  return Scaffold(
+    appBar: AppBar(
+      // Use localization
+      // title: Text(l10n.navigationErrorTitle),
+      title: const Text('Navigation Error'), // Placeholder
+    ),
+    body: Center(
+      child: Padding(
+        padding: const EdgeInsets.all(16.0),
+        // Use localization
+        // child: Text(l10n.navigationErrorText(state.error?.toString() ?? 'Unknown error')),
+        child: Text('Error: ${state.error?.toString() ?? 'Unknown error'}'), // Placeholder
+      ),
+    ),
+  );
+}
+// --- End Simple Error Screen Widget ---

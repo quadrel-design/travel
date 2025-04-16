@@ -122,7 +122,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
 
     final budgetValue = double.tryParse(_budgetController.text.trim()) ?? 0.0;
     final newJourney = Journey(
-      id: Uuid().v4(),
+      id: const Uuid().v4(), // Generate ID locally
       userId: userId,
       title: _nameController.text.trim(),
       description: _descriptionController.text.trim(),
@@ -134,11 +134,9 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     );
 
     try {
-      await journeyRepository.addJourney(newJourney);
-      if (mounted) {
-         _showSuccessSnackBar(context, l10n.journeySaveSuccessTitle, l10n.journeySaveSuccessDesc);
-         context.pop(); 
-      }
+      await journeyRepository.createJourney(newJourney.title);
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Close screen on success
     } catch (error) {
        if (mounted) {
            // Use parameterized localization

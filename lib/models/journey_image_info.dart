@@ -12,7 +12,6 @@ class JourneyImageInfo extends Equatable {
   final double? detectedTotalAmount;
   final String? detectedCurrency;
   final DateTime? lastProcessedAt;
-  final bool scanInitiated;
 
   final String? localPath;
 
@@ -25,7 +24,6 @@ class JourneyImageInfo extends Equatable {
     this.detectedTotalAmount,
     this.detectedCurrency,
     this.lastProcessedAt,
-    this.scanInitiated = false,
     this.localPath,
   });
 
@@ -71,7 +69,6 @@ class JourneyImageInfo extends Equatable {
       detectedTotalAmount: parseNumeric(map['detected_total_amount'])?.toDouble(),
       detectedCurrency: map['detected_currency'] as String?,
       lastProcessedAt: processedTimestamp,
-      scanInitiated: map['scan_initiated'] as bool? ?? false,
       localPath: map['local_path'] as String?,
     );
   }
@@ -85,7 +82,6 @@ class JourneyImageInfo extends Equatable {
     double? detectedTotalAmount,
     String? detectedCurrency,
     DateTime? lastProcessedAt,
-    bool? scanInitiated,
     String? localPath,
     bool setHasPotentialTextNull = false,
     bool setDetectedTextNull = false,
@@ -102,7 +98,6 @@ class JourneyImageInfo extends Equatable {
       detectedTotalAmount: setDetectedTotalAmountNull ? null : detectedTotalAmount ?? this.detectedTotalAmount,
       detectedCurrency: setDetectedCurrencyNull ? null : detectedCurrency ?? this.detectedCurrency,
       lastProcessedAt: setLastProcessedAtNull ? null : lastProcessedAt ?? this.lastProcessedAt,
-      scanInitiated: scanInitiated ?? this.scanInitiated,
       localPath: localPath ?? this.localPath,
     );
   }
@@ -117,7 +112,6 @@ class JourneyImageInfo extends Equatable {
         detectedTotalAmount,
         detectedCurrency,
         lastProcessedAt,
-        scanInitiated,
         localPath,
       ];
 } 

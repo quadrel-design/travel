@@ -22,8 +22,11 @@ const VISION_API_URL = `https://vision.googleapis.com/v1/images:annotate?key=${G
 
 // OpenAI API Configuration
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY'); // Fetch key from Supabase Vault
-const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = 'gpt-3.5-turbo'; // Switch to gpt-3.5-turbo for cost testing
+const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions'; // Keep URL hardcoded for now
+// Read model, temp, tokens from env vars with defaults
+const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') ?? 'gpt-3.5-turbo';
+const OPENAI_TEMPERATURE = parseFloat(Deno.env.get('OPENAI_TEMPERATURE') ?? '0.1'); // Parse float, default 0.1
+const OPENAI_MAX_TOKENS = parseInt(Deno.env.get('OPENAI_MAX_TOKENS') ?? '60'); // Parse int, default 60
 
 interface VisionApiResponse {
   responses: {
@@ -145,11 +148,31 @@ serve(async (req: Request) => {
     const image_base64 = body.image_base64;
     journey_image_id = body.journey_image_id; // Assign here
 
-    if (!image_base64 || !journey_image_id) {
-      console.error("Missing image_base64 or journey_image_id in request body");
-      // Note: journey_image_id might be null here if it was missing
-      throw new Error(`Missing image_base64 or journey_image_id in request body for image ID: ${journey_image_id ?? 'unknown'}`);
+    // --- Input Validation --- 
+    const errors: string[] = [];
+    if (!image_base64 || typeof image_base64 !== 'string' || image_base64.trim().length === 0) {
+      errors.push('Missing or invalid image_base64 (must be a non-empty string).');
     }
+    // Basic UUID format check (simple regex)
+    const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+    if (!journey_image_id || typeof journey_image_id !== 'string' || journey_image_id.trim().length === 0) {
+      errors.push('Missing or invalid journey_image_id (must be a non-empty string).');
+    } else if (!uuidRegex.test(journey_image_id)) {
+       // Log a warning if it doesn't look like a UUID, but maybe still allow processing?
+       // Or make it an error: errors.push('Invalid journey_image_id format (must be a UUID).');
+       console.warn(`journey_image_id "${journey_image_id}" does not appear to be a valid UUID format.`);
+    }
+
+    if (errors.length > 0) {
+      const errorMessage = `Invalid request: ${errors.join(' ')}`;
+      console.error(errorMessage, { body }); // Log the error and received body
+      return new Response(JSON.stringify({ error: errorMessage }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400, // Bad Request
+      });
+    }
+    // --- End Input Validation ---
+
     console.log(`Received image_base64 (length: ${image_base64.length}), journey_image_id: ${journey_image_id}`);
 
     // --- API Key Validation ---
@@ -200,14 +223,42 @@ serve(async (req: Request) => {
     const detectedText = annotation?.text?.trim() || null;
     const visionError = visionResult.responses?.[0]?.error?.message;
 
+    // Handle Vision API explicitly returning an error in the response body
     if (visionError) {
        console.error(`Vision API returned an error for image ${journey_image_id}: ${visionError}`);
-       // Potentially update DB here to mark as error? Or just proceed without text.
+       // Update DB to indicate processing failed at Vision step
+       const { error: updateError } = await supabaseAdmin
+            .from('journey_images')
+            .update({
+                // Set flags indicating failure/no text, but update timestamp
+                has_potential_text: false,
+                detected_text: null, // Clear any previous text
+                is_invoice_guess: false,
+                detected_total_amount: null,
+                detected_currency: null,
+                // TODO: Consider adding a dedicated 'processing_error' text field
+                last_processed_at: new Date().toISOString(),
+            })
+            .eq('id', journey_image_id);
+        if (updateError) {
+            console.error(`Supabase update error (Vision API error case) for image ID ${journey_image_id}:`, updateError);
+            throw updateError; // Throw if DB update fails
+        }
+        console.log(`DB updated for Vision API error: ${journey_image_id}`);
+        // Return 200 OK, but indicate failure in the message
+        return new Response(JSON.stringify({ 
+            error: `Processing failed: Vision API error: ${visionError}`,
+            journey_image_id 
+        }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            status: 200, // Indicate function completed, but processing failed
+         });
     }
 
+    // Handle case where Vision processed successfully but found no text
     if (!detectedText) {
         console.log(`No text detected by Vision API for image ${journey_image_id}. Updating DB.`);
-        // Update DB indicating no text found, maybe clear other fields?
+        // Update DB indicating no text found
          const { error: updateError } = await supabaseAdmin
             .from('journey_images')
             .update({
@@ -240,10 +291,10 @@ serve(async (req: Request) => {
     let extractedAmount: number | null = null;
     let extractedCurrency: string | null = null;
 
-    console.log(`Calling OpenAI API for image ID: ${journey_image_id}...`);
+    console.log(`Calling OpenAI API for image ID: ${journey_image_id} using model: ${OPENAI_MODEL}, temp: ${OPENAI_TEMPERATURE}, tokens: ${OPENAI_MAX_TOKENS}...`);
     try {
         const openAiApiBody = {
-          model: OPENAI_MODEL,
+          model: OPENAI_MODEL, // Use env var
           messages: [
             {
               role: 'system',
@@ -264,8 +315,8 @@ CRITICAL INSTRUCTIONS:
               content: `Extract the final total amount and currency from the following text:\n\n${detectedText}`
             }
           ],
-          temperature: 0.1, // Lower temperature for more deterministic output
-          max_tokens: 60, // Slightly increased token limit for JSON structure
+          temperature: OPENAI_TEMPERATURE, // Use env var
+          max_tokens: OPENAI_MAX_TOKENS, // Use env var
           response_format: { type: "json_object" } // Request JSON output
         };
 
@@ -279,14 +330,16 @@ CRITICAL INSTRUCTIONS:
         });
 
         console.log(`OpenAI API response status for image ID ${journey_image_id}: ${openAiResponse.status}`);
+        // Log OpenAI errors but don't throw - allow DB update with null amounts
          if (!openAiResponse.ok) {
           const errorBody = await openAiResponse.text();
-          console.error(`OpenAI API error response body for image ID ${journey_image_id}:`, errorBody);
-          // Don't throw, just log and proceed without amount
+          console.error(`OpenAI API HTTP error response for image ID ${journey_image_id}: ${openAiResponse.status}`, errorBody);
+          // Proceed without amount/currency
         } else {
              const openAiResult = await openAiResponse.json() as OpenAiApiResponse;
              if (openAiResult.error) {
                  console.error(`OpenAI API returned an error object for image ID ${journey_image_id}:`, openAiResult.error.message);
+                  // Proceed without amount/currency
              } else {
                 const messageContent = openAiResult.choices?.[0]?.message?.content;
                 console.log('OpenAI raw response content:', messageContent); // Log raw response
@@ -302,8 +355,9 @@ CRITICAL INSTRUCTIONS:
         }
 
     } catch (error) {
-         console.error(`Error during OpenAI API call for image ${journey_image_id}:`, error);
-         // Proceed without amount if OpenAI fails
+         // Catch network errors during OpenAI call
+         console.error(`Network or other error during OpenAI API call for image ${journey_image_id}:`, error);
+         // Proceed without amount/currency
     }
 
 

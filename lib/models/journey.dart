@@ -30,14 +30,33 @@ class Journey extends Equatable {
     final startDateStr = json['start_date'];
     final endDateStr = json['end_date'];
 
+    // Helper to safely parse dates, providing a fallback
+    DateTime _parseDate(dynamic dateValue, DateTime fallback) {
+      if (dateValue is String) {
+        // Use tryParse which returns null on failure instead of throwing
+        final parsedDate = DateTime.tryParse(dateValue);
+        if (parsedDate == null) {
+           print('WARNING [Journey.fromJson]: Failed to parse date string: "$dateValue", using fallback.');
+           return fallback;
+        }
+        return parsedDate;
+      }
+      // Log if the value is not null and not a string
+      if (dateValue != null) {
+          print('WARNING [Journey.fromJson]: Unexpected type for date field: ${dateValue.runtimeType}, value: "$dateValue", using fallback.');
+      }
+      return fallback;
+    }
+
     return Journey(
       id: json['id'] as String? ?? '',
       userId: json['user_id'] as String? ?? '',
       title: json['title'] as String? ?? '',
       description: json['description'] as String? ?? '',
       location: json['location'] as String? ?? '',
-      startDate: startDateStr != null ? DateTime.parse(startDateStr as String) : DateTime.now(),
-      endDate: endDateStr != null ? DateTime.parse(endDateStr as String) : DateTime.now(),
+      // Use the safe parsing helper
+      startDate: _parseDate(startDateStr, DateTime.now()),
+      endDate: _parseDate(endDateStr, DateTime.now()),
       budget: (json['budget'] as num?)?.toDouble() ?? 0.0,
       isCompleted: json['is_completed'] as bool? ?? false,
     );

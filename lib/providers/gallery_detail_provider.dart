@@ -5,6 +5,7 @@ import 'package:logger/logger.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:travel/models/journey_image_info.dart';
 import 'package:travel/providers/logging_provider.dart'; // Import the logger provider
+import '../repositories/repository_exceptions.dart'; // CORRECTED PATH
 
 // 1. Define the State class
 class GalleryDetailState extends Equatable {
@@ -14,6 +15,8 @@ class GalleryDetailState extends Equatable {
   final List<String?> signedUrls;
   final bool isLoadingSignedUrls;
   final String? signedUrlError;
+  final String? generalError; // Add general error field
+  final String? scanningImageId; // ID of the image currently being scanned
 
   const GalleryDetailState({
     required this.images,
@@ -22,6 +25,8 @@ class GalleryDetailState extends Equatable {
     this.signedUrls = const [],
     this.isLoadingSignedUrls = true,
     this.signedUrlError,
+    this.generalError, // Add to constructor
+    this.scanningImageId, // Add to constructor
   });
 
   GalleryDetailState copyWith({
@@ -30,7 +35,11 @@ class GalleryDetailState extends Equatable {
     List<String?>? signedUrls,
     bool? isLoadingSignedUrls,
     String? signedUrlError,
+    String? generalError, // Add to copyWith
+    String? scanningImageId, // Add to copyWith parameters
     bool clearSignedUrlError = false, // Helper flag to clear error
+    bool clearGeneralError = false, // Helper flag to clear general error
+    bool clearScanningImageId = false, // Helper to clear scanning ID
   }) {
     return GalleryDetailState(
       images: images ?? this.images,
@@ -38,6 +47,8 @@ class GalleryDetailState extends Equatable {
       signedUrls: signedUrls ?? this.signedUrls,
       isLoadingSignedUrls: isLoadingSignedUrls ?? this.isLoadingSignedUrls,
       signedUrlError: clearSignedUrlError ? null : signedUrlError ?? this.signedUrlError,
+      generalError: clearGeneralError ? null : generalError ?? this.generalError, // Handle new field
+      scanningImageId: clearScanningImageId ? null : scanningImageId ?? this.scanningImageId, // Handle scanningImageId, allow explicit clearing
     );
   }
 
@@ -48,6 +59,8 @@ class GalleryDetailState extends Equatable {
         signedUrls,
         isLoadingSignedUrls,
         signedUrlError,
+        generalError, // Add to props
+        scanningImageId, // Add to props
       ];
 }
 
@@ -161,32 +174,49 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
           },
           onError: (error) {
             _logger.e('Realtime listener error on channel $_channelName', error: error);
-             state = state.copyWith(scanError: {...state.scanError, 'realtime_error': error.toString()});
+             // Clear scanning state on listener error
+             state = state.copyWith(
+                generalError: 'Realtime listener error: ${error.toString()}',
+                clearScanningImageId: true
+             );
           },
           onDone: () {
             _logger.w('Realtime listener on channel $_channelName closed.');
+            // Clear scanning state when listener closes
+            if (mounted) { // Check if notifier is still mounted
+               state = state.copyWith(clearScanningImageId: true);
+            }
           },
         );
 
-     // Subscribe callback (Optional but useful for knowing when ready)
+     // Subscribe callback
      _supabaseClient.channel(_channelName!).subscribe((status, [error]) {
         _logger.i('GalleryDetailNotifier Realtime subscription status for $_channelName: $status');
         if (status == RealtimeSubscribeStatus.subscribed) {
             _logger.i('GalleryDetailNotifier successfully subscribed to $_channelName.');
+            // Clear general error and scanning state on successful sub
+            state = state.copyWith(clearGeneralError: true, clearScanningImageId: true);
         } else if (status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.channelError) {
              _logger.e('Realtime subscription failed/closed for $_channelName', error: error);
-             // Consider setting an error state
-             state = state.copyWith(scanError: {...state.scanError, 'realtime_error': 'Subscription closed/failed: ${error?.toString()}'});
+             // Set general error and clear scanning state
+             state = state.copyWith(
+                generalError: 'Subscription closed/failed: ${error?.toString()}',
+                clearScanningImageId: true
+             );
         } else if (status == RealtimeSubscribeStatus.timedOut) {
              _logger.w('Realtime subscription timed out for $_channelName');
-             state = state.copyWith(scanError: {...state.scanError, 'realtime_error': 'Subscription timed out'});
+             // Set general error and clear scanning state
+             state = state.copyWith(
+                generalError: 'Subscription timed out',
+                clearScanningImageId: true
+             );
         }
      });
   }
 
   void _handleRealtimeUpdate(Map<String, dynamic> newRowData) {
       final updatedImageInfo = JourneyImageInfo.fromMap(newRowData);
-      _logger.d('Processing update for image ID: ${updatedImageInfo.id}, hasPotentialText: ${updatedImageInfo.hasPotentialText}, Amount: ${updatedImageInfo.detectedTotalAmount}, Currency: ${updatedImageInfo.detectedCurrency}');
+      _logger.d('Processing update for image ID: ${updatedImageInfo.id}, LastProcessed: ${updatedImageInfo.lastProcessedAt}');
 
       final index = state.images.indexWhere((img) => img.id == updatedImageInfo.id);
       if (index != -1) {
@@ -194,44 +224,54 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
         final updatedImages = List<JourneyImageInfo>.from(state.images);
         updatedImages[index] = updatedImageInfo; // Replace with the new data
 
-        // Create a new map for scanError, removing the error for the updated image if it exists
         final newScanError = Map<String, String?>.from(state.scanError);
         newScanError.remove(updatedImageInfo.id);
+
+        // Check if this update corresponds to the image currently being scanned
+        final bool clearScanning = state.scanningImageId == updatedImageInfo.id;
+        if (clearScanning) {
+            _logger.d('Realtime update received for the image currently being scanned (${updatedImageInfo.id}), clearing scanning state.');
+        }
 
         state = state.copyWith(
           images: updatedImages,
           scanError: newScanError,
-          // Keep signed URL state as is, only data changed
+          clearScanningImageId: clearScanning, // Clear scanning state if it matches
         );
       } else {
          _logger.w('Received realtime update for unknown image ID: ${updatedImageInfo.id}');
       }
   }
 
-  // Method to reset scan status and mark as initiated
-  void resetScanStatus(String imageId) {
-    _logger.d('Resetting scan status AND marking as initiated for image ID: $imageId');
+  // Method to initiate scan state and reset image data
+  void initiateScan(String imageId) {
+    _logger.d('Initiating scan for image ID: $imageId');
     final index = state.images.indexWhere((img) => img.id == imageId);
     if (index != -1) {
       final updatedImages = List<JourneyImageInfo>.from(state.images);
-      // Mark as initiated, clear previous results
+      // Reset previous results on the image object itself
       updatedImages[index] = updatedImages[index].copyWith(
-        scanInitiated: true,
-        hasPotentialText: null,
-        detectedText: null,
-        detectedTotalAmount: null,
-        detectedCurrency: null,
-        isInvoiceGuess: false,
-        lastProcessedAt: null,
+        // Use the specific clear flags in copyWith
+        setHasPotentialTextNull: true,
+        setDetectedTextNull: true,
+        setDetectedTotalAmountNull: true,
+        setDetectedCurrencyNull: true,
+        setLastProcessedAtNull: true,
+        isInvoiceGuess: false, // Reset guess as well
       );
 
       // Clear any specific error for this image
       final newScanError = Map<String, String?>.from(state.scanError);
       newScanError.remove(imageId);
 
-      state = state.copyWith(images: updatedImages, scanError: newScanError);
+      // Set the scanningImageId in the state
+      state = state.copyWith(
+        images: updatedImages,
+        scanError: newScanError,
+        scanningImageId: imageId,
+      );
     } else {
-      _logger.w('Attempted to reset scan status for unknown image ID: $imageId');
+      _logger.w('Attempted to initiate scan for unknown image ID: $imageId');
     }
   }
 
@@ -240,13 +280,15 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
     _logger.e('Setting scan error for image ID $imageId: $error');
      final index = state.images.indexWhere((img) => img.id == imageId);
      if (index != -1) {
-      final updatedImages = List<JourneyImageInfo>.from(state.images);
-      // Reset scan initiated flag on error using the updated copyWith
-      updatedImages[index] = updatedImages[index].copyWith(scanInitiated: false);
-
-      state = state.copyWith(
-         images: updatedImages, // Include the updated image list
-         scanError: { ...state.scanError, imageId: error }
+       // Check if this error corresponds to the image currently being scanned
+       final bool clearScanning = state.scanningImageId == imageId;
+       if (clearScanning) {
+          _logger.d('Scan error occurred for the image currently being scanned (${imageId}), clearing scanning state.');
+       }
+       state = state.copyWith(
+         // Keep images as they are (no longer need to reset scanInitiated)
+         scanError: { ...state.scanError, imageId: error },
+         clearScanningImageId: clearScanning, // Clear scanning state if it matches
        );
      } else {
        _logger.w('Attempted to set scan error for unknown image ID: $imageId');
@@ -272,6 +314,15 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
         _logger.w('Attempted to handle deletion for ID $deletedImageId, but it was not found in state.');
     }
 }
+
+  // Method to clear the general error state
+  void clearGeneralError() {
+    _logger.d('Clearing general error state.');
+    // Only update if there is actually an error to clear
+    if (state.generalError != null) {
+       state = state.copyWith(clearGeneralError: true);
+    }
+  }
 
   @override
   void dispose() {
