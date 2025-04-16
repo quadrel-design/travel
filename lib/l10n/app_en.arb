@@ -29,7 +29,8 @@
   "journeySaveErrorTitle": "Save Error",
   "journeySaveSuccessTitle": "Journey Saved",
   "journeySaveSuccessDesc": "Your new journey has been created.",
-  "journeySaveMissingInfoDesc": "Please fill in all fields, including dates.",
+  "journeySaveMissingInfoDesc": "Please fill in all required fields, including dates.",
+  "journeySaveInvalidDateRange": "End date cannot be before start date.",
   "journeyDeleteSuccessDesc": "Journey deleted.",
   "journeyDeleteErrorDesc": "Failed to delete journey: {error}",
   "@journeyDeleteErrorDesc": {
@@ -58,8 +59,31 @@
   "homeScreenRefreshTooltip": "Refresh Journeys",
 
   "createJourneyTitle": "Create Journey",
-  "createJourneyErrorUserNotLoggedIn": "User not logged in.",
-  
+  "createJourneyErrorUserNotLoggedIn": "User not logged in. Please sign in again.",
+  "saveButton": "Save",
+
+  "journeyFormFieldNameLabel": "Travel Name",
+  "journeyFormFieldNameDesc": "Enter a descriptive name for your trip.",
+  "journeyFormFieldNameHint": "e.g., Summer Vacation in Italy",
+  "journeyFormFieldRequiredError": "This field is required.",
+  "journeyFormFieldNameMinLengthError": "Name must be at least 3 characters.",
+  "journeyFormFieldFromLabel": "From",
+  "journeyFormFieldFromHint": "Select start date",
+  "journeyFormFieldTillLabel": "Till",
+  "journeyFormFieldTillHint": "Select end date",
+  "journeyFormFieldDescLabel": "Description",
+  "journeyFormFieldDescDesc": "Add some details about your travel plans.",
+  "journeyFormFieldDescHint": "Describe your journey...",
+  "journeyFormFieldDescMaxLengthError": "Description too long (max 500 chars).",
+  "journeyFormFieldLocationLabel": "Location",
+  "journeyFormFieldLocationDesc": "Where is this journey taking place?",
+  "journeyFormFieldLocationHint": "Start typing a city or place...",
+  "journeyFormFieldBudgetLabel": "Budget ($)",
+  "journeyFormFieldBudgetDesc": "Estimated budget for the trip.",
+  "journeyFormFieldBudgetHint": "e.g., 2000",
+  "journeyFormFieldNumericError": "Please enter a valid number.",
+  "journeyFormFieldBudgetMinError": "Budget must be a positive number.",
+
   "detailScreenErrorMissingData": "Error: Journey data missing",
 
   "galleryDetailTitle": "Image {index} of {total}",

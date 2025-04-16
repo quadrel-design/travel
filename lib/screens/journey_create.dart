@@ -6,13 +6,24 @@ import 'package:intl/intl.dart';
 // import 'package:shadcn_ui/shadcn_ui.dart'; // Remove import
 import 'package:uuid/uuid.dart'; // For generating IDs
 import 'package:travel/providers/repository_providers.dart'; // Import providers
-import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add import
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+// import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add import
 
 import '../models/journey.dart'; // Import Journey model
 import '../widgets/app_title.dart'; // Import AppTitle
 // import '../repositories/journey_repository.dart'; // Unused import
 // import '../repositories/auth_repository.dart'; // Unused import
 import '../widgets/form_field_group.dart'; // Import the new widget
+import 'package:flutter_form_builder/flutter_form_builder.dart';
+import 'package:form_builder_validators/form_builder_validators.dart';
+// Remove http and dotenv imports if only used for direct Places API call
+// import 'package:http/http.dart' as http;
+// import 'dart:convert';
+// import 'package:flutter_dotenv/flutter_dotenv.dart';
+// Import Supabase client
+import 'package:supabase_flutter/supabase_flutter.dart';
+// Import flutter_typeahead package
+// import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 class CreateJourneyScreen extends ConsumerStatefulWidget {
   const CreateJourneyScreen({super.key});
@@ -25,12 +36,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   // Add a ScaffoldMessenger Key
   final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>(); 
 
-  final _formKey = GlobalKey<FormState>(); // Use FormState key
-  final _nameController = TextEditingController();
-  final _descriptionController = TextEditingController();
-  final _locationController = TextEditingController();
-  final _budgetController = TextEditingController();
-  // Add controllers for date display
+  final _formKey = GlobalKey<FormBuilderState>();
   final _startDateDisplayController = TextEditingController();
   final _endDateDisplayController = TextEditingController();
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy'); 
@@ -45,10 +51,6 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     _scaffoldMessengerKey.currentState?.removeCurrentSnackBar(); 
     
     // dispose all controllers
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _locationController.dispose();
-    _budgetController.dispose();
     _startDateDisplayController.dispose();
     _endDateDisplayController.dispose();
     super.dispose();
@@ -103,11 +105,18 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     final journeyRepository = ref.read(journeyRepositoryProvider);
     final authRepository = ref.read(authRepositoryProvider);
     
-    final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) return; // Validators handle messages
+    final isValid = _formKey.currentState?.saveAndValidate() ?? false;
+    if (!isValid) {
+      _showErrorSnackBar(context, l10n.missingInfoTitle, l10n.journeySaveMissingInfoDesc);
+      return;
+    }
     
     if (_startDate == null || _endDate == null) {
-       _showErrorSnackBar(context, l10n.missingInfoTitle, l10n.journeySaveMissingInfoDesc);
+       _showErrorSnackBar(context, l10n.errorTitle, l10n.journeySaveInvalidDateRange);
+      return;
+    }
+    if (_endDate!.isBefore(_startDate!)) {
+       _showErrorSnackBar(context, l10n.errorTitle, l10n.journeySaveInvalidDateRange);
       return;
     }
 
@@ -120,32 +129,99 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       return;
     }
 
-    final budgetValue = double.tryParse(_budgetController.text.trim()) ?? 0.0;
+    final formData = _formKey.currentState!.value;
+    final String title = formData['name'] ?? '';
+    final String description = formData['description'] ?? '';
+    final String location = formData['location'] ?? '';
+    final double budget = double.tryParse(formData['budget']?.toString() ?? '0.0') ?? 0.0;
+
     final newJourney = Journey(
-      id: const Uuid().v4(), // Generate ID locally
+      id: const Uuid().v4(),
       userId: userId,
-      title: _nameController.text.trim(),
-      description: _descriptionController.text.trim(),
-      location: _locationController.text.trim(),
+      title: title,
+      description: description,
+      location: location,
       startDate: _startDate!,
       endDate: _endDate!,
-      budget: budgetValue,
+      budget: budget,
       isCompleted: false,
     );
 
     try {
-      await journeyRepository.createJourney(newJourney.title);
+      await journeyRepository.createJourney(title);
       if (!mounted) return;
       Navigator.of(context).pop(); // Close screen on success
     } catch (error) {
        if (mounted) {
-           // Use parameterized localization
-           _showErrorSnackBar(context, l10n.journeySaveErrorTitle, l10n.journeyDeleteErrorDesc(error));
+           _showErrorSnackBar(context, l10n.journeySaveErrorTitle, l10n.journeyDeleteErrorDesc(error.toString()));
        }
     } finally {
        if (mounted) { setState(() { _isLoading = false; }); }
     }
   }
+
+  // --- REMOVE Google Places API Helper --- 
+  // final String _googleApiKey = dotenv.env['GOOGLE_PLACES_API_KEY'] ?? '';
+  // final String _sessionToken = const Uuid().v4();
+
+  // --- REWRITE _searchLocations to call Supabase Edge Function ---
+   Future<List<String>> _searchLocations(String pattern) async {
+     print('[_searchLocations] triggered with pattern: "$pattern"'); // Existing log
+
+     if (pattern.isEmpty) {
+       return [];
+     }
+
+     try {
+       print('[DEBUG] Attempting to invoke Supabase function location-autocomplete...'); // Added log
+       final response = await Supabase.instance.client.functions.invoke(
+         'location-autocomplete',
+         body: { 'query': pattern },
+       );
+       print('[DEBUG] Supabase function response status: ${response.status}'); // Added log
+       print('[DEBUG] Supabase function response data: ${response.data}'); // Added log
+
+
+       if (response.status != 200) {
+          print('[ERROR] Supabase function invocation failed (Status != 200)'); // Added log
+          // Handle function invocation errors (e.g., function not found, server error)
+          // print('Supabase function invocation failed with status: ${response.status}');
+          // print('Error data: ${response.data}');
+          // Try to parse error message if available
+          String errorMessage = 'Failed to fetch suggestions.';
+          if (response.data != null && response.data['error'] is String) {
+            errorMessage = response.data['error'];
+          }
+          // Optionally show error to user via snackbar
+          if (mounted) {
+              _showErrorSnackBar(context, 'Search Error', errorMessage); // Placeholder text
+          }
+          return [];
+       }
+
+       // Check if the response data contains the expected 'suggestions' list
+       if (response.data != null && response.data['suggestions'] is List) {
+          // Ensure elements are strings before casting
+          final suggestions = List<String>.from(response.data['suggestions']
+              .where((item) => item is String)); 
+          print('[DEBUG] Received ${suggestions.length} suggestions from Supabase function.'); // Changed log level
+          return suggestions;
+       } else {
+         print('[ERROR] Received unexpected data format from Supabase function: ${response.data}'); // Added log
+         return [];
+       }
+
+     } catch (e, stackTrace) { // Catch specific invocation errors
+       print('[ERROR] Exception caught invoking Supabase function: $e'); // Added log
+       print('[ERROR] StackTrace: $stackTrace'); // Added log
+        if (mounted) {
+            // _showErrorSnackBar(context, 'Search Error', 'An unexpected error occurred.'); // Placeholder text
+             _showErrorSnackBar(context, 'Search Error', 'Failed to connect to search service: $e'); // Show exception
+        }
+       return []; // Return empty list on error
+     }
+   }
+   // --- End Supabase Edge Function Call ---
 
   @override
   Widget build(BuildContext context) {
@@ -160,13 +236,13 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
           // Replace with TextButton
           TextButton(
             onPressed: _isLoading ? null : _saveJourney,
-            child: const Text( 'Save'), // Add const - TODO: Localize
+            child: Text(l10n.saveButton),
           ),
         ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0), // Already const
-        child: Form(
+        child: FormBuilder(
           key: _formKey,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch, // Stretch buttons later?
@@ -176,12 +252,17 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
 
               // --- Travel Name Field --- 
               FormFieldGroup(
-                label: 'Travel Name', // TODO: Localize
-                description: 'Enter a descriptive name for your trip.', // TODO: Localize
-                child: TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(hintText: 'e.g., Summer Vacation in Italy'), // Add const back
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a journey name.' : null,
+                label: l10n.journeyFormFieldNameLabel,
+                description: l10n.journeyFormFieldNameDesc,
+                child: FormBuilderTextField(
+                  name: 'name',
+                  decoration: InputDecoration(
+                    hintText: l10n.journeyFormFieldNameHint,
+                  ),
+                  validator: FormBuilderValidators.compose([
+                    FormBuilderValidators.required(errorText: l10n.journeyFormFieldRequiredError),
+                    FormBuilderValidators.minLength(3, errorText: l10n.journeyFormFieldNameMinLengthError),
+                  ]),
                 ),
               ),
               const SizedBox(height: 16),
@@ -192,32 +273,30 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
                  children: [
                    Expanded(
                      child: FormFieldGroup(
-                        label: 'From', // TODO: Localize
+                        label: l10n.journeyFormFieldFromLabel,
                         child: TextFormField(
                           controller: _startDateDisplayController,
-                          decoration: const InputDecoration(hintText: 'Select start date'), // Add const
+                          decoration: InputDecoration(
+                            hintText: l10n.journeyFormFieldFromHint,
+                          ),
                           readOnly: true,
                           onTap: () => _pickDate(true),
-                          validator: (v) => _startDate == null ? 'Please select a start date.' : null,
+                          validator: (v) => _startDate == null ? l10n.journeyFormFieldRequiredError : null,
                         ),
                      ),
                    ),
                    const SizedBox(width: 16),
                    Expanded(
                       child: FormFieldGroup(
-                        label: 'Till', // TODO: Localize
+                        label: l10n.journeyFormFieldTillLabel,
                         child: TextFormField(
                           controller: _endDateDisplayController,
-                          decoration: const InputDecoration(hintText: 'Select end date'), // Add const
+                          decoration: InputDecoration(
+                            hintText: l10n.journeyFormFieldTillHint,
+                          ),
                           readOnly: true,
                           onTap: () => _pickDate(false),
-                          validator: (v) {
-                             if (_endDate == null) return 'Please select an end date.';
-                             if (_startDate != null && _endDate!.isBefore(_startDate!)) {
-                                return 'End date must be after start date.';
-                             }
-                             return null;
-                          },
+                          validator: (v) => _endDate == null ? l10n.journeyFormFieldRequiredError : null,
                         ),
                      ),
                    ),
@@ -227,51 +306,119 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
               
               // --- Description Field ---
               FormFieldGroup(
-                label: 'Description', // TODO: Localize
-                description: 'Add some details about your travel plans.', // TODO: Localize
-                child: TextFormField(
-                  controller: _descriptionController,
-                  decoration: const InputDecoration(hintText: 'Describe your journey...'), // Add const
+                label: l10n.journeyFormFieldDescLabel,
+                description: l10n.journeyFormFieldDescDesc,
+                child: FormBuilderTextField(
+                  name: 'description',
+                  decoration: InputDecoration(
+                    hintText: l10n.journeyFormFieldDescHint,
+                  ),
                   maxLines: 3,
+                  validator: FormBuilderValidators.maxLength(500, errorText: l10n.journeyFormFieldDescMaxLengthError),
                 ),
               ),
               const SizedBox(height: 16),
 
-              // --- Location Field ---
+              // --- Location Field (Using built-in Autocomplete) ---
               FormFieldGroup(
-                label: 'Location', // TODO: Localize
-                description: 'Where is this journey taking place?', // TODO: Localize
-                child: TextFormField(
-                  controller: _locationController,
-                  decoration: const InputDecoration(hintText: 'e.g., Rome, Italy'), // Add const
-                  validator: (v) => (v == null || v.trim().isEmpty) ? 'Please enter a location.' : null,
+                label: l10n.journeyFormFieldLocationLabel,
+                description: l10n.journeyFormFieldLocationDesc,
+                child: FormBuilderField<String>(
+                  name: 'location',
+                  validator: FormBuilderValidators.required(errorText: l10n.journeyFormFieldRequiredError),
+                  builder: (FormFieldState<String?> field) {
+                    // Use Flutter's built-in Autocomplete widget
+                    return Autocomplete<String>(
+                      // Provide initial value from the FormBuilder field state
+                      initialValue: TextEditingValue(text: field.value ?? ''),
+                      // Function that provides options based on text input
+                      optionsBuilder: (TextEditingValue textEditingValue) async {
+                        // Add debounce here as well
+                        await Future.delayed(const Duration(milliseconds: 300));
+                        // Call the same backend function
+                        return await _searchLocations(textEditingValue.text);
+                      },
+                      // How to display the options in the overlay
+                      optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
+                        return Align(
+                          alignment: Alignment.topLeft,
+                          child: Material(
+                            elevation: 4.0,
+                            // Constrain the height of the suggestions list
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxHeight: 200), 
+                              child: ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                itemCount: options.length,
+                                itemBuilder: (BuildContext context, int index) {
+                                  final String option = options.elementAt(index);
+                                  return InkWell(
+                                    onTap: () {
+                                      onSelected(option);
+                                    },
+                                    child: ListTile(
+                                      title: Text(option),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                      // What to do when an option is selected
+                      onSelected: (String selection) {
+                        // Update the FormBuilder field state when an option is selected
+                        field.didChange(selection);
+                        FocusScope.of(context).unfocus(); // Close keyboard
+                      },
+                      // How to build the text field itself
+                      fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+                        // Forward the field state changes to the FormBuilder field
+                        // This ensures validation works even if user doesn't select an option
+                        textEditingController.addListener(() {
+                           field.didChange(textEditingController.text);
+                         });
+                        return TextFormField(
+                          controller: textEditingController,
+                          focusNode: focusNode,
+                          decoration: InputDecoration(
+                             hintText: l10n.journeyFormFieldLocationHint,
+                             // Display error text from FormBuilderField state
+                             errorText: field.errorText,
+                           ),
+                           // Optional: handle submission if needed
+                           // onFieldSubmitted: (String value) { onFieldSubmitted(); },
+                         );
+                      },
+                      // Optional: Convert an option String to a String display value (usually identity)
+                      displayStringForOption: (String option) => option,
+                    );
+                  },
                 ),
               ),
               const SizedBox(height: 16),
               
               // --- Budget Field ---
               FormFieldGroup(
-                label: 'Budget (\$)', // TODO: Localize
-                description: 'Estimated budget for the trip.', // TODO: Localize
-                child: TextFormField(
-                  controller: _budgetController,
-                  decoration: const InputDecoration(hintText: 'e.g., 2000'), // Add const back
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true), // Already const
+                label: l10n.journeyFormFieldBudgetLabel,
+                description: l10n.journeyFormFieldBudgetDesc,
+                child: FormBuilderTextField(
+                  name: 'budget',
+                  decoration: InputDecoration(
+                    hintText: l10n.journeyFormFieldBudgetHint,
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   inputFormatters: [
-                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}'))
+                    FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
                   ],
-                  validator: (v) {
-                     if (v == null || v.trim().isEmpty) {
-                        return 'Please enter a budget.';
-                     }
-                     if (double.tryParse(v.trim()) == null) {
-                        return 'Please enter a valid number.';
-                     }
-                     if (double.parse(v.trim()) <= 0) {
-                        return 'Budget must be positive.';
-                     }
-                     return null;
-                  },
+                  valueTransformer: (text) => num.tryParse(text ?? ''),
+                  validator: FormBuilderValidators.compose([
+                    FormBuilderValidators.required(errorText: l10n.journeyFormFieldRequiredError),
+                    FormBuilderValidators.numeric(errorText: l10n.journeyFormFieldNumericError),
+                    FormBuilderValidators.min(0.01, errorText: l10n.journeyFormFieldBudgetMinError),
+                  ]),
                 ),
               ),
 

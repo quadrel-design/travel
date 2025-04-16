@@ -202,8 +202,8 @@ class GalleryOverviewScreen extends ConsumerWidget {
             final fileBytes = await pickedFile.readAsBytes();
             final fileName = pickedFile.name;
             logger.d('Uploading image: $fileName');
-            await repo.uploadJourneyImage(fileBytes, fileName);
-            logger.i('Successfully uploaded image: $fileName');
+            await repo.uploadJourneyImage(fileBytes, fileName, journey.id);
+            logger.i('Successfully uploaded image: $fileName for Journey ${journey.id}');
           } catch (e, stackTrace) {
             logger.e('Failed to upload image', error: e, stackTrace: stackTrace);
             if (context.mounted) {

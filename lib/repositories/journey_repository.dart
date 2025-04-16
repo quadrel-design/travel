@@ -152,36 +152,35 @@ class JourneyRepository {
     }
   }
 
-  Future<String> uploadJourneyImage(Uint8List imageBytes, String fileName) async {
+  Future<String> uploadJourneyImage(Uint8List imageBytes, String fileName, String journeyId) async {
     final imageRecordId = const Uuid().v4();
     final userId = _getCurrentUserId();
     final fileExt = p.extension(fileName);
-    // Store images under journey ID later when context is available
-    // For now, maybe store directly under user? Or a temporary location?
-    // Let's assume a structure like: userId/imageRecordId.ext for now
-    final filePath = '$userId/$imageRecordId$fileExt';
-    _logger.d('Attempting to upload image to path: $filePath (Record ID: $imageRecordId)');
+    // Updated filePath to include journeyId
+    final filePath = '$userId/$journeyId/$imageRecordId$fileExt';
+    _logger.d('Attempting to upload image to path: $filePath (Record ID: $imageRecordId) for Journey: $journeyId');
 
     try {
       await _supabaseClient.storage.from('journey_images').uploadBinary(
             filePath,
             imageBytes,
-            // Consider adding file options like contentType if available/needed
-            // fileOptions: FileOptions(contentType: pickedFile.mimeType)
+            // fileOptions: FileOptions(contentType: pickedFile.mimeType) // Consider adding later
           );
       final imageUrl = _supabaseClient.storage.from('journey_images').getPublicUrl(filePath);
       _logger.i('Image uploaded successfully to: $imageUrl');
 
-      // Add initial reference to the database
-      await addImageReference(imageUrl, id: imageRecordId);
+      // Pass journeyId down to addImageReference
+      await addImageReference(imageUrl, journeyId, id: imageRecordId);
 
       return imageUrl; // Return the public URL
     } on StorageException catch (e, stackTrace) {
       _logger.e('StorageException during image upload for $filePath', error: e, stackTrace: stackTrace);
+      // Attempt to delete the failed upload if possible?
       throw ImageUploadException('Storage failed: ${e.message}', e, stackTrace);
     } on AddImageReferenceException { // Let specific exception bubble up
-      // Could potentially try to delete the uploaded storage file here if DB insert fails
       _logger.w('Image uploaded to storage ($filePath), but failed to add DB reference. Manual cleanup might be needed.');
+      // Consider attempting to delete the orphaned storage file here
+      // await _supabaseClient.storage.from('journey_images').remove([filePath]);
       rethrow;
     } on NotAuthenticatedException { // Re-throw specific exception
        rethrow;
@@ -192,19 +191,19 @@ class JourneyRepository {
   }
 
   // Method to add just the image reference
-  Future<void> addImageReference(String imageUrl, {String? id}) async {
+  Future<void> addImageReference(String imageUrl, String journeyId, {String? id}) async {
     final imageRecordId = id ?? const Uuid().v4();
-    final userId = _getCurrentUserId(); // Ensure user is logged in
-    _logger.d('Adding image reference to DB. ID: $imageRecordId, URL: $imageUrl');
+    final userId = _getCurrentUserId(); // Keep user check for logging/potential future use
+    _logger.d('Adding image reference to DB. ID: $imageRecordId, URL: $imageUrl, JourneyID: $journeyId');
 
     try {
       await _supabaseClient.from('journey_images').insert({
         'id': imageRecordId,
-        'user_id': userId,
-        'url': imageUrl,
-        // Add journey_id later if needed
+        // 'user_id': userId, // Remove user_id field
+        'journey_id': journeyId, // Add journey_id field
+        'image_url': imageUrl,
       });
-      _logger.i('Successfully added image reference to DB. ID: $imageRecordId');
+      _logger.i('Successfully added image reference to DB. ID: $imageRecordId for Journey $journeyId');
     } on PostgrestException catch (e, stackTrace) {
       _logger.e('PostgrestException adding image reference $imageRecordId', error: e, stackTrace: stackTrace);
       throw AddImageReferenceException('Database insert failed: ${e.message}', e, stackTrace);
