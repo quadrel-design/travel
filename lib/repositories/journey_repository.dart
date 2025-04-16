@@ -238,36 +238,35 @@ class JourneyRepository {
      }
   }
 
-  Future<void> deleteJourneyImage(String imageUrl) async {
+  // Modify signature to accept imageId
+  Future<void> deleteJourneyImage(String imageUrl, String imageId) async {
     final imagePath = _extractStoragePath(imageUrl);
     if (imagePath == null) {
        _logger.e('Could not extract storage path from URL, cannot delete: $imageUrl');
        throw ImageDeleteException('Invalid image URL format.');
     }
-    _logger.d('Attempting to delete image from storage: $imagePath');
+    _logger.d('Attempting to delete image ID: $imageId, Path: $imagePath');
 
     try {
       // Delete from storage
       await _supabaseClient.storage.from('journey_images').remove([imagePath]);
       _logger.i('Successfully deleted image from storage: $imagePath');
 
-      // Delete from database (using URL as the key here - might be better to use ID if available)
-      // This assumes RLS prevents deleting others' images if only URL is known.
-      // If an ID is available, using .eq('id', imageId) is generally safer.
-      _logger.d('Attempting to delete image reference from DB for URL: $imageUrl');
-      await _supabaseClient.from('journey_images').delete().eq('image_url', imageUrl);
-      _logger.i('Successfully deleted image reference from DB for URL: $imageUrl');
+      // Delete from database using the unique ID
+      _logger.d('Attempting to delete image reference from DB for ID: $imageId');
+      await _supabaseClient.from('journey_images').delete().eq('id', imageId);
+      _logger.i('Successfully deleted image reference from DB for ID: $imageId');
 
     } on StorageException catch (e, stackTrace) {
-      _logger.e('StorageException deleting image $imagePath', error: e, stackTrace: stackTrace);
+      _logger.e('StorageException deleting image $imagePath (ID: $imageId)', error: e, stackTrace: stackTrace);
       throw ImageDeleteException('Storage delete failed: ${e.message}', e, stackTrace);
     } on PostgrestException catch (e, stackTrace) {
-       _logger.e('PostgrestException deleting image reference for $imageUrl', error: e, stackTrace: stackTrace);
+       _logger.e('PostgrestException deleting image reference for ID $imageId', error: e, stackTrace: stackTrace);
        // If storage delete succeeded but DB failed, log warning
-       _logger.w('Storage file $imagePath deleted, but failed to delete DB reference for $imageUrl. Manual cleanup might be needed.');
+       _logger.w('Storage file $imagePath deleted, but failed to delete DB reference for ID $imageId. Manual cleanup might be needed.');
        throw DatabaseOperationException('DB delete failed: ${e.message}', e, stackTrace);
     } catch (e, stackTrace) {
-       _logger.e('Unexpected error deleting image $imagePath', error: e, stackTrace: stackTrace);
+       _logger.e('Unexpected error deleting image $imagePath (ID: $imageId)', error: e, stackTrace: stackTrace);
        throw ImageDeleteException('An unexpected error occurred during deletion.', e, stackTrace);
     }
   }

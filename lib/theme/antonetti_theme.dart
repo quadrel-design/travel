@@ -7,6 +7,7 @@ import 'component_themes/card_theme.dart';
 import 'component_themes/elevated_button_theme.dart';
 import 'component_themes/input_decoration_theme.dart';
 import 'component_themes/list_tile_theme.dart';
+import 'component_themes/bottom_app_bar_theme.dart';
 
 // --- Color Scheme Definition ---
 const ColorScheme antonettiColorScheme = ColorScheme(
@@ -27,6 +28,7 @@ const ColorScheme antonettiColorScheme = ColorScheme(
   surfaceContainerHighest: Color(0xFFDAE5E5),
   outline: Color(0xFF6F7979),
   onSurfaceVariant: Color(0xFF3F4949),
+  outlineVariant: Color(0xFFE0E0E0),
 );
 
 // --- Text Theme Definition ---
@@ -50,6 +52,7 @@ final ThemeData antonettiTheme = ThemeData(
   inputDecorationTheme: antonettiInputDecorationTheme,
   appBarTheme: antonettiAppBarTheme,
   listTileTheme: antonettiListTileTheme,
+  bottomAppBarTheme: antonettiBottomAppBarTheme,
   // Apply font globally as well
   fontFamily: GoogleFonts.inter().fontFamily,
   // Customize other component themes as needed (TextButton, OutlinedButton, etc.)

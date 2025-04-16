@@ -18,6 +18,7 @@ import 'dart:convert';
 import '../widgets/image_status_chip.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import AppLocalizations
 import '../models/image_status.dart'; // Make sure this is imported
+import 'package:travel/constants/layout_constants.dart'; // Import layout constants
 
 // Function to determine status (can be moved to a helper file)
 ImageStatus determineImageStatus(JourneyImageInfo imageInfo) {
@@ -118,11 +119,12 @@ class GalleryOverviewScreen extends ConsumerWidget {
           return const Center(child: Text('No images yet. Tap + to add.'));
         }
         return GridView.builder(
-          padding: const EdgeInsets.all(8.0),
+          // Use layout constants
+          padding: kGridPadding,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3,
-            crossAxisSpacing: 8.0,
-            mainAxisSpacing: 8.0,
+            crossAxisCount: kGridCrossAxisCount,
+            crossAxisSpacing: kGridCrossAxisSpacing,
+            mainAxisSpacing: kGridMainAxisSpacing,
           ),
           itemCount: images.length,
           itemBuilder: (context, index) {
