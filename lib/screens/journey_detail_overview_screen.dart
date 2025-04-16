@@ -77,8 +77,9 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
              _buildOverviewLinkCard(context, 
               label: 'Expenses', // TODO: Localize
               onTap: () { 
-                // TODO: Navigate to Expenses screen 
-                print('Tapped Expenses'); 
+                // --- Navigate to Expenses screen --- 
+                context.push('${AppRoutes.journeyDetail}/${journey.id}/expenses');
+                // --- End Navigation ---
               }
             ),
              _buildOverviewLinkCard(context, 

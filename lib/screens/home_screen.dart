@@ -154,20 +154,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         itemBuilder: (context, index) {
           final journey = journeys[index];
           final dateRange = '${_dateFormat.format(journey.startDate)} - ${_dateFormat.format(journey.endDate)}';
+          final subtitleText = '${journey.description}\n$dateRange';
 
           return Card( 
             // Styling (elevation, shape, margin, color) comes from antonettiCardTheme
             child: ListTile( 
               // Styling (padding, density, text) comes from antonettiListTileTheme & textTheme
               title: Text(journey.title), 
-              subtitle: Text(
-                '${journey.description}\n$dateRange',
-                 maxLines: 2, 
-                 overflow: TextOverflow.ellipsis, 
-              ),
-              trailing: Icon(Icons.chevron_right, color: theme.colorScheme.outline), // Material icon
+              subtitle: Text(subtitleText, style: theme.textTheme.bodySmall),
+              isThreeLine: true,
               onTap: () {
-                context.push(AppRoutes.journeyDetail, extra: journey);
+                // Navigate to the detail screen, passing the Journey object
+                // context.push(AppRoutes.journeyDetail, extra: journey);
+                // --- CORRECTED NAVIGATION --- 
+                context.push('${AppRoutes.journeyDetail}/${journey.id}', extra: journey);
               },
             ),
           );

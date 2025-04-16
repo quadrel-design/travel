@@ -23,7 +23,7 @@ const VISION_API_URL = `https://vision.googleapis.com/v1/images:annotate?key=${G
 // OpenAI API Configuration
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY'); // Fetch key from Supabase Vault
 const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-const OPENAI_MODEL = 'gpt-4o-mini'; // Use the cheapest capable model
+const OPENAI_MODEL = 'gpt-3.5-turbo'; // Switch to gpt-3.5-turbo for cost testing
 
 interface VisionApiResponse {
   responses: {
@@ -130,36 +130,43 @@ function extractAmountDetails(content: string | null): ExtractedAmount {
 
 
 serve(async (req: Request) => {
-  console.log(`Request received: ${req.method} ${req.url}`);
-  // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    console.log("Handling OPTIONS request");
-    return new Response('ok', { headers: corsHeaders });
-  }
-
+  let journey_image_id: string | null = null; // Define here for broader scope in error handling
   try {
+    console.log(`Request received: ${req.method} ${req.url}`);
+    // Handle CORS preflight requests
+    if (req.method === 'OPTIONS') {
+      console.log("Handling OPTIONS request");
+      return new Response('ok', { headers: corsHeaders });
+    }
+
     // 1. Extract data from the request
     console.log("Parsing request body...");
-    const { image_base64, journey_image_id } = await req.json();
+    const body = await req.json();
+    const image_base64 = body.image_base64;
+    journey_image_id = body.journey_image_id; // Assign here
+
     if (!image_base64 || !journey_image_id) {
-      console.error("Missing image_base64 or journey_image_id");
-      throw new Error('Missing image_base64 or journey_image_id in request body');
+      console.error("Missing image_base64 or journey_image_id in request body");
+      // Note: journey_image_id might be null here if it was missing
+      throw new Error(`Missing image_base64 or journey_image_id in request body for image ID: ${journey_image_id ?? 'unknown'}`);
     }
     console.log(`Received image_base64 (length: ${image_base64.length}), journey_image_id: ${journey_image_id}`);
 
-    if (!GOOGLE_VISION_API_KEY) {
-      console.error("Missing GOOGLE_CLOUD_API_KEY");
-      throw new Error('Missing GOOGLE_CLOUD_API_KEY environment variable');
+    // --- API Key Validation ---
+    if (!GOOGLE_VISION_API_KEY) { // Checks for null, undefined, empty string
+      console.error(`Missing or empty GOOGLE_CLOUD_API_KEY for image ID: ${journey_image_id}`);
+      throw new Error('Missing or empty GOOGLE_CLOUD_API_KEY environment variable');
     }
-     if (!OPENAI_API_KEY) {
-      console.error("Missing OPENAI_API_KEY");
-      throw new Error('Missing OPENAI_API_KEY secret in Supabase Vault');
+     if (!OPENAI_API_KEY) { // Checks for null, undefined, empty string
+      console.error(`Missing or empty OPENAI_API_KEY for image ID: ${journey_image_id}`);
+      throw new Error('Missing or empty OPENAI_API_KEY secret in Supabase Vault');
     }
+    // --- End API Key Validation ---
 
     console.log(`Processing image ID: ${journey_image_id}`);
 
     // 2. Call Google Vision API for OCR
-    console.log('Calling Google Vision API...');
+    console.log(`Calling Google Vision API for image ID: ${journey_image_id}...`);
     const visionApiBody = {
       requests: [
         {
@@ -181,11 +188,11 @@ serve(async (req: Request) => {
       headers: { 'Content-Type': 'application/json' },
     });
 
-    console.log(`Google Vision API response status: ${visionResponse.status}`);
+    console.log(`Google Vision API response status for image ID ${journey_image_id}: ${visionResponse.status}`);
     if (!visionResponse.ok) {
       const errorBody = await visionResponse.text();
-      console.error('Google Vision API error response body:', errorBody);
-      throw new Error(`Google Vision API request failed: ${visionResponse.status} ${visionResponse.statusText}`);
+      console.error(`Google Vision API error response body for image ID ${journey_image_id}:`, errorBody);
+      throw new Error(`Google Vision API request failed for ${journey_image_id}: ${visionResponse.status} ${visionResponse.statusText}`);
     }
 
     const visionResult = await visionResponse.json() as VisionApiResponse;
@@ -195,8 +202,7 @@ serve(async (req: Request) => {
 
     if (visionError) {
        console.error(`Vision API returned an error for image ${journey_image_id}: ${visionError}`);
-       // Decide if you want to update DB with error or just throw
-       // For now, we'll proceed without text if there's an error
+       // Potentially update DB here to mark as error? Or just proceed without text.
     }
 
     if (!detectedText) {
@@ -214,7 +220,7 @@ serve(async (req: Request) => {
             })
             .eq('id', journey_image_id);
         if (updateError) {
-            console.error("Supabase update error (no text case):", updateError);
+            console.error(`Supabase update error (no text case) for image ID ${journey_image_id}:`, updateError);
             throw updateError;
         }
         console.log(`DB updated for no text detected: ${journey_image_id}`);
@@ -234,14 +240,24 @@ serve(async (req: Request) => {
     let extractedAmount: number | null = null;
     let extractedCurrency: string | null = null;
 
-    console.log('Calling OpenAI API...');
+    console.log(`Calling OpenAI API for image ID: ${journey_image_id}...`);
     try {
         const openAiApiBody = {
           model: OPENAI_MODEL,
           messages: [
             {
               role: 'system',
-              content: `You are an assistant specialized in extracting the final total amount and its currency from OCR text of invoices or receipts. Respond ONLY with a JSON object containing "amount" (as a number, using '.' as decimal separator) and "currency" (as a 3-letter ISO code like EUR or USD, or a common symbol like € or $). If no clear final total amount is found, return {"amount": null, "currency": null}. Focus on the final amount due, ignoring subtotals and line item prices.`
+              // --- Use New, Refined Prompt --- 
+              content: `You are an expert invoice and receipt processing assistant. Your SOLE task is to identify the single FINAL TOTAL AMOUNT PAYABLE (e.g., Grand Total, Total Due, Endbetrag, Gesamtbetrag) and its corresponding CURRENCY symbol or 3-letter ISO code from the provided OCR text.
+
+CRITICAL INSTRUCTIONS:
+1. FOCUS EXCLUSIVELY on the **final amount** the customer has to pay. This is often located near the bottom of the text.
+2. ACTIVELY IGNORE all other numbers, including: line item prices, quantities, subtotals, tax amounts (like VAT, Sales Tax, MwSt.), discounts, shipping costs, or any intermediate calculations.
+3. Respond ONLY with a valid JSON object in the format: {"amount": <number | null>, "currency": "<string | null>"}.
+4. Use '.' as the decimal separator for the amount (e.g., 123.45).
+5. For currency, use standard 3-letter ISO codes (e.g., "EUR", "USD", "GBP") or common symbols (e.g., "€", "$", "£").
+6. If you CANNOT confidently determine the single final total amount payable, respond with: {"amount": null, "currency": null}. Do not guess if unsure.`
+              // --- End New Prompt --- 
             },
             {
               role: 'user',
@@ -262,15 +278,15 @@ serve(async (req: Request) => {
           body: JSON.stringify(openAiApiBody)
         });
 
-        console.log(`OpenAI API response status: ${openAiResponse.status}`);
+        console.log(`OpenAI API response status for image ID ${journey_image_id}: ${openAiResponse.status}`);
          if (!openAiResponse.ok) {
           const errorBody = await openAiResponse.text();
-          console.error('OpenAI API error response body:', errorBody);
+          console.error(`OpenAI API error response body for image ID ${journey_image_id}:`, errorBody);
           // Don't throw, just log and proceed without amount
         } else {
              const openAiResult = await openAiResponse.json() as OpenAiApiResponse;
              if (openAiResult.error) {
-                 console.error('OpenAI API returned an error object:', openAiResult.error.message);
+                 console.error(`OpenAI API returned an error object for image ID ${journey_image_id}:`, openAiResult.error.message);
              } else {
                 const messageContent = openAiResult.choices?.[0]?.message?.content;
                 console.log('OpenAI raw response content:', messageContent); // Log raw response
@@ -278,7 +294,7 @@ serve(async (req: Request) => {
                     const details = extractAmountDetails(messageContent);
                     extractedAmount = details.amount;
                     extractedCurrency = details.currency;
-                    console.log(`Extracted amount: ${extractedAmount}, Currency: ${extractedCurrency}`);
+                    console.log(`Extracted amount for image ID ${journey_image_id}: ${extractedAmount}, Currency: ${extractedCurrency}`);
                 } else {
                      console.warn("No message content found in OpenAI response.");
                 }
@@ -292,7 +308,7 @@ serve(async (req: Request) => {
 
 
     // 5. Update Supabase
-    console.log(`Updating Supabase for ${journey_image_id} with Amount: ${extractedAmount}, Currency: ${extractedCurrency}`);
+    console.log(`Updating Supabase for image ID ${journey_image_id} with Amount: ${extractedAmount}, Currency: ${extractedCurrency}`);
     const { error: updateError } = await supabaseAdmin
       .from('journey_images')
       .update({
@@ -306,7 +322,7 @@ serve(async (req: Request) => {
       .eq('id', journey_image_id);
 
     if (updateError) {
-      console.error('Supabase update error:', updateError);
+      console.error(`Supabase update error for image ID ${journey_image_id}:`, updateError);
       throw updateError; // Throw if DB update fails
     }
 
@@ -326,7 +342,8 @@ serve(async (req: Request) => {
     });
 
   } catch (error) {
-    console.error('Unhandled Error in Edge Function:', error);
+    // Use journey_image_id if available in the error message
+    console.error(`Unhandled Error in Edge Function (Image ID: ${journey_image_id ?? 'unknown'}):`, error);
     return new Response(JSON.stringify({ error: error.message || 'An unexpected error occurred' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500,

@@ -24,6 +24,7 @@ import '../models/journey_image_info.dart'; // Import the new model
 import 'package:http/http.dart' as http; // Keep for now, might be needed in GalleryPageView scan
 import 'dart:math'; // Keep for min()
 import '../widgets/gallery_detail_view.dart'; // Import the new PageView widget
+import 'dart:convert'; // Added for base64 encoding
 
 // Rename class
 class GalleryOverviewScreen extends ConsumerStatefulWidget {
@@ -72,7 +73,20 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
 
   // Add image loading function
   Future<void> _loadImages() async {
-    _logger.d('_loadImages started.');
+    // --- Add Check for valid Journey ID ---
+    if (widget.journey.id.isEmpty) {
+      _logger.e('_loadImages aborted: Journey ID is empty.');
+      if (mounted) {
+        setState(() {
+          _isLoadingImages = false;
+          _imageError = 'Cannot load images: Invalid Journey ID.'; // TODO: Localize
+        });
+      }
+      return;
+    }
+    // --- End Check ---
+
+    _logger.d('_loadImages started for journey ID: ${widget.journey.id}');
     if (!mounted) {
       _logger.w('_loadImages aborted: widget not mounted.');
       return;
@@ -131,17 +145,44 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
           final fileExt = p.extension(pickedFile.name);
           final fileName = '$imageRecordId$fileExt';
           final filePath = '$userId/${widget.journey.id}/$fileName';
+
+          _logger.d('Uploading binary for $fileName...');
           await supabase.storage.from('journey_images').uploadBinary(
                 filePath, imageBytes, fileOptions: FileOptions(contentType: pickedFile.mimeType));
           final imageUrl = supabase.storage.from('journey_images').getPublicUrl(filePath);
           _logger.d('Image uploaded to: $imageUrl');
 
+          _logger.d('Adding initial DB reference for ID: $imageRecordId');
           await _journeyRepository.addImageReference(
             widget.journey.id,
             imageUrl,
             id: imageRecordId,
           );
           _logger.d('Initial image reference added to DB with ID: $imageRecordId');
+
+          // --- Trigger Scan Immediately (REMOVED) --- 
+          // try {
+          //   _logger.i('Automatically triggering scan for new image ID: $imageRecordId');
+          //   final imageBase64 = base64Encode(imageBytes); // Encode bytes for function
+          //   final response = await supabase.functions.invoke(
+          //     'detect-invoice-text',
+          //     body: {
+          //       'image_base64': imageBase64,
+          //       'journey_image_id': imageRecordId,
+          //     },
+          //   );
+          //   if (response.status == 200) {
+          //     _logger.i('Auto-scan successful for $imageRecordId (results will update via Realtime).');
+          //   } else {
+          //     _logger.e('Auto-scan function call failed for $imageRecordId with status ${response.status}', error: response.data);
+          //     // Optionally add to errorMessages or show a specific snackbar?
+          //     errorMessages.add('Scan failed for ${pickedFile.name}.'); 
+          //   }
+          // } catch (scanError) {
+          //   _logger.e('Error during auto-scan invocation for $imageRecordId', error: scanError);
+          //   errorMessages.add('Scan failed for ${pickedFile.name}.'); 
+          // }
+          // --- End Trigger Scan (REMOVED) --- 
 
           successCount++;
         } catch (e) { 

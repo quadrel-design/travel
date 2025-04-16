@@ -21,6 +21,7 @@ import 'package:travel/providers/repository_providers.dart'; // Import providers
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
 import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
+import 'screens/expense_list_screen.dart'; // Add import for the new screen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,64 +89,49 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       // Add the journey detail route
       GoRoute(
-        path: AppRoutes.journeyDetail,
+        path: '${AppRoutes.journeyDetail}/:journeyId',
         builder: (context, state) {
-          Journey? journey; // Initialize as null
-          if (state.extra is Journey) {
-            journey = state.extra as Journey?;
-          } else if (state.extra is Map<String, dynamic>) {
-            // If it's a map, deserialize it
-            try {
-               journey = Journey.fromJson(state.extra as Map<String, dynamic>);
-            } catch (e) {
-               print("Error deserializing Journey from extra: $e"); 
-               // Handle error appropriately - maybe navigate back or show error screen
-            }
+          final journeyId = state.pathParameters['journeyId'];
+          final journey = state.extra as Journey?;
+          if (journeyId == null || journey == null) {
+            // Handle error: Maybe redirect to home or show error screen
+            print('Journey ID or Journey object missing for detail route');
+            // Maybe return a Scaffold with an error message
+            return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
           }
-          final l10n = AppLocalizations.of(context)!;
-          return journey != null
-              ? JourneyDetailOverviewScreen(journey: journey)
-              : Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
+          return JourneyDetailOverviewScreen(journey: journey);
         },
         routes: [
           GoRoute(
-            name: 'journeyInfo',
-            path: 'info', 
+            path: 'info',
             builder: (context, state) {
-              Journey? journey;
-              if (state.extra is Journey) {
-                journey = state.extra as Journey?;
-              } else if (state.extra is Map<String, dynamic>) {
-                try {
-                  journey = Journey.fromJson(state.extra as Map<String, dynamic>);
-                } catch (e) { print("Error deserializing Journey for info: $e"); }
-              }
-              final l10n = AppLocalizations.of(context)!;
-              if (journey == null) {
-                 return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
-              }
-              return JourneyDetailScreen(journey: journey);
+               final journey = state.extra as Journey?;
+               if (journey == null) return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
+               return JourneyDetailScreen(journey: journey);
             },
           ),
-           GoRoute(
-            path: 'gallery', 
-            name: 'journeyGallery',
+          GoRoute(
+            path: 'gallery',
             builder: (context, state) {
-              Journey? journey;
-              if (state.extra is Journey) {
-                journey = state.extra as Journey?;
-              } else if (state.extra is Map<String, dynamic>) {
-                try {
-                   journey = Journey.fromJson(state.extra as Map<String, dynamic>);
-                } catch (e) { print("Error deserializing Journey for gallery: $e"); }
-              }
-              final l10n = AppLocalizations.of(context)!;
-              if (journey == null) {
-                 return Scaffold(body: Center(child: Text(l10n.detailScreenErrorMissingData)));
-              }
-              return GalleryOverviewScreen(journey: journey); 
+              final journey = state.extra as Journey?;
+               if (journey == null) return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
+              return GalleryOverviewScreen(journey: journey);
             },
           ),
+          // --- Add Expense List Route --- 
+          GoRoute(
+            name: 'journeyExpenses', // Define a name
+            path: 'expenses', // Define the sub-path
+            builder: (context, state) {
+               final journeyId = state.pathParameters['journeyId'];
+               if (journeyId == null || journeyId.isEmpty) {
+                  print('Journey ID missing for expenses route');
+                  return const Scaffold(body: Center(child: Text('Error: Journey ID missing')));
+               }
+              return ExpenseListScreen(journeyId: journeyId);
+            },
+          ),
+          // --- End Add Expense List Route --- 
         ],
       ),
       // Update Settings Route Path

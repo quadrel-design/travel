@@ -1,212 +1,294 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:equatable/equatable.dart';
 import 'package:logger/logger.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:travel/models/journey_image_info.dart';
 import 'package:travel/providers/logging_provider.dart'; // Import the logger provider
 
 // 1. Define the State class
-class GalleryDetailState {
+class GalleryDetailState extends Equatable {
   final List<JourneyImageInfo> images;
-  final Set<String> scanInitiatedInSession; // Track scans started in this session
-  final bool isLoading;
-  final String? error;
+  final Map<String, String?> scanError; // Map image ID to error message
+  // Add signed URL state
+  final List<String?> signedUrls;
+  final bool isLoadingSignedUrls;
+  final String? signedUrlError;
 
-  GalleryDetailState({
+  const GalleryDetailState({
     required this.images,
-    this.scanInitiatedInSession = const {},
-    this.isLoading = false,
-    this.error,
+    this.scanError = const {},
+    // Initialize signed URL state
+    this.signedUrls = const [],
+    this.isLoadingSignedUrls = true,
+    this.signedUrlError,
   });
 
   GalleryDetailState copyWith({
     List<JourneyImageInfo>? images,
-    Set<String>? scanInitiatedInSession,
-    bool? isLoading,
-    String? error,
-    bool clearError = false,
+    Map<String, String?>? scanError,
+    List<String?>? signedUrls,
+    bool? isLoadingSignedUrls,
+    String? signedUrlError,
+    bool clearSignedUrlError = false, // Helper flag to clear error
   }) {
     return GalleryDetailState(
       images: images ?? this.images,
-      scanInitiatedInSession: scanInitiatedInSession ?? this.scanInitiatedInSession,
-      isLoading: isLoading ?? this.isLoading,
-      error: clearError ? null : error ?? this.error,
+      scanError: scanError ?? this.scanError,
+      signedUrls: signedUrls ?? this.signedUrls,
+      isLoadingSignedUrls: isLoadingSignedUrls ?? this.isLoadingSignedUrls,
+      signedUrlError: clearSignedUrlError ? null : signedUrlError ?? this.signedUrlError,
     );
   }
+
+  @override
+  List<Object?> get props => [
+        images,
+        scanError,
+        signedUrls,
+        isLoadingSignedUrls,
+        signedUrlError,
+      ];
 }
 
 // 2. Define the StateNotifier
 class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
   final Logger _logger;
-  RealtimeChannel? _imagesChannel;
   final List<String> _imageIds;
   String? _channelName;
+  final SupabaseClient _supabaseClient;
+  final Ref _ref;
+  StreamSubscription<List<Map<String, dynamic>>>? _subscription;
 
-  GalleryDetailNotifier(List<JourneyImageInfo> initialImages, this._logger)
+  GalleryDetailNotifier(List<JourneyImageInfo> initialImages, this._logger, this._supabaseClient, this._ref)
       : _imageIds = initialImages.map((img) => img.id).where((id) => id.isNotEmpty).toList(),
-        super(GalleryDetailState(images: List.from(initialImages))) {
+        // Initialize state with empty signed URLs initially
+        super(GalleryDetailState(images: List.from(initialImages), signedUrls: List.filled(initialImages.length, null))) {
     _logger.i('GalleryDetailNotifier initialized for ${_imageIds.length} images.');
-    _setupRealtimeListener();
+    // Fetch signed URLs immediately
+    _fetchSignedUrls();
+    // Setup Realtime only if there are IDs
+    if (_imageIds.isNotEmpty) {
+      _setupRealtimeListener();
+    }
   }
+
+  // --- Signed URL Logic (Moved from Widget) ---
+  String? _extractPath(String url) {
+    try {
+      final uri = Uri.parse(url);
+      final bucketName = 'journey_images';
+      final pathStartIndex = uri.path.indexOf(bucketName) + bucketName.length + 1;
+      if (pathStartIndex <= bucketName.length) return null;
+      return uri.path.substring(pathStartIndex);
+    } catch (e) {
+      _logger.e('Failed to parse path from URL: $url', error: e);
+      return null;
+    }
+  }
+  Future<String> _generateSignedUrl(String imagePath) async {
+    try {
+      final result = await _supabaseClient.storage
+          .from('journey_images')
+          .createSignedUrl(imagePath, 3600); // 1 hour expiry
+      return result;
+    } catch (e) {
+      _logger.e('Error generating signed URL for $imagePath', error: e);
+      rethrow;
+    }
+  }
+
+  Future<void> _fetchSignedUrls() async {
+     // Use state's image list
+     final imageList = state.images;
+     final imageCount = imageList.length;
+
+     _logger.d('Fetching signed URLs for $imageCount images within provider.');
+     // Update state to indicate loading
+     state = state.copyWith(isLoadingSignedUrls: true, signedUrlError: null, clearSignedUrlError: true);
+
+     List<String?> results = List.filled(imageCount, null);
+     bool hadError = false;
+
+     for (int i = 0; i < imageCount; i++) {
+        final imageInfo = imageList[i];
+        final path = _extractPath(imageInfo.url);
+        if (path == null) {
+          _logger.w('Could not extract path for ${imageInfo.url}');
+          hadError = true;
+          continue;
+        }
+        try {
+          final signedUrl = await _generateSignedUrl(path);
+          results[i] = signedUrl;
+        } catch (e) {
+          hadError = true;
+        }
+      }
+
+     // Update state with results
+     state = state.copyWith(
+       signedUrls: results,
+       isLoadingSignedUrls: false,
+       signedUrlError: hadError ? 'Some images could not be loaded.' : null, // TODO: Localize
+       clearSignedUrlError: !hadError, // Clear error only if successful
+     );
+     _logger.d('Finished fetching signed URLs within provider.');
+   }
+  // --- End Signed URL Logic ---
 
   void _setupRealtimeListener() {
     if (_imageIds.isEmpty) {
-      _logger.w('No valid image IDs provided to GalleryDetailNotifier, skipping Realtime listener setup.');
+      _logger.w('Skipping Realtime setup: No image IDs provided.');
       return;
     }
-
-    final client = Supabase.instance.client;
-    // Use an 'in' filter for all relevant IDs
-    final idFilter = PostgresChangeFilter(
-          type: PostgresChangeFilterType.inFilter,
-          column: 'id',
-          value: _imageIds,
-        );
-
+    _channelName = 'public:journey_images:detail_view_${DateTime.now().millisecondsSinceEpoch}_${hashCode}';
     _logger.d('Setting up Realtime listener for journey_images table using IN filter for ${_imageIds.length} IDs...');
-
-    // Store the channel name
-    _channelName = 'public:journey_images:detail_view_${DateTime.now().millisecondsSinceEpoch}_${_imageIds.hashCode}';
     _logger.d('Subscribing to channel: $_channelName');
 
-    _imagesChannel = client
-        .channel(_channelName!) // Use the stored name
-        .onPostgresChanges(
-            event: PostgresChangeEvent.update,
-            schema: 'public',
-            table: 'journey_images',
-            filter: idFilter, // Apply initial filter
-            callback: (payload) {
-              _logger.d('Realtime update received on channel $_channelName: ${payload.toString()}');
-              final updatedRecord = payload.newRecord;
-              // Ensure the received ID is one we are tracking
-              if (updatedRecord != null && _imageIds.contains(updatedRecord['id'])) {
-                 _handleRealtimeUpdate(updatedRecord);
-              } else {
-                 _logger.d('Realtime update ignored (ID not in list or no new record). Record ID: ${updatedRecord?['id']}');
-              }
-            })
-        .subscribe((status, [dynamic error]) async { // Accept optional error argument
-      _logger.i('GalleryDetailNotifier Realtime subscription status for $_channelName: $status');
-      if (status == RealtimeSubscribeStatus.subscribed) {
-        _logger.i('GalleryDetailNotifier successfully subscribed to $_channelName.');
-      } else if (status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.timedOut || status == RealtimeSubscribeStatus.channelError) { // Check for various error/closed states
-        _logger.e('GalleryDetailNotifier Realtime subscription closed or failed for $_channelName. Status: $status', error: error);
-        // Update state only if notifier is still mounted
-         if(mounted) {
-             state = state.copyWith(error: 'Realtime connection lost ($status)');
-         }
-      }
-    });
+    _subscription = _supabaseClient
+        .from('journey_images')
+        .stream(primaryKey: ['id'])
+        .inFilter('id', _imageIds)
+        .listen(
+          (List<Map<String, dynamic>> data) {
+             _logger.d('Realtime update received on channel $_channelName: ${data.length} item(s)');
+             // Use PostgresChangePayload for better structure if needed/possible
+             // For simplicity, just process the raw list for now
+             for (var change in data) {
+               _handleRealtimeUpdate(change);
+             }
+          },
+          onError: (error) {
+            _logger.e('Realtime listener error on channel $_channelName', error: error);
+             state = state.copyWith(scanError: {...state.scanError, 'realtime_error': error.toString()});
+          },
+          onDone: () {
+            _logger.w('Realtime listener on channel $_channelName closed.');
+          },
+        );
+
+     // Subscribe callback (Optional but useful for knowing when ready)
+     _supabaseClient.channel(_channelName!).subscribe((status, [error]) {
+        _logger.i('GalleryDetailNotifier Realtime subscription status for $_channelName: $status');
+        if (status == RealtimeSubscribeStatus.subscribed) {
+            _logger.i('GalleryDetailNotifier successfully subscribed to $_channelName.');
+        } else if (status == RealtimeSubscribeStatus.closed || status == RealtimeSubscribeStatus.channelError) {
+             _logger.e('Realtime subscription failed/closed for $_channelName', error: error);
+             // Consider setting an error state
+             state = state.copyWith(scanError: {...state.scanError, 'realtime_error': 'Subscription closed/failed: ${error?.toString()}'});
+        } else if (status == RealtimeSubscribeStatus.timedOut) {
+             _logger.w('Realtime subscription timed out for $_channelName');
+             state = state.copyWith(scanError: {...state.scanError, 'realtime_error': 'Subscription timed out'});
+        }
+     });
   }
 
-   void _handleRealtimeUpdate(Map<String, dynamic> updatedRecord) {
-    if (!mounted) return; // Check if notifier is still mounted
+  void _handleRealtimeUpdate(Map<String, dynamic> newRowData) {
+      final updatedImageInfo = JourneyImageInfo.fromMap(newRowData);
+      _logger.d('Processing update for image ID: ${updatedImageInfo.id}, hasPotentialText: ${updatedImageInfo.hasPotentialText}, Amount: ${updatedImageInfo.detectedTotalAmount}, Currency: ${updatedImageInfo.detectedCurrency}');
 
-    try {
-      final updatedImageInfo = JourneyImageInfo.fromMap(updatedRecord);
-       _logger.d('Processing update for image ID: ${updatedImageInfo.id}, hasPotentialText: ${updatedImageInfo.hasPotentialText}, Amount: ${updatedImageInfo.detectedTotalAmount}, Currency: ${updatedImageInfo.detectedCurrency}');
-
-      final currentImages = List<JourneyImageInfo>.from(state.images); // Create mutable copy
-      final index = currentImages.indexWhere((img) => img.id == updatedImageInfo.id);
-
+      final index = state.images.indexWhere((img) => img.id == updatedImageInfo.id);
       if (index != -1) {
-         _logger.i('Updating state for image index: $index with new data.');
-         // Preserve localPath if it exists - Important if showing images picked locally but not uploaded yet
-         final existingLocalPath = currentImages[index].localPath;
-         currentImages[index] = JourneyImageInfo(
-             id: updatedImageInfo.id,
-             url: updatedImageInfo.url, // Make sure URL is updated if it changes
-             hasPotentialText: updatedImageInfo.hasPotentialText,
-             detectedText: updatedImageInfo.detectedText,
-             isInvoiceGuess: updatedImageInfo.isInvoiceGuess,
-             detectedTotalAmount: updatedImageInfo.detectedTotalAmount,
-             detectedCurrency: updatedImageInfo.detectedCurrency,
-             localPath: existingLocalPath // Keep localPath
-         );
-         // Update state immutably
-         // NOTE: We do NOT modify scanInitiatedInSession here. That's handled by resetScanStatus.
-         // We only update the image data itself.
-         state = state.copyWith(images: currentImages, clearError: true);
+        _logger.d('Updating state for image index: $index with new data.');
+        final updatedImages = List<JourneyImageInfo>.from(state.images);
+        updatedImages[index] = updatedImageInfo; // Replace with the new data
+
+        // Create a new map for scanError, removing the error for the updated image if it exists
+        final newScanError = Map<String, String?>.from(state.scanError);
+        newScanError.remove(updatedImageInfo.id);
+
+        state = state.copyWith(
+          images: updatedImages,
+          scanError: newScanError,
+          // Keep signed URL state as is, only data changed
+        );
       } else {
-         _logger.w('Received update for image ID ${updatedImageInfo.id} not found in current state.');
+         _logger.w('Received realtime update for unknown image ID: ${updatedImageInfo.id}');
       }
-    } catch (e, stackTrace) {
-       _logger.e('Error processing Realtime update', error: e, stackTrace: stackTrace);
-       state = state.copyWith(error: 'Failed to process image update');
+  }
+
+  // Method to reset scan status and mark as initiated
+  void resetScanStatus(String imageId) {
+    _logger.d('Resetting scan status AND marking as initiated for image ID: $imageId');
+    final index = state.images.indexWhere((img) => img.id == imageId);
+    if (index != -1) {
+      final updatedImages = List<JourneyImageInfo>.from(state.images);
+      // Mark as initiated, clear previous results
+      updatedImages[index] = updatedImages[index].copyWith(
+        scanInitiated: true,
+        hasPotentialText: null,
+        detectedText: null,
+        detectedTotalAmount: null,
+        detectedCurrency: null,
+        isInvoiceGuess: false,
+        lastProcessedAt: null,
+      );
+
+      // Clear any specific error for this image
+      final newScanError = Map<String, String?>.from(state.scanError);
+      newScanError.remove(imageId);
+
+      state = state.copyWith(images: updatedImages, scanError: newScanError);
+    } else {
+      _logger.w('Attempted to reset scan status for unknown image ID: $imageId');
     }
-   }
+  }
 
-   // Method to reset status before scan
-   void resetScanStatus(String imageId) {
-     if (!mounted) return;
-     _logger.d('Resetting scan status AND marking as initiated for image ID: $imageId');
-     final currentImages = List<JourneyImageInfo>.from(state.images);
-     final currentInitiated = Set<String>.from(state.scanInitiatedInSession);
-     final index = currentImages.indexWhere((img) => img.id == imageId);
+  // Method to explicitly set an error state for a scan
+  void setScanError(String imageId, String error) {
+    _logger.e('Setting scan error for image ID $imageId: $error');
+     final index = state.images.indexWhere((img) => img.id == imageId);
      if (index != -1) {
-       final img = currentImages[index];
-       currentImages[index] = JourneyImageInfo(
-          id: img.id,
-          url: img.url,
-          hasPotentialText: null, // Reset persistent status
-          detectedText: null,
-          isInvoiceGuess: img.isInvoiceGuess,
-          detectedTotalAmount: null,
-          detectedCurrency: null,
-          localPath: img.localPath);
-       currentInitiated.add(imageId); // Mark as initiated in this session
-       state = state.copyWith(images: currentImages, scanInitiatedInSession: currentInitiated, clearError: true);
+      final updatedImages = List<JourneyImageInfo>.from(state.images);
+      // Reset scan initiated flag on error using the updated copyWith
+      updatedImages[index] = updatedImages[index].copyWith(scanInitiated: false);
+
+      state = state.copyWith(
+         images: updatedImages, // Include the updated image list
+         scanError: { ...state.scanError, imageId: error }
+       );
      } else {
-        _logger.w('Attempted to reset status for image ID $imageId not found in state.');
+       _logger.w('Attempted to set scan error for unknown image ID: $imageId');
      }
-   }
+  }
 
-   // Method to handle deletion update from parent widget
-   void handleDeletion(String imageId) {
-      if (!mounted) return;
-      _logger.d('Handling deletion for image ID: $imageId');
-      final currentImages = List<JourneyImageInfo>.from(state.images);
-      final currentInitiated = Set<String>.from(state.scanInitiatedInSession);
-      final originalLength = currentImages.length;
+  // Method to handle deletion update
+  void handleDeletion(String deletedImageId) {
+    _logger.i('Handling deletion in provider for image ID: $deletedImageId');
+    final currentImages = List<JourneyImageInfo>.from(state.images);
+    final initialLength = currentImages.length;
+    currentImages.removeWhere((img) => img.id == deletedImageId);
 
-      // Remove image from the state list
-      currentImages.removeWhere((img) => img.id == imageId);
-      // Remove from session tracking set
-      currentInitiated.remove(imageId);
-
-      if (currentImages.length < originalLength) {
-          _logger.i('Removed image ID $imageId from notifier state.');
-          _imageIds.remove(imageId);
-          // Update state with the reduced list and updated set
-          state = state.copyWith(images: currentImages, scanInitiatedInSession: currentInitiated, clearError: true);
-
-          if (_imageIds.isEmpty && _imagesChannel != null) {
-             _logger.w('Image list is now empty, unsubscribing from Realtime channel.');
-             _imagesChannel?.unsubscribe();
-             _imagesChannel = null;
-          }
-
-      } else {
-           _logger.w('Attempted to delete image ID $imageId not found in notifier state.');
-      }
-   }
-
+    if (currentImages.length < initialLength) {
+        _logger.d('Image $deletedImageId removed from provider state.');
+        // Also remove from scanError map
+        final newScanError = Map<String, String?>.from(state.scanError);
+        newScanError.remove(deletedImageId);
+        // Refetch signed URLs for the smaller list
+        state = state.copyWith(images: currentImages, scanError: newScanError);
+        _fetchSignedUrls(); // Refetch URLs for the remaining images
+    } else {
+        _logger.w('Attempted to handle deletion for ID $deletedImageId, but it was not found in state.');
+    }
+}
 
   @override
   void dispose() {
-    _logger.i('Disposing GalleryDetailNotifier and unsubscribing from channel ${_channelName ?? 'N/A'}...');
-    _imagesChannel?.unsubscribe();
+    _logger.d('Disposing GalleryDetailNotifier. Unsubscribing from channel: $_channelName');
+    _subscription?.cancel();
+    if (_channelName != null) {
+      _supabaseClient.removeChannel(_supabaseClient.channel(_channelName!));
+    }
     super.dispose();
   }
 }
 
 
 // 3. Define the StateNotifierProvider.family
-// Remove .autoDispose for testing
-final galleryDetailProvider = StateNotifierProvider
-    .family<GalleryDetailNotifier, GalleryDetailState, List<JourneyImageInfo>>(
-        (ref, initialImages) {
+final galleryDetailProvider = StateNotifierProvider.autoDispose
+    .family<GalleryDetailNotifier, GalleryDetailState, List<JourneyImageInfo>>((ref, initialImages) {
   final logger = ref.watch(loggerProvider);
-  return GalleryDetailNotifier(initialImages, logger);
+  final supabaseClient = Supabase.instance.client;
+  return GalleryDetailNotifier(initialImages, logger, supabaseClient, ref);
 });

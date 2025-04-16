@@ -156,4 +156,23 @@ class JourneyRepository {
       throw CouldNotDeleteImage(e);
     }
   }
+
+  // --- Add method to fetch detected sums --- 
+  Future<List<JourneyImageInfo>> fetchDetectedSums(String journeyId) async {
+    try {
+      final response = await _client
+          .from('journey_images')
+          .select('id, image_url, detected_total_amount, detected_currency, last_processed_at') // Select relevant fields
+          .eq('journey_id', journeyId)
+          .not('detected_total_amount', 'is', null) // Filter for non-null amounts
+          .order('last_processed_at', ascending: false); // Order by processing time
+
+      return response.map((data) => JourneyImageInfo.fromMap(data)).toList();
+    } catch (e) {
+      _logger.e('Failed to fetch detected sums for journey: $journeyId', error: e);
+      // Consider adding a specific exception type if needed
+      throw JourneyRepositoryException('Could not fetch detected sums', e);
+    }
+  }
+  // --- End method --- 
 } 
