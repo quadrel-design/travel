@@ -31,7 +31,7 @@ class Journey extends Equatable {
     final endDateStr = json['end_date'];
 
     // Helper to safely parse dates, providing a fallback
-    DateTime _parseDate(dynamic dateValue, DateTime fallback) {
+    DateTime parseDate(dynamic dateValue, DateTime fallback) {
       if (dateValue is String) {
         // Use tryParse which returns null on failure instead of throwing
         final parsedDate = DateTime.tryParse(dateValue);
@@ -55,8 +55,8 @@ class Journey extends Equatable {
       description: json['description'] as String? ?? '',
       location: json['location'] as String? ?? '',
       // Use the safe parsing helper
-      startDate: _parseDate(startDateStr, DateTime.now()),
-      endDate: _parseDate(endDateStr, DateTime.now()),
+      startDate: parseDate(startDateStr, DateTime.now()),
+      endDate: parseDate(endDateStr, DateTime.now()),
       budget: (json['budget'] as num?)?.toDouble() ?? 0.0,
       isCompleted: json['is_completed'] as bool? ?? false,
     );

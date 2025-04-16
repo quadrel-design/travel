@@ -5,7 +5,7 @@ import 'package:logger/logger.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:travel/models/journey_image_info.dart';
 import 'package:travel/providers/logging_provider.dart'; // Import the logger provider
-import '../repositories/repository_exceptions.dart'; // CORRECTED PATH
+// CORRECTED PATH
 
 // 1. Define the State class
 class GalleryDetailState extends Equatable {
@@ -90,7 +90,7 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
   String? _extractPath(String url) {
     try {
       final uri = Uri.parse(url);
-      final bucketName = 'journey_images';
+      const bucketName = 'journey_images';
       final pathStartIndex = uri.path.indexOf(bucketName) + bucketName.length + 1;
       if (pathStartIndex <= bucketName.length) return null;
       return uri.path.substring(pathStartIndex);
@@ -155,7 +155,7 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
       _logger.w('Skipping Realtime setup: No image IDs provided.');
       return;
     }
-    _channelName = 'public:journey_images:detail_view_${DateTime.now().millisecondsSinceEpoch}_${hashCode}';
+    _channelName = 'public:journey_images:detail_view_${DateTime.now().millisecondsSinceEpoch}_$hashCode';
     _logger.d('Setting up Realtime listener for journey_images table using IN filter for ${_imageIds.length} IDs...');
     _logger.d('Subscribing to channel: $_channelName');
 
@@ -283,7 +283,7 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
        // Check if this error corresponds to the image currently being scanned
        final bool clearScanning = state.scanningImageId == imageId;
        if (clearScanning) {
-          _logger.d('Scan error occurred for the image currently being scanned (${imageId}), clearing scanning state.');
+          _logger.d('Scan error occurred for the image currently being scanned ($imageId), clearing scanning state.');
        }
        state = state.copyWith(
          // Keep images as they are (no longer need to reset scanInitiated)

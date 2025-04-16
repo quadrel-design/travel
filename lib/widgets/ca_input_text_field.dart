@@ -45,7 +45,7 @@ class MyInputTextField extends StatefulWidget {
   static const int defaultMaxLength = 500;
 
   const MyInputTextField({
-    Key? key,
+    super.key,
     this.title,
     this.hint,
     this.helperText,
@@ -61,7 +61,7 @@ class MyInputTextField extends StatefulWidget {
     this.backColor,
     this.suffix,
     this.prefix,
-  }) : super(key: key);
+  });
 
   @override
   _MyInputTextFieldState createState() => _MyInputTextFieldState();

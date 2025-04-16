@@ -79,7 +79,7 @@ final homeScreenProvider = StateNotifierProvider<HomeScreenNotifier, HomeScreenS
 class HomeScreen extends ConsumerStatefulWidget {
   final String title; // Keep title if passed via routing
 
-  const HomeScreen({Key? key, required this.title}) : super(key: key);
+  const HomeScreen({super.key, required this.title});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();

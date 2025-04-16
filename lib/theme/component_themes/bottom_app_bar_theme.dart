@@ -10,7 +10,7 @@ final BottomAppBarTheme antonettiBottomAppBarTheme = BottomAppBarTheme(
   // Use the default rectangular shape
   shape: null,
   // Remove horizontal padding, keep vertical if desired
-  padding: EdgeInsets.symmetric(vertical: 8.0), // Only vertical padding
+  padding: const EdgeInsets.symmetric(vertical: 8.0), // Only vertical padding
   // Set height to match typical AppBar height
   height: 64.0,
   // Let surface tint be handled by M3 defaults based on color

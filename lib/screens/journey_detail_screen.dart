@@ -14,8 +14,7 @@ import '../models/journey.dart';
 class JourneyDetailScreen extends ConsumerStatefulWidget {
   final Journey journey;
 
-  const JourneyDetailScreen({Key? key, required this.journey})
-      : super(key: key);
+  const JourneyDetailScreen({super.key, required this.journey});
 
   @override
   ConsumerState<JourneyDetailScreen> createState() => _JourneyDetailScreenState();

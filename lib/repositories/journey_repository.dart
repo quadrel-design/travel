@@ -29,7 +29,7 @@ class JourneyRepository {
   String? _extractStoragePath(String url) {
     try {
       final uri = Uri.parse(url);
-      final bucketName = 'journey_images'; // Assuming this is your bucket name
+      const bucketName = 'journey_images'; // Assuming this is your bucket name
       final pathSegments = uri.pathSegments;
       // Find the segment after 'object/public' and the bucket name
       final bucketIndex = pathSegments.indexOf(bucketName);
@@ -199,8 +199,8 @@ class JourneyRepository {
     try {
       await _supabaseClient.from('journey_images').insert({
         'id': imageRecordId,
-        // 'user_id': userId, // Remove user_id field
-        'journey_id': journeyId, // Add journey_id field
+        'user_id': userId, // Add user_id field back
+        'journey_id': journeyId, // Keep journey_id field
         'image_url': imageUrl,
       });
       _logger.i('Successfully added image reference to DB. ID: $imageRecordId for Journey $journeyId');
@@ -219,18 +219,30 @@ class JourneyRepository {
   Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId) {
      _logger.d('Creating stream for journey images for journey ID: $journeyId');
      try {
-       final userId = _getCurrentUserId();
-       return _supabaseClient
+       // final userId = _getCurrentUserId();
+       final stream = _supabaseClient
          .from('journey_images')
          .stream(primaryKey: ['id'])
-         // .eq('user_id', userId) // Filter by user ID
-         .eq('journey_id', journeyId) // Filter by journey ID
-         .order('created_at') // Order by creation time
-         .map((list) => list.map((map) => JourneyImageInfo.fromMap(map)).toList());
-     } on NotAuthenticatedException { // Handle auth error during stream setup
-       // Return an empty stream or stream with error?
+         // .eq('journey_id', journeyId) // Filter by journey ID - TEMPORARILY REMOVED AGAIN
+         .order('created_at'); // Order by creation time
+
+      // Log raw stream events BEFORE mapping
+      final loggedStream = stream.handleError((error, stackTrace) {
+        _logger.e('[REPO STREAM ERROR] Error in raw stream for journey $journeyId', error: error, stackTrace: stackTrace);
+      }).map((listOfMaps) {
+        // Log just before processing the list
+        _logger.d('[REPO STREAM MAP] Outer map received ${listOfMaps.length} raw items for journey $journeyId (Filter removed)');
+        // Process list, log before individual item mapping
+        return listOfMaps.map((map) {
+             _logger.d('[REPO STREAM MAP INNER] Processing map with ID: ${map?['id']}'); // Log before fromMap - RESTORED
+             return JourneyImageInfo.fromMap(map); // Actual mapping
+           }).toList();
+      });
+
+      return loggedStream; // Return the stream with logging/error handling
+
+     } on NotAuthenticatedException { 
        _logger.e('Cannot get journey images stream: User not authenticated.');
-       // Returning an error stream might be better for the UI to handle
        return Stream.error(NotAuthenticatedException('User must be logged in to view images.'));
      } catch (e, stackTrace) {
         _logger.e('Error setting up journey images stream for journey $journeyId', error: e, stackTrace: stackTrace);

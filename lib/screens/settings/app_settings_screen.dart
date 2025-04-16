@@ -9,7 +9,7 @@ import 'package:travel/providers/repository_providers.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 class AppSettingsScreen extends ConsumerWidget {
-  const AppSettingsScreen({Key? key}) : super(key: key);
+  const AppSettingsScreen({super.key});
 
   // Helper SnackBar methods (or move to utils)
   void _showErrorSnackBar(BuildContext context, String title, String message) {

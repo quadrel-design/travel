@@ -66,7 +66,7 @@ class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State
   String? _extractPath(String url) {
     try {
       final uri = Uri.parse(url);
-      final bucketName = 'journey_images'; // Ensure this matches
+      const bucketName = 'journey_images'; // Ensure this matches
       final pathStartIndex = uri.path.indexOf(bucketName) + bucketName.length + 1;
       if (pathStartIndex <= bucketName.length) return null;
       return uri.path.substring(pathStartIndex);
@@ -265,12 +265,12 @@ class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State
       widget.logger.w('GalleryPageView build called with empty _signedUrls. Returning empty Scaffold.');
       return Scaffold(
         // Change background and text color for empty state
-        backgroundColor: theme.colorScheme.background, // Use theme background
+        backgroundColor: theme.colorScheme.surface, // Use theme background
         appBar: AppBar(title: const Text('Gallery')), // Simple AppBar
         body: Center(
           child: Text(
             'No images left.', 
-            style: TextStyle(color: theme.colorScheme.onBackground) // Use theme text color
+            style: TextStyle(color: theme.colorScheme.onSurface) // Use theme text color
           ),
         ),
       );
@@ -281,7 +281,7 @@ class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State
 
     return Scaffold(
       // Change Scaffold background
-      backgroundColor: theme.colorScheme.background, // Use theme background 
+      backgroundColor: theme.colorScheme.surface, // Use theme background 
       appBar: AppBar(
         backgroundColor: theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface, 
         foregroundColor: theme.appBarTheme.foregroundColor ?? theme.colorScheme.onSurface,
@@ -294,7 +294,7 @@ class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State
         iconTheme: theme.appBarTheme.iconTheme ?? theme.iconTheme, 
         actions: [
           // Add Download Button
-          if (currentImageInfo != null && currentImageInfo.url != null)
+          if (currentImageInfo != null)
             IconButton(
               icon: const Icon(Icons.download),
               onPressed: () async {

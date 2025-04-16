@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'dart:math'; // Add import for max
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +10,7 @@ import 'package:logger/logger.dart'; // Import logger
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
 import '../models/journey_image_info.dart'; // Add import for the model
 import 'package:http/http.dart' as http; // Add http import for http.get
-import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import AppLocalizations
+// Import AppLocalizations
 import '../providers/gallery_detail_provider.dart'; // Import the new provider
 import 'package:intl/intl.dart'; // Add intl import
 
@@ -29,7 +28,7 @@ class GalleryDetailView extends ConsumerStatefulWidget {
   final int initialIndex;
   final List<JourneyImageInfo> images; // Initial list
   final Logger logger;
-  final Future<void> Function(String imageUrl) onDeleteImage;
+  final Future<void> Function(String imageUrl, String imageId) onDeleteImage;
   final Function(String deletedUrl) onImageDeletedSuccessfully;
 
   @override
@@ -198,7 +197,7 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     widget.logger.i('Attempting delete via callback for: $imageUrlToDelete (ID: $imageIdToDelete)');
 
     try {
-      await widget.onDeleteImage(imageUrlToDelete); // Call the passed callback
+      await widget.onDeleteImage(imageUrlToDelete, imageIdToDelete);
       widget.logger.i('Parent delete callback successful for: $imageUrlToDelete');
 
       // The parent (Overview Screen) is responsible for its own success message/handling

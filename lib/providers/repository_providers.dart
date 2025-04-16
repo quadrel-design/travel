@@ -49,30 +49,10 @@ final detectedSumsProvider = StreamProvider.autoDispose
 // --- Add Provider for Journey Images Stream --- 
 final journeyImagesStreamProvider = StreamProvider.autoDispose
     .family<List<JourneyImageInfo>, String>((ref, journeyId) {
-  final supabaseClient = Supabase.instance.client;
-
-  final stream = supabaseClient
-      .from('journey_images')
-      .stream(primaryKey: ['id'])
-      .eq('journey_id', journeyId)
-      .order('created_at', ascending: true);
-
-  // Map the stream data
-  return stream.map((listOfMaps) {
-    // --- Add Detailed Logging --- 
-    print('>>> [StreamProvider] Received ${listOfMaps.length} items for journey $journeyId');
-    final mappedList = listOfMaps.map((map) {
-        // Log raw map data
-        // print('>>> [StreamProvider] Raw map: $map'); 
-        final imageInfo = JourneyImageInfo.fromMap(map);
-        // Log parsed JourneyImageInfo, especially lastProcessedAt
-        print('>>> [StreamProvider] Parsed ID: ${imageInfo.id}, LastProcessed: ${imageInfo.lastProcessedAt}'); 
-        return imageInfo;
-    }).toList();
-    print('>>> [StreamProvider] Mapped list size: ${mappedList.length}');
-    return mappedList;
-    // --- End Detailed Logging --- 
-  });
+  // Get the repository
+  final repository = ref.watch(journeyRepositoryProvider);
+  // Return the stream from the repository method
+  return repository.getJourneyImagesStream(journeyId);
 });
 // --- End Provider --- 
 

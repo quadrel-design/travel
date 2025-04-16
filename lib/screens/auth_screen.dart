@@ -2,8 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import '../widgets/app_title.dart'; // Import AppTitle
-import '../constants/app_colors.dart'; // Import color constants
+import 'package:travel/widgets/app_title.dart'; // Import AppTitle
+import 'package:travel/constants/app_colors.dart'; // Import color constants
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import generated class
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod

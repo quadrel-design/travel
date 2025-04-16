@@ -2,21 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:uuid/uuid.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:path/path.dart' as p;
 import 'package:travel/models/journey.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/providers/logging_provider.dart';
-import 'package:logger/logger.dart';
-import '../widgets/full_screen_confirm_dialog.dart';
 import '../models/journey_image_info.dart';
-import 'package:http/http.dart' as http; // Keep for GalleryDetailView dependency if needed elsewhere
-import 'dart:math';
+// Keep for GalleryDetailView dependency if needed elsewhere
 import '../widgets/gallery_detail_view.dart';
-import 'dart:convert';
 import '../widgets/image_status_chip.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import AppLocalizations
+// Import AppLocalizations
 import '../models/image_status.dart'; // Make sure this is imported
 import 'package:travel/constants/layout_constants.dart'; // Import layout constants
 
@@ -99,8 +92,9 @@ class GalleryOverviewScreen extends ConsumerWidget {
       }
 
       try {
-        await repo.deleteJourneyImage(imageUrl); // Pass URL to repo
-        logger.i('Successfully deleted image from storage: $imageUrl');
+        // Pass both imageUrl and imageId to the repository method
+        await repo.deleteJourneyImage(imageUrl, imageId);
+        logger.i('Successfully deleted image: $imageUrl (ID: $imageId)');
         // Note: Realtime update should remove the image from the list via the stream provider
       } catch (e, stackTrace) {
         logger.e('Failed to delete image: $imageUrl', error: e, stackTrace: stackTrace);
@@ -141,7 +135,9 @@ class GalleryOverviewScreen extends ConsumerWidget {
                       images: images, // Pass the full list
                       initialIndex: index,
                       logger: logger,
-                      onDeleteImage: (url) => repo.deleteJourneyImage(url), // Pass delete function
+                      // Update onDeleteImage callback to accept and pass imageId
+                      // We get the imageId from imageInfo corresponding to the url/index
+                      onDeleteImage: (url, id) => repo.deleteJourneyImage(url, id),
                       onImageDeletedSuccessfully: (deletedUrl) {
                          logger.i('Detail view reported successful deletion for $deletedUrl, list should update via stream.');
                          // No manual list update needed here due to stream
@@ -187,7 +183,7 @@ class GalleryOverviewScreen extends ConsumerWidget {
       final logger = ref.watch(loggerProvider);
       final repo = ref.watch(journeyRepositoryProvider);
 
-      Future<void> _addImage() async {
+      Future<void> addImage() async {
         if (ref.read(galleryUploadStateProvider)) {
           logger.w('Upload already in progress, ignoring FAB tap.');
           return;
@@ -227,7 +223,7 @@ class GalleryOverviewScreen extends ConsumerWidget {
       return FloatingActionButton(
         // tooltip: isUploading ? l10n.uploadingStatus : l10n.addPhotoTooltip,
         tooltip: isUploading ? 'Uploading...' : 'Add Photo', // Placeholder
-        onPressed: isUploading ? null : _addImage,
+        onPressed: isUploading ? null : addImage,
         child: isUploading
             ? const CircularProgressIndicator(color: Colors.white)
             : const Icon(Icons.add_a_photo),

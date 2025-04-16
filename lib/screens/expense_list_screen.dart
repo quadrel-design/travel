@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:intl/intl.dart'; // For formatting
-import 'package:travel/models/journey_image_info.dart'; // Import model
+// Import model
 import 'package:travel/providers/repository_providers.dart'; // Import provider
 
 // Change to ConsumerWidget

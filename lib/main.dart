@@ -14,7 +14,6 @@ import 'screens/gallery_overview_screen.dart'; // Import renamed gallery screen
 import 'models/journey.dart'; // Import Journey model
 import 'screens/settings/app_settings_screen.dart'; // Update import for settings screen (using current filename)
 import 'repositories/auth_repository.dart'; // Import AuthRepository
-import 'repositories/journey_repository.dart';
 // Import generated localizations delegate
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/providers/repository_providers.dart'; // Import providers
@@ -79,7 +78,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const HomeScreen(title: 'TravelMouse'),
-        routes: [
+        routes: const [
           // Example nested route if needed
         ],
       ),
