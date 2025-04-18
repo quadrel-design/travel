@@ -36,14 +36,16 @@ class Journey extends Equatable {
         // Use tryParse which returns null on failure instead of throwing
         final parsedDate = DateTime.tryParse(dateValue);
         if (parsedDate == null) {
-           print('WARNING [Journey.fromJson]: Failed to parse date string: "$dateValue", using fallback.');
+           // WARNING: Failed to parse date string, using fallback
+           // print('WARNING [Journey.fromJson]: Failed to parse date string: "$dateValue", using fallback.');
            return fallback;
         }
         return parsedDate;
       }
       // Log if the value is not null and not a string
       if (dateValue != null) {
-          print('WARNING [Journey.fromJson]: Unexpected type for date field: ${dateValue.runtimeType}, value: "$dateValue", using fallback.');
+          // WARNING: Unexpected type for date field, using fallback
+          // print('WARNING [Journey.fromJson]: Unexpected type for date field: ${dateValue.runtimeType}, value: "$dateValue", using fallback.');
       }
       return fallback;
     }
@@ -111,4 +113,42 @@ class Journey extends Equatable {
         budget,
         isCompleted,
       ];
+
+  // Method to convert map to Journey object
+  factory Journey.fromMap(Map<String, dynamic> map) {
+    try {
+      // Replace print statements with logger or remove them
+      // print("Journey.fromMap: $map");
+      return Journey(
+        id: map['id'],
+        userId: map['user_id'],
+        title: map['title'] ?? 'Untitled Journey',
+        description: map['description'] ?? '',
+        location: map['location'] ?? 'Unknown',
+        startDate: map['start_date'] != null
+            ? DateTime.parse(map['start_date'])
+            : DateTime.now(),
+        endDate: map['end_date'] != null
+            ? DateTime.parse(map['end_date'])
+            : DateTime.now().add(const Duration(days: 7)),
+        budget: map['budget']?.toDouble() ?? 0.0,
+        isCompleted: map['is_completed'] ?? false,
+      );
+    } catch (e) {
+      // Replace print statement with logger or remove it
+      // print("Exception in Journey.fromMap: $e");
+      // In case of parsing errors, return a default Journey
+      return Journey(
+        id: map['id'] ?? '',
+        userId: map['user_id'] ?? '',
+        title: 'Error Loading Journey',
+        description: 'Error loading journey data.',
+        location: 'Unknown',
+        startDate: DateTime.now(),
+        endDate: DateTime.now().add(const Duration(days: 7)),
+        budget: 0.0,
+        isCompleted: false,
+      );
+    }
+  }
 }

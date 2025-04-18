@@ -232,8 +232,6 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
   Widget build(BuildContext context) {
     final state = ref.watch(galleryDetailProvider(widget.images));
     final images = state.images;
-    final signedUrls = state.signedUrls;
-    final isLoadingSignedUrls = state.isLoadingSignedUrls;
     final generalError = state.generalError; // Watch general error
     final notifier = ref.read(galleryDetailProvider(widget.images).notifier); // Read notifier for actions
 
@@ -325,20 +323,6 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     final isLoadingSignedUrls = state.isLoadingSignedUrls;
     final scanningImageId = state.scanningImageId; // Get scanning ID from state
 
-    // Determine image provider based on signed URL availability and loading state
-    ImageProvider imageProvider;
-    bool showLoadingIndicator = isLoadingSignedUrls || (currentIndex >= signedUrls.length || signedUrls[currentIndex] == null);
-
-    if (!showLoadingIndicator) {
-      imageProvider = CachedNetworkImageProvider(signedUrls[currentIndex]!); 
-    } else if (images.isNotEmpty && currentIndex < images.length) {
-      // Fallback to public URL if signed URL is loading/failed but we have the public one
-      imageProvider = CachedNetworkImageProvider(images[currentIndex].url);
-    } else {
-      // Should ideally not happen if images list is not empty, but provide a placeholder
-      imageProvider = const AssetImage('assets/placeholder.png'); // Ensure you have a placeholder asset
-    }
-
     return Column(
       children: [
         Expanded(
@@ -424,7 +408,7 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
 
     return Container(
       padding: const EdgeInsets.all(16.0),
-      color: Colors.black.withOpacity(0.7),
+      color: Colors.black.withValues(alpha: 0.7),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,

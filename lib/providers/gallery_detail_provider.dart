@@ -70,10 +70,9 @@ class GalleryDetailNotifier extends StateNotifier<GalleryDetailState> {
   final List<String> _imageIds;
   String? _channelName;
   final SupabaseClient _supabaseClient;
-  final Ref _ref;
   StreamSubscription<List<Map<String, dynamic>>>? _subscription;
 
-  GalleryDetailNotifier(List<JourneyImageInfo> initialImages, this._logger, this._supabaseClient, this._ref)
+  GalleryDetailNotifier(List<JourneyImageInfo> initialImages, this._logger, this._supabaseClient, Ref ref)
       : _imageIds = initialImages.map((img) => img.id).where((id) => id.isNotEmpty).toList(),
         // Initialize state with empty signed URLs initially
         super(GalleryDetailState(images: List.from(initialImages), signedUrls: List.filled(initialImages.length, null))) {

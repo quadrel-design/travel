@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
@@ -11,9 +10,6 @@ import '../models/journey_image_info.dart'; // Add import for the model
 import 'package:http/http.dart' as http; // Add http import for http.get
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add import for AppLocalizations
-import '../providers/gallery_detail_provider.dart'; // Add import for gallery detail provider
-// import 'photo_app_bar.dart'; // Remove import
-// import 'full_screen_image_viewer.dart'; // Not needed anymore
 
 class GalleryDetailView extends ConsumerStatefulWidget {
   final List<JourneyImageInfo> images;
@@ -25,7 +21,7 @@ class GalleryDetailView extends ConsumerStatefulWidget {
   final void Function(String imageUrl) onImageDeletedSuccessfully;
 
   const GalleryDetailView({
-    Key? key,
+    super.key,
     required this.images,
     required this.initialIndex,
     this.showDeleteButton = true,
@@ -33,7 +29,7 @@ class GalleryDetailView extends ConsumerStatefulWidget {
     required this.logger,
     required this.onDeleteImage,
     required this.onImageDeletedSuccessfully,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<GalleryDetailView> createState() => _GalleryDetailViewState();
@@ -47,8 +43,6 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
 
   // --- State for Signed URLs ---
   List<String?> _signedUrls = []; // Store signed URLs (nullable for errors)
-  bool _isLoadingSignedUrls = true;
-  String? _signedUrlError;
   // --- End State for Signed URLs ---
 
   // --- Scan Logic ---
@@ -103,14 +97,15 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
   Future<void> _fetchSignedUrls() async {
     if (!mounted) return;
     setState(() {
-      _isLoadingSignedUrls = true;
-      _signedUrlError = null;
+      // _isLoadingSignedUrls = true;
+      // _signedUrlError = null;
       // Use widget.images.length
       _signedUrls = List.filled(widget.images.length, null); 
     });
 
     List<String?> results = [];
-    bool hadError = false;
+    // bool hadError = false;
+    
     // Iterate over the JourneyImageInfo objects
     for (final imageInfo in widget.images) {
       // Extract path from imageInfo.url
@@ -118,7 +113,7 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
       if (path == null) {
         widget.logger.w('Could not extract path for ${imageInfo.url}');
         results.add(null); // Mark as error
-        hadError = true;
+        // hadError = true;
         continue;
       }
       try {
@@ -126,19 +121,18 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
         results.add(signedUrl);
       } catch (e) {
         results.add(null); // Mark as error
-        hadError = true;
+        // hadError = true;
       }
     }
 
     if (!mounted) return;
     setState(() {
       _signedUrls = results;
-      _isLoadingSignedUrls = false;
-      if (hadError) {
-         _signedUrlError = 'Some images could not be loaded.'; // TODO: Localize
-      }
+      // _isLoadingSignedUrls = false;
+      // if (hadError) {
+      //   _signedUrlError = 'Some images could not be loaded.'; // TODO: Localize
+      // }
     });
-
   }
   // --- Signed URL Logic End ---
 
@@ -271,7 +265,7 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          if (currentImage != null && widget.onDeleteImage != null)
+          if (currentImage != null)
             IconButton(
               icon: const Icon(Icons.delete),
               onPressed: () => _handleDelete(),
@@ -304,11 +298,6 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
               final imageInfo = widget.images[index];
               final signedUrl = _signedUrls[index];
               
-              // Determine if the overlay should be shown
-              final bool showOverlay =
-                  imageInfo.hasPotentialText == true ||
-                  (imageInfo.detectedText != null && imageInfo.detectedText!.isNotEmpty);
-              
               return PhotoViewGalleryPageOptions(
                 imageProvider: CachedNetworkImageProvider(signedUrl!),
                 errorBuilder: (context, error, stackTrace) {
@@ -334,13 +323,15 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rena
             },
             itemCount: widget.images.length,
             loadingBuilder: (BuildContext context, ImageChunkEvent? event) {
-              final double progress = event != null && event.expectedTotalBytes != null
-                  ? event.cumulativeBytesLoaded / event.expectedTotalBytes!
-                  : 0;
+              // Handle null case properly
+              double? progress;
+              if (event != null && event.expectedTotalBytes != null) {
+                progress = event.cumulativeBytesLoaded / event.expectedTotalBytes!;
+              }
               
               return Center(
                 child: CircularProgressIndicator(
-                  value: progress > 0 ? progress : null,
+                  value: progress,
                 ),
               );
             },

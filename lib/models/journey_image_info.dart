@@ -27,49 +27,47 @@ class JourneyImageInfo extends Equatable {
     this.localPath,
   });
 
+  factory JourneyImageInfo.fromJson(Map<String, dynamic> json) {
+    try {
+      // Comment out debug print statements
+      // print('JourneyImageInfo.fromJson called with: $json');
+      
+      return JourneyImageInfo(
+        id: json['id'] as String,
+        url: json['url'] as String,
+        lastProcessedAt: json['last_processed_at'] != null
+          ? DateTime.parse(json['last_processed_at'] as String)
+          : null,
+        detectedText: json['detected_text'] as String?,
+        detectedTotalAmount: json['detected_total_amount'] != null
+            ? double.parse(json['detected_total_amount'].toString())
+            : null,
+        detectedCurrency: json['detected_currency'] as String?,
+        hasPotentialText: json['has_potential_text'] as bool?,
+      );
+    } catch (e) {
+      // Comment out error print statements
+      // print('Error in JourneyImageInfo.fromJson: $e');
+      // print('JSON that caused error: $json');
+      rethrow; // Still rethrow the error
+    }
+  }
+
   factory JourneyImageInfo.fromMap(Map<String, dynamic> map) {
-    // Remove logger instance
-    // final logger = ProviderContainer().read(loggerProvider); 
-
-    num? parseNumeric(dynamic value) {
-       if (value is num) return value;
-       if (value is String) return num.tryParse(value);
-       return null;
-    }
-
-    DateTime? parseTimestamp(dynamic value) {
-      if (value == null) return null;
-      if (value is String) {
-        final parsedDate = DateTime.tryParse(value);
-        if (parsedDate == null) {
-            // Use print instead of logger
-            print('WARNING [JourneyImageInfo.fromMap]: Failed to parse timestamp string: $value');
-        }
-        return parsedDate;
-      } else {
-         // Use print instead of logger
-         print('WARNING [JourneyImageInfo.fromMap]: Unexpected type for timestamp: ${value.runtimeType}, value: $value');
-         return null;
-      }
-    }
-
-    final processedTimestamp = parseTimestamp(map['last_processed_at']);
-    // Log if timestamp is null after parsing
-    if (processedTimestamp == null && map['last_processed_at'] != null) {
-        // Use print instead of logger
-        print('WARNING [JourneyImageInfo.fromMap]: Timestamp parsed as null. Original value: ${map['last_processed_at']} (Type: ${map['last_processed_at']?.runtimeType})');
-    }
-
+    // Comment out debug print
+    // print('JourneyImageInfo.fromMap: $map');
     return JourneyImageInfo(
-      id: map['id'] as String? ?? '',
-      url: map['image_url'] as String? ?? '',
-      hasPotentialText: map['has_potential_text'] as bool?,
+      id: map['id'] as String,
+      url: map['url'] as String,
+      lastProcessedAt: map['last_processed_at'] != null
+          ? DateTime.parse(map['last_processed_at'] as String)
+          : null,
       detectedText: map['detected_text'] as String?,
-      isInvoiceGuess: map['is_invoice_guess'] as bool? ?? false,
-      detectedTotalAmount: parseNumeric(map['detected_total_amount'])?.toDouble(),
+      detectedTotalAmount: map['detected_total_amount'] != null 
+          ? double.parse(map['detected_total_amount'].toString())
+          : null,
       detectedCurrency: map['detected_currency'] as String?,
-      lastProcessedAt: processedTimestamp,
-      localPath: map['local_path'] as String?,
+      hasPotentialText: map['has_potential_text'] as bool?,
     );
   }
 

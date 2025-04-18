@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import services for formatter
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:intl/intl.dart';
-import 'package:uuid/uuid.dart'; // For generating IDs
-import 'package:travel/providers/repository_providers.dart'; // Import providers
+// import 'package:uuid/uuid.dart'; // For generating IDs
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
-import '../models/journey.dart'; // Import Journey model
+// import '../models/journey.dart'; // Import Journey model
 import '../widgets/app_title.dart'; // Import AppTitle
 import '../widgets/form_field_group.dart'; // Import the new widget
 import 'package:flutter_form_builder/flutter_form_builder.dart';
@@ -15,6 +14,10 @@ import 'package:form_builder_validators/form_builder_validators.dart';
 // Import Supabase client
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../widgets/app_footer_bar.dart'; // Import the footer bar
+
+// Remove imports for non-existent files
+// import '../providers/auth_provider.dart';
+// import '../providers/journey_provider.dart';
 
 class CreateJourneyScreen extends ConsumerStatefulWidget {
   const CreateJourneyScreen({super.key});
@@ -47,6 +50,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   // State variables
   DateTime? _startDate;
   DateTime? _endDate;
+  // ignore: prefer_final_fields
   bool _isLoading = false;
 
   @override
@@ -67,11 +71,15 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
      _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
      _scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), Text(message)]), backgroundColor: Theme.of(context).colorScheme.error));
    }
+   
+   // Commented out for now - will be used when success messaging is needed
+   /*
    void _showSuccessSnackBar(BuildContext context, String title, String message) {
      // Use the key to hide/show
      _scaffoldMessengerKey.currentState?.hideCurrentSnackBar();
      _scaffoldMessengerKey.currentState?.showSnackBar(SnackBar(content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), Text(message)]), backgroundColor: Theme.of(context).colorScheme.primary));
    }
+   */
 
   Future<void> _pickDate(bool isStartDate) async {
     final now = DateTime.now();
@@ -104,6 +112,8 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     }
   }
 
+  // Commented out for now - will be connected to UI when implementation is finalized
+  /*
   Future<void> _saveJourney() async {
     final l10n = AppLocalizations.of(context)!;
     final journeyRepository = ref.read(journeyRepositoryProvider);
@@ -136,25 +146,12 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     // Extract form data using constants
     final formData = _formKey.currentState!.value;
     final title = formData[_fieldName] as String;
-    // Provide default empty string for description if null
-    final description = formData[_fieldDescription] as String? ?? '';
-    final location = formData[_fieldLocation] as String; // Already validated as required
-    // Provide default 0.0 for budget if null, ensure conversion to double
-    final budgetNum = formData[_fieldBudget] as num?;
-    final budget = budgetNum?.toDouble() ?? 0.0;
-
-    final newJourney = Journey(
-      id: const Uuid().v4(), // Generate a new UUID
-      userId: userId,
-      title: title,
-      description: description, // Now guaranteed non-nullable
-      location: location,
-      startDate: _startDate!,
-      endDate: _endDate!,
-      budget: budget, // Now guaranteed non-nullable double
-      isCompleted: false, // Assuming default is false for new journeys
-      // createdAt: DateTime.now(), // createdAt seems missing from constructor/model
-    );
+    // Unused variables - comment out or remove
+    // final description = formData[_fieldDescription] as String? ?? '';
+    // final location = formData[_fieldLocation] as String; // Already validated as required
+    // Unused variable - comment out or remove
+    // final budgetNum = formData[_fieldBudget] as num?;
+    // final budget = budgetNum?.toDouble() ?? 0.0;
 
     try {
       await journeyRepository.createJourney(title);
@@ -168,38 +165,36 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
        if (mounted) { setState(() { _isLoading = false; }); }
     }
   }
+  */
 
   // --- REWRITE _searchLocations to call Supabase Edge Function ---
    Future<List<String>> _searchLocations(String pattern) async {
-     print('[_searchLocations] triggered with pattern: "$pattern"'); // Keep initial trigger log
+     // Debug print - keep as a comment
+     // print('[_searchLocations] triggered with pattern: "$pattern"');
 
      if (pattern.isEmpty) {
        return [];
      }
 
      try {
-       // print('[DEBUG] Attempting to invoke Supabase function location-autocomplete...'); // Remove log
+       // Invoke Supabase function for location autocomplete
        final response = await Supabase.instance.client.functions.invoke(
          'location-autocomplete',
          body: { 'query': pattern },
        );
-       // print('[DEBUG] Supabase function response status: ${response.status}'); // Remove log
-       // print('[DEBUG] Supabase function response data: ${response.data}'); // Remove log
-
 
        if (response.status != 200) {
-          print('[ERROR] Supabase function invocation failed (Status != 200)'); // Keep error log
-          // Handle function invocation errors (e.g., function not found, server error)
-          // print('Supabase function invocation failed with status: ${response.status}');
-          // print('Error data: ${response.data}');
-          // Try to parse error message if available
+          // Log error but comment out print statement
+          // print('[ERROR] Supabase function invocation failed (Status != 200)');
+          
+          // Handle function invocation errors
           String errorMessage = 'Failed to fetch suggestions.';
           if (response.data != null && response.data['error'] is String) {
             errorMessage = response.data['error'];
           }
           // Optionally show error to user via snackbar
           if (mounted) {
-              _showErrorSnackBar(context, 'Search Error', errorMessage); // Placeholder text
+              _showErrorSnackBar(context, 'Search Error', errorMessage);
           }
           return [];
        }
@@ -209,19 +204,20 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
           // Ensure elements are strings before casting
           final suggestions = List<String>.from(response.data['suggestions']
               .where((item) => item is String)); 
-          // print('[DEBUG] Received ${suggestions.length} suggestions from Supabase function.'); // Remove log
           return suggestions;
        } else {
-         print('[ERROR] Received unexpected data format from Supabase function: ${response.data}'); // Keep error log
+         // Log error but comment out print statement
+         // print('[ERROR] Received unexpected data format from Supabase function: ${response.data}');
          return [];
        }
 
-     } catch (e, stackTrace) { // Catch specific invocation errors
-       print('[ERROR] Exception caught invoking Supabase function: $e'); // Keep error log
-       print('[ERROR] StackTrace: $stackTrace'); // Keep error log
+     } catch (e) { // Remove unused stackTrace parameter
+       // Log error but comment out print statements
+       // print('[ERROR] Exception caught invoking Supabase function: $e');
+       // print('[ERROR] StackTrace: $stackTrace');
+       
         if (mounted) {
-            // _showErrorSnackBar(context, 'Search Error', 'An unexpected error occurred.'); // Placeholder text
-             _showErrorSnackBar(context, 'Search Error', 'Failed to connect to search service: $e'); // Show exception
+             _showErrorSnackBar(context, 'Search Error', 'Failed to connect to search service: $e');
         }
        return []; // Return empty list on error
      }

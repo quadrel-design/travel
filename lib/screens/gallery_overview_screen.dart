@@ -57,6 +57,8 @@ class GalleryOverviewScreen extends ConsumerWidget {
     final repo = ref.watch(journeyRepositoryProvider);
 
     // Remove l10n usage inside helper
+    // Commented out unused function - can be restored when needed
+    /*
     Future<bool> showDeleteConfirmationDialog(BuildContext context) async {
       return await showDialog<bool>(
             context: context,
@@ -101,11 +103,12 @@ class GalleryOverviewScreen extends ConsumerWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             // SnackBar(content: Text(l10n.deleteImageErrorSnackbar(e.toString()))),
-             SnackBar(content: Text('Error deleting image: ${e.toString()}')), // Placeholder
+            SnackBar(content: Text('Error deleting image: ${e.toString()}')), // Placeholder
           );
         }
       }
     }
+    */
 
     return journeyImagesAsyncValue.when(
       data: (images) {
@@ -123,7 +126,6 @@ class GalleryOverviewScreen extends ConsumerWidget {
           itemCount: images.length,
           itemBuilder: (context, index) {
             final imageInfo = images[index];
-            final status = determineImageStatus(imageInfo);
 
             return GestureDetector(
               onTap: () {

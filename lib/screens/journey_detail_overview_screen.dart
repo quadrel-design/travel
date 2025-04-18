@@ -86,7 +86,7 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
               label: 'Participants', // TODO: Localize
               onTap: () { 
                 // TODO: Navigate to Participants screen
-                print('Tapped Participants'); 
+                // print('Tapped Participants'); 
               }
             ),
              _buildOverviewLinkCard(context, 
