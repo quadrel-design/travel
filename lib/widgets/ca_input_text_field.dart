@@ -64,10 +64,10 @@ class MyInputTextField extends StatefulWidget {
   });
 
   @override
-  _MyInputTextFieldState createState() => _MyInputTextFieldState();
+  MyInputTextFieldState createState() => MyInputTextFieldState();
 }
 
-class _MyInputTextFieldState extends State<MyInputTextField> {
+class MyInputTextFieldState extends State<MyInputTextField> {
   late bool _passwordVisibility;
   late ThemeData theme;
 

@@ -11,7 +11,7 @@ final loggerProvider = Provider<Logger>((ref) {
       lineLength: 120, // width of the output
       colors: true, // Colorful log messages
       printEmojis: true, // Print an emoji for each log message
-      printTime: false // Should each log print contain a timestamp
+      dateTimeFormat: DateTimeFormat.none // Use proper parameter instead of deprecated printTime
     ),
     // You can also set the minimum level, e.g., Level.debug for development
     // level: Level.debug, 

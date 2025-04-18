@@ -234,7 +234,7 @@ class JourneyRepository {
         _logger.d('[REPO STREAM MAP] Outer map received ${listOfMaps.length} raw items for journey $journeyId (Filter removed)');
         // Process list, log before individual item mapping
         return listOfMaps.map((map) {
-             _logger.d('[REPO STREAM MAP INNER] Processing map with ID: ${map?['id']}'); // Log before fromMap - RESTORED
+             _logger.d('[REPO STREAM MAP INNER] Processing map with ID: ${map['id']}'); // Log before fromMap - RESTORED
              return JourneyImageInfo.fromMap(map); // Actual mapping
            }).toList();
       });
@@ -280,6 +280,62 @@ class JourneyRepository {
     } catch (e, stackTrace) {
        _logger.e('Unexpected error deleting image $imagePath (ID: $imageId)', error: e, stackTrace: stackTrace);
        throw ImageDeleteException('An unexpected error occurred during deletion.', e, stackTrace);
+    }
+  }
+
+  // Update alias method to accept userId parameter
+  Future<List<Journey>> fetchUserJourneys(String userId) async {
+    _logger.d('fetchUserJourneys called for user: $userId');
+    // This is similar to getJourneys but uses the provided userId
+    try {
+      _logger.d('Fetching journeys for provided user: $userId');
+      final data = await _supabaseClient
+          .from('journeys')
+          .select()
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
+      _logger.d('Fetched ${data.length} journeys from DB for user $userId.');
+      final journeys = data.map((item) => Journey.fromJson(item)).toList();
+      return journeys;
+    } on PostgrestException catch (e, stackTrace) {
+      _logger.e('PostgrestException fetching journeys for $userId', error: e, stackTrace: stackTrace);
+      throw DatabaseFetchException('Failed to fetch journeys: ${e.message}', e, stackTrace);
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error fetching journeys for $userId', error: e, stackTrace: stackTrace);
+      throw DatabaseFetchException('An unexpected error occurred while fetching journeys.', e, stackTrace);
+    }
+  }
+
+  // Add full journey creation method to match the call in test_data.dart
+  Future<String> addJourney(Journey journey) async {
+    try {
+      final userId = _getCurrentUserId();
+      _logger.d('Creating journey with title: "${journey.title}" for user: $userId');
+      
+      // Convert to map and ensure user_id is set
+      final journeyData = journey.toJson();
+      journeyData['user_id'] = userId;
+      
+      // If journey has an ID, use it, otherwise Supabase will generate one
+      final String? journeyId = journey.id.isNotEmpty ? journey.id : null;
+      if (journeyId != null) {
+        journeyData['id'] = journeyId;
+      }
+      
+      final response = await _supabaseClient.from('journeys').insert(journeyData).select();
+      final insertedId = response.isNotEmpty ? response[0]['id'] : null;
+      
+      _logger.i('Successfully created journey with ID: $insertedId');
+      return insertedId ?? '';
+    } on PostgrestException catch (e, stackTrace) {
+      _logger.e('PostgrestException creating journey', error: e, stackTrace: stackTrace);
+      throw DatabaseOperationException('Failed to create journey: ${e.message}', e, stackTrace);
+    } on NotAuthenticatedException {
+      rethrow;
+    } catch (e, stackTrace) {
+      _logger.e('Unexpected error creating journey', error: e, stackTrace: stackTrace);
+      throw DatabaseOperationException('An unexpected error occurred while creating the journey.', e, stackTrace);
     }
   }
 

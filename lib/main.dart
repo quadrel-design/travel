@@ -21,6 +21,8 @@ import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
 import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
 import 'screens/expense_list_screen.dart'; // Add import for the new screen
+import 'providers/logging_provider.dart'; // Add import for logger
+import 'package:logger/logger.dart'; // Add Logger import
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -61,6 +63,7 @@ String? determineRedirect(AuthRepository authRepo, String? currentRoute) {
 // Make router accessible via a provider for easier access to Ref
 final routerProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
+  final logger = ref.watch(loggerProvider); // Get the logger
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
@@ -93,8 +96,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           final journeyId = state.pathParameters['journeyId'];
           final journey = state.extra as Journey?;
           if (journeyId == null || journey == null) {
-            // Handle error: Maybe redirect to home or show error screen
-            print('Journey ID or Journey object missing for detail route');
+            // Replace print with logger
+            logger.w('Journey ID or Journey object missing for detail route');
             // Maybe return a Scaffold with an error message
             return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
           }
@@ -114,7 +117,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final journey = state.extra as Journey?;
                if (journey == null) {
-                 print('Error: Journey object missing for gallery route');
+                 // Replace print with logger
+                 logger.w('Error: Journey object missing for gallery route');
                  return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
                }
               return GalleryOverviewScreen(journey: journey);
@@ -127,7 +131,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
                final journeyId = state.pathParameters['journeyId'];
                if (journeyId == null || journeyId.isEmpty) {
-                  print('Journey ID missing for expenses route');
+                  // Replace print with logger
+                  logger.w('Journey ID missing for expenses route');
                   return const Scaffold(body: Center(child: Text('Error: Journey ID missing')));
                }
               return ExpenseListScreen(journeyId: journeyId);
@@ -145,7 +150,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (BuildContext context, GoRouterState state) {
       return determineRedirect(authRepository, state.matchedLocation);
     },
-    errorBuilder: (context, state) => _buildErrorScreen(context, state),
+    errorBuilder: (context, state) => _buildErrorScreen(context, state, logger), // Pass logger to error builder
   );
 });
 
@@ -185,9 +190,9 @@ class MyApp extends ConsumerWidget {
 }
 
 // --- Simple Error Screen Widget ---
-Widget _buildErrorScreen(BuildContext context, GoRouterState state) {
+Widget _buildErrorScreen(BuildContext context, GoRouterState state, Logger logger) {
   // final l10n = AppLocalizations.of(context)!;
-  print('GoRouter navigation error: ${state.error}'); // Use simple print for now
+  logger.e('GoRouter navigation error: ${state.error}'); // Use logger instead of print
 
   return Scaffold(
     appBar: AppBar(

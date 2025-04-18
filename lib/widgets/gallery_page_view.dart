@@ -9,31 +9,41 @@ import 'package:logger/logger.dart'; // Import logger
 import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
 import '../models/journey_image_info.dart'; // Add import for the model
 import 'package:http/http.dart' as http; // Add http import for http.get
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add import for AppLocalizations
+import '../providers/gallery_detail_provider.dart'; // Add import for gallery detail provider
 // import 'photo_app_bar.dart'; // Remove import
 // import 'full_screen_image_viewer.dart'; // Not needed anymore
 
-class GalleryDetailView extends StatefulWidget {
-  const GalleryDetailView({
-    super.key,
-    this.initialIndex = 0,
-    required this.images,
-  })
-  // Removed redundant pageController initialization here
-  ;
-
-  final int initialIndex;
+class GalleryDetailView extends ConsumerStatefulWidget {
   final List<JourneyImageInfo> images;
+  final int initialIndex;
+  final bool showDeleteButton;
+  final bool showScanButton;
+  final Logger logger;
+  final Future<void> Function(String imageUrl) onDeleteImage;
+  final void Function(String imageUrl) onImageDeletedSuccessfully;
+
+  const GalleryDetailView({
+    Key? key,
+    required this.images,
+    required this.initialIndex,
+    this.showDeleteButton = true,
+    this.showScanButton = true,
+    required this.logger,
+    required this.onDeleteImage,
+    required this.onImageDeletedSuccessfully,
+  }) : super(key: key);
 
   @override
-  State<StatefulWidget> createState() {
-    return _GalleryDetailViewState(); // Rename State class reference
-  }
+  ConsumerState<GalleryDetailView> createState() => _GalleryDetailViewState();
 }
 
-class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State class
+class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> { // Rename State class
   late PageController pageController;
   late int currentIndex;
   bool _isDeleting = false; // Track deletion state
+  bool showAppBar = true;
 
   // --- State for Signed URLs ---
   List<String?> _signedUrls = []; // Store signed URLs (nullable for errors)
@@ -246,182 +256,134 @@ class _GalleryDetailViewState extends State<GalleryDetailView> { // Rename State
 
   @override
   Widget build(BuildContext context) {
-    // Access l10n for title localization
-    final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context); // Access theme for styling
-
-    // Get the current image info based on the page index
-    // Ensure index is within bounds, handle potential empty list
-    final JourneyImageInfo? currentImageInfo =
-        widget.images.isNotEmpty && currentIndex < widget.images.length
-            ? widget.images[currentIndex]
-            : null;
-
-    // Check if signedUrls is empty before building Scaffold content
-    // This prevents errors if all images are deleted while viewing
-    if (_signedUrls.isEmpty) {
-      // Optionally return a different scaffold or an empty container
-      // Or, if the pop logic handles this, it might be okay, but safer to check.
-      widget.logger.w('GalleryPageView build called with empty _signedUrls. Returning empty Scaffold.');
-      return Scaffold(
-        // Change background and text color for empty state
-        backgroundColor: theme.colorScheme.surface, // Use theme background
-        appBar: AppBar(title: const Text('Gallery')), // Simple AppBar
-        body: Center(
-          child: Text(
-            'No images left.', 
-            style: TextStyle(color: theme.colorScheme.onSurface) // Use theme text color
-          ),
-        ),
-      );
-    }
+    // Initialize these at the beginning of build to avoid multiple lookups
+    final l10n = AppLocalizations.of(context);
+    final theme = Theme.of(context);
     
-    // Ensure currentIndex is valid for the potentially reduced _signedUrls list
-    final safeCurrentIndex = currentIndex.clamp(0, _signedUrls.length - 1);
+    // Get current index as a reactive value
+    final currentImageIndex = pageController.page?.round() ?? widget.initialIndex;
+    final currentImage = currentImageIndex >= 0 && currentImageIndex < widget.images.length 
+        ? widget.images[currentImageIndex] 
+        : null;
 
     return Scaffold(
-      // Change Scaffold background
-      backgroundColor: theme.colorScheme.surface, // Use theme background 
       appBar: AppBar(
-        backgroundColor: theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface, 
-        foregroundColor: theme.appBarTheme.foregroundColor ?? theme.colorScheme.onSurface,
-        elevation: 0, 
-        // Explicitly remove any border shape
-        shape: const Border(), 
-        title: Text(l10n.galleryDetailTitle(safeCurrentIndex + 1, widget.images.length), style: theme.textTheme.titleMedium),
-        centerTitle: true,
-        // Use AppBar specific icon theme or fallback
-        iconTheme: theme.appBarTheme.iconTheme ?? theme.iconTheme, 
+        backgroundColor: Colors.black,
+        iconTheme: const IconThemeData(color: Colors.white),
         actions: [
-          // Add Download Button
-          if (currentImageInfo != null)
+          if (currentImage != null && widget.onDeleteImage != null)
             IconButton(
-              icon: const Icon(Icons.download),
-              onPressed: () async {
-                 // Placeholder for download logic
-                 ScaffoldMessenger.of(context).showSnackBar(
-                   SnackBar(content: Text(l10n.downloadingImage)),
-                 );
-                 try {
-                   // Simulate download
-                   await Future.delayed(const Duration(seconds: 1)); 
-                   // Replace with actual download logic using image_downloader or similar
-                   print('Download requested for: ${currentImageInfo.url}');
-                   ScaffoldMessenger.of(context).showSnackBar(
-                     SnackBar(content: Text(l10n.downloadComplete)),
-                   );
-                 } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                     SnackBar(content: Text(l10n.downloadFailed)),
-                   );
-                 }
-              },
+              icon: const Icon(Icons.delete),
+              onPressed: () => _handleDelete(),
+              tooltip: l10n?.deleteImage ?? 'Delete image',
             ),
         ],
       ),
-      body: _isLoadingSignedUrls
-        ? const Center(child: CircularProgressIndicator())
-        : _signedUrlError != null && _signedUrls.every((url) => url == null)
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  // Error text color (red) should be fine on white
-                  child: Text(_signedUrlError!, style: const TextStyle(color: Colors.red)),
-                ),
-              )
-            : PhotoViewGallery.builder(
-                scrollPhysics: const BouncingScrollPhysics(),
-                builder: (BuildContext context, int index) {
-                   if (index >= widget.images.length) {
-                     // Handle potential index out of bounds error gracefully
-                     return const Center(child: Text("Error: Image not found"));
-                   }
-                   final imageInfo = widget.images[index];
-                   final imageUrl = imageInfo.url;
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          PhotoViewGallery.builder(
+            scrollPhysics: const BouncingScrollPhysics(),
+            builder: (BuildContext context, int index) {
+              if (index < 0 || index >= widget.images.length) {
+                // Return placeholder for invalid indices
+                widget.logger.w('Invalid index $index requested in PhotoViewGallery');
+                return PhotoViewGalleryPageOptions(
+                  imageProvider: const AssetImage('assets/images/image_error.png'),
+                  errorBuilder: (context, error, stackTrace) {
+                    widget.logger.e('Error loading image: $error');
+                    return const Center(
+                      child: Icon(Icons.error_outline, color: Colors.red, size: 42),
+                    );
+                  },
+                  minScale: PhotoViewComputedScale.contained,
+                  maxScale: PhotoViewComputedScale.covered * 2,
+                );
+              }
 
-                   // Determine if the overlay should be shown
-                   final bool showOverlay =
-                       imageInfo.hasPotentialText == true ||
-                       (imageInfo.detectedText != null && imageInfo.detectedText!.isNotEmpty);
-
-                  return PhotoViewGalleryPageOptions(
-                    imageProvider: imageUrl != null
-                        ? CachedNetworkImageProvider(_signedUrls[index]!)
-                        : imageInfo.localPath != null
-                            ? FileImage(File(imageInfo.localPath!)) // Use FileImage for local paths
-                            : const AssetImage('assets/placeholder.png') as ImageProvider, // Fallback placeholder
-                    initialScale: PhotoViewComputedScale.contained,
-                    heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id ?? "image_$index"), // Use image ID or index as tag
-                    minScale: PhotoViewComputedScale.contained * 0.8,
-                    maxScale: PhotoViewComputedScale.covered * 2,
-                    // Wrap with Stack to potentially add overlay
-                    child: Stack(
+              final imageInfo = widget.images[index];
+              final signedUrl = _signedUrls[index];
+              
+              // Determine if the overlay should be shown
+              final bool showOverlay =
+                  imageInfo.hasPotentialText == true ||
+                  (imageInfo.detectedText != null && imageInfo.detectedText!.isNotEmpty);
+              
+              return PhotoViewGalleryPageOptions(
+                imageProvider: CachedNetworkImageProvider(signedUrl!),
+                errorBuilder: (context, error, stackTrace) {
+                  widget.logger.e('Error loading image ${imageInfo.id}: $error');
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                         // The actual image is implicitly handled by PhotoViewGalleryPageOptions
-                         // Add the overlay conditionally
-                         if (showOverlay)
-                           Positioned.fill(
-                             child: Container(
-                               decoration: BoxDecoration(
-                                 shape: BoxShape.circle,
-                                 color: Colors.white.withOpacity(0.7), // Semi-transparent white circle
-                               ),
-                               child: const Icon(
-                                 Icons.check_circle,
-                                 color: Colors.green,
-                                 size: 50.0, // Adjust size as needed
-                               ),
-                             ),
-                           ),
+                        const Icon(Icons.error_outline, color: Colors.red, size: 42),
+                        const SizedBox(height: 16),
+                        Text(
+                          l10n?.imageLoadError ?? 'Could not load image',
+                          style: theme.textTheme.bodyMedium?.copyWith(color: Colors.red),
+                        ),
                       ],
                     ),
                   );
                 },
-                itemCount: widget.images.length,
-                loadingBuilder: (context, event) => Center(
-                  child: SizedBox(
-                    width: 20.0,
-                    height: 20.0,
-                    child: CircularProgressIndicator(
-                      value: event == null
-                          ? 0
-                          : event.cumulativeBytesLoaded / (event.expectedTotalBytes ?? 1),
-                    ),
-                  ),
+                minScale: PhotoViewComputedScale.contained,
+                maxScale: PhotoViewComputedScale.covered * 2,
+                heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id),
+              );
+            },
+            itemCount: widget.images.length,
+            loadingBuilder: (BuildContext context, ImageChunkEvent? event) {
+              final double progress = event != null && event.expectedTotalBytes != null
+                  ? event.cumulativeBytesLoaded / event.expectedTotalBytes!
+                  : 0;
+              
+              return Center(
+                child: CircularProgressIndicator(
+                  value: progress > 0 ? progress : null,
                 ),
-                pageController: pageController,
-                onPageChanged: onPageChanged,
-                backgroundDecoration: BoxDecoration(
-                  color: theme.canvasColor, // Use theme background color
+              );
+            },
+            pageController: pageController,
+            onPageChanged: onPageChanged,
+            backgroundDecoration: BoxDecoration(
+              color: theme.canvasColor, // Use theme background color
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              color: theme.bottomAppBarTheme.color ?? theme.colorScheme.surface,
+              padding: const EdgeInsets.symmetric(horizontal: 8.0), 
+              child: SafeArea( 
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween, 
+                  children: [
+                    // --- Add Scan Button --- 
+                    _isScanning
+                      ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0)))
+                      : IconButton(
+                          icon: const Icon(Icons.document_scanner_outlined),
+                          tooltip: 'Scan for Text', // TODO: Localize
+                          onPressed: _handleScan,
+                        ),
+                    // --- Keep Delete Button --- 
+                    _isDeleting 
+                      ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0))) 
+                      : IconButton(
+                          icon: Icon(Icons.delete_outline, color: theme.colorScheme.error), 
+                          tooltip: 'Delete Image', 
+                          onPressed: _handleDelete,
+                        ),
+                  ],
                 ),
-              ),
-      bottomNavigationBar: Container(
-            color: theme.bottomAppBarTheme.color ?? theme.colorScheme.surface,
-            padding: const EdgeInsets.symmetric(horizontal: 8.0), 
-            child: SafeArea( 
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween, 
-                children: [
-                  // --- Add Scan Button --- 
-                  _isScanning
-                    ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0)))
-                    : IconButton(
-                        icon: const Icon(Icons.document_scanner_outlined),
-                        tooltip: 'Scan for Text', // TODO: Localize
-                        onPressed: _handleScan,
-                      ),
-                  // --- Keep Delete Button --- 
-                  _isDeleting 
-                    ? const SizedBox(width: 48, height: 48, child: Center(child: CircularProgressIndicator(strokeWidth: 2.0))) 
-                    : IconButton(
-                        icon: Icon(Icons.delete_outline, color: theme.colorScheme.error), 
-                        tooltip: 'Delete Image', 
-                        onPressed: _handleDelete,
-                      ),
-                ],
               ),
             ),
           ),
+        ],
+      ),
     );
   }
 } 

@@ -6,12 +6,12 @@ final InputDecorationTheme antonettiInputDecorationTheme = InputDecorationTheme(
   // Default border
   border: OutlineInputBorder(
     borderRadius: const BorderRadius.all(Radius.circular(8)),
-    borderSide: BorderSide(color: antonettiColorScheme.outline.withOpacity(0.5)), // Use outline color with opacity
+    borderSide: BorderSide(color: antonettiColorScheme.outline.withOpacity(0.5)), // Use withOpacity correctly
   ),
   // Border when the field is enabled (optional, often same as default)
   enabledBorder: OutlineInputBorder(
     borderRadius: const BorderRadius.all(Radius.circular(8)),
-    borderSide: BorderSide(color: antonettiColorScheme.outline.withOpacity(0.5)), // Use outline color with opacity
+    borderSide: BorderSide(color: antonettiColorScheme.outline.withOpacity(0.5)), // Use withOpacity correctly
   ),
   // Border when the field has focus
   focusedBorder: OutlineInputBorder(
@@ -33,7 +33,7 @@ final InputDecorationTheme antonettiInputDecorationTheme = InputDecorationTheme(
   // Style for the label when it floats above the field (if using labels)
   labelStyle: TextStyle(color: antonettiColorScheme.onSurfaceVariant),
   // Style for the hint text inside the field
-  hintStyle: TextStyle(color: antonettiColorScheme.onSurfaceVariant.withOpacity(0.6)), // Use onSurfaceVariant with opacity
+  hintStyle: TextStyle(color: antonettiColorScheme.onSurfaceVariant.withOpacity(0.6)), // Use withOpacity correctly
   // Padding inside the field
   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
   // Background fill

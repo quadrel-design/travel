@@ -117,5 +117,14 @@
   "deleteButtonTooltip": "Delete Image",
   "@deleteButtonTooltip": {
       "description": "Tooltip for the button that deletes the current image"
+  },
+
+  "deleteImage": "Delete image",
+  "@deleteImage": {
+      "description": "Label for delete image button"
+  },
+  "imageLoadError": "Could not load image",
+  "@imageLoadError": {
+      "description": "Error message when image failed to load"
   }
 } 

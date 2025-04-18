@@ -57,7 +57,7 @@ class GalleryOverviewScreen extends ConsumerWidget {
     final repo = ref.watch(journeyRepositoryProvider);
 
     // Remove l10n usage inside helper
-    Future<bool> _showDeleteConfirmationDialog(BuildContext context) async {
+    Future<bool> showDeleteConfirmationDialog(BuildContext context) async {
       return await showDialog<bool>(
             context: context,
             builder: (BuildContext context) {
@@ -83,9 +83,9 @@ class GalleryOverviewScreen extends ConsumerWidget {
           ) ?? false;
     }
 
-    Future<void> _deleteImage(String imageUrl, String imageId) async {
+    Future<void> deleteImage(String imageUrl, String imageId) async {
       logger.d('Attempting to delete image: $imageUrl (ID: $imageId)');
-      final confirmed = await _showDeleteConfirmationDialog(context);
+      final confirmed = await showDeleteConfirmationDialog(context);
       if (!confirmed) {
         logger.d('Deletion cancelled by user.');
         return;

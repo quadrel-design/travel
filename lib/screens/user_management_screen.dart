@@ -7,10 +7,10 @@ class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
 
   @override
-  _UserManagementScreenState createState() => _UserManagementScreenState();
+  UserManagementScreenState createState() => UserManagementScreenState();
 }
 
-class _UserManagementScreenState extends State<UserManagementScreen> {
+class UserManagementScreenState extends State<UserManagementScreen> {
   bool _isLoading = true;
   List<app_user.User> _users = [];
   String? _error;
