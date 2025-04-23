@@ -9,5 +9,6 @@ class AppRoutes {
   static const appSettings = '/app-settings';
   static const String userManagement = '/user-management';
   static const String journeyGallery = '/journey-detail/gallery';
+  static const String uiAppBars = '/ui-app-bars';
   // Add other routes here as needed
 } 

@@ -51,6 +51,10 @@ final journeyImagesStreamProvider = StreamProvider.autoDispose
     .family<List<JourneyImageInfo>, String>((ref, journeyId) {
   // Get the repository
   final repository = ref.watch(journeyRepositoryProvider);
+  // Get logger
+  final logger = ref.watch(loggerProvider); 
+  // *** Log Provider Execution ***
+  logger.d('[PROVIDER] journeyImagesStreamProvider executing for journeyId: $journeyId');
   // Return the stream from the repository method
   return repository.getJourneyImagesStream(journeyId);
 });

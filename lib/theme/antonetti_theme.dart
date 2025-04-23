@@ -2,12 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 // Import component theme files
-import 'component_themes/app_bar_theme.dart';
-import 'component_themes/card_theme.dart';
-import 'component_themes/elevated_button_theme.dart';
-import 'component_themes/input_decoration_theme.dart';
-import 'component_themes/list_tile_theme.dart';
-import 'component_themes/bottom_app_bar_theme.dart';
+// import 'component_themes/app_bar_theme.dart';
+// import 'component_themes/card_theme.dart';
+// import 'component_themes/elevated_button_theme.dart';
+// import 'component_themes/input_decoration_theme.dart';
+// import 'component_themes/list_tile_theme.dart';
+// import 'component_themes/app_footer_bar_theme.dart'; // Removed import
+// Import new component theme files
+// Remove import for circular_action_button_theme.dart
+// import 'component_themes/circular_action_button_theme.dart';
+// Remove import for deleted theme
+// import 'component_themes/grouped_circular_action_button_theme.dart';
+// Remove import for deleted theme
+// import 'component_themes/invoice_bottom_bar_theme.dart';
+// Explicitly comment out this import again
+// import 'component_themes/invoice_ocr_summary_theme.dart';
+// Explicitly comment out this import again
+// import 'component_themes/invoice_image_process_summary_theme.dart';
 
 // --- Color Scheme Definition ---
 const ColorScheme antonettiColorScheme = ColorScheme(
@@ -28,16 +39,18 @@ const ColorScheme antonettiColorScheme = ColorScheme(
   surfaceContainerHighest: Color(0xFFDAE5E5),
   outline: Color(0xFF6F7979),
   onSurfaceVariant: Color(0xFF3F4949),
-  outlineVariant: Color(0xFFE0E0E0),
+  outlineVariant: Color(0xFFE0E0E0), // Used for button backgrounds
 );
 
 // --- Text Theme Definition ---
 // Start with default Material text theme and apply Inter font
 final TextTheme defaultTextTheme = ThemeData.light().textTheme;
-final TextTheme antonettiTextTheme = GoogleFonts.interTextTheme(defaultTextTheme).copyWith(
+final TextTheme antonettiTextTheme =
+    GoogleFonts.interTextTheme(defaultTextTheme).copyWith(
   // Optionally override specific styles further
   bodyMedium: GoogleFonts.inter(fontSize: 14), // Example: ensure specific size
-  labelLarge: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.bold), // Example: Button text
+  labelLarge: GoogleFonts.inter(
+      fontSize: 14, fontWeight: FontWeight.bold), // Example: Button text
 );
 
 // --- Main ThemeData Definition ---
@@ -45,15 +58,25 @@ final ThemeData antonettiTheme = ThemeData(
   useMaterial3: true, // Recommended for new apps
   colorScheme: antonettiColorScheme,
   textTheme: antonettiTextTheme,
-  scaffoldBackgroundColor: antonettiColorScheme.surface, // Use surface for main background
+  scaffoldBackgroundColor:
+      antonettiColorScheme.surface, // Use surface for main background
   // Use imported component themes
-  elevatedButtonTheme: antonettiElevatedButtonTheme,
-  cardTheme: antonettiCardTheme,
-  inputDecorationTheme: antonettiInputDecorationTheme,
-  appBarTheme: antonettiAppBarTheme,
-  listTileTheme: antonettiListTileTheme,
-  bottomAppBarTheme: antonettiBottomAppBarTheme,
+  // elevatedButtonTheme: antonettiElevatedButtonTheme,
+  // bottomAppBarTheme: antonettiFooterBarTheme, // Removed usage
   // Apply font globally as well
   fontFamily: GoogleFonts.inter().fontFamily,
+  // --- Register Theme Extensions ---
+  extensions: const <ThemeExtension<dynamic>>[
+    // Remove extension for circular_action_button_theme.dart
+    // antonettiCircularActionButtonTheme,
+    // Remove extension for deleted theme
+    // antonettiGroupedCircularActionButtonTheme,
+    // Remove extension for deleted theme
+    // antonettiInvoiceBottomBarTheme,
+    // Remove extension for deleted theme
+    // antonettiInvoiceOcrSummaryTheme,
+    // Remove extension for deleted theme again
+    // antonettiInvoiceImageProcessSummaryTheme,
+  ],
   // Customize other component themes as needed (TextButton, OutlinedButton, etc.)
-); 
+);

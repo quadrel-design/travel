@@ -6,6 +6,7 @@ import 'package:equatable/equatable.dart';
 class JourneyImageInfo extends Equatable {
   final String id;
   final String url;
+  final String imagePath;
   final bool? hasPotentialText;
   final String? detectedText;
   final bool isInvoiceGuess;
@@ -18,6 +19,7 @@ class JourneyImageInfo extends Equatable {
   const JourneyImageInfo({
     required this.id,
     required this.url,
+    required this.imagePath,
     this.hasPotentialText,
     this.detectedText,
     this.isInvoiceGuess = false,
@@ -31,13 +33,14 @@ class JourneyImageInfo extends Equatable {
     try {
       // Comment out debug print statements
       // print('JourneyImageInfo.fromJson called with: $json');
-      
+
       return JourneyImageInfo(
         id: json['id'] as String,
         url: json['url'] as String,
+        imagePath: json['image_path'] as String? ?? '',
         lastProcessedAt: json['last_processed_at'] != null
-          ? DateTime.parse(json['last_processed_at'] as String)
-          : null,
+            ? DateTime.parse(json['last_processed_at'] as String)
+            : null,
         detectedText: json['detected_text'] as String?,
         detectedTotalAmount: json['detected_total_amount'] != null
             ? double.parse(json['detected_total_amount'].toString())
@@ -57,14 +60,15 @@ class JourneyImageInfo extends Equatable {
     // Comment out debug print
     // print('JourneyImageInfo.fromMap: $map');
     return JourneyImageInfo(
-      id: map['id'] as String,
-      url: map['url'] as String,
+      id: map['id'] as String? ?? '',
+      url: map['image_url'] as String? ?? '',
+      imagePath: map['image_path'] as String? ?? '',
       lastProcessedAt: map['last_processed_at'] != null
-          ? DateTime.parse(map['last_processed_at'] as String)
+          ? DateTime.tryParse(map['last_processed_at'] as String? ?? '')
           : null,
       detectedText: map['detected_text'] as String?,
-      detectedTotalAmount: map['detected_total_amount'] != null 
-          ? double.parse(map['detected_total_amount'].toString())
+      detectedTotalAmount: map['detected_total_amount'] != null
+          ? double.tryParse(map['detected_total_amount'].toString())
           : null,
       detectedCurrency: map['detected_currency'] as String?,
       hasPotentialText: map['has_potential_text'] as bool?,
@@ -74,6 +78,7 @@ class JourneyImageInfo extends Equatable {
   JourneyImageInfo copyWith({
     String? id,
     String? url,
+    String? imagePath,
     bool? hasPotentialText,
     String? detectedText,
     bool? isInvoiceGuess,
@@ -90,12 +95,22 @@ class JourneyImageInfo extends Equatable {
     return JourneyImageInfo(
       id: id ?? this.id,
       url: url ?? this.url,
-      hasPotentialText: setHasPotentialTextNull ? null : hasPotentialText ?? this.hasPotentialText,
-      detectedText: setDetectedTextNull ? null : detectedText ?? this.detectedText,
+      imagePath: imagePath ?? this.imagePath,
+      hasPotentialText: setHasPotentialTextNull
+          ? null
+          : hasPotentialText ?? this.hasPotentialText,
+      detectedText:
+          setDetectedTextNull ? null : detectedText ?? this.detectedText,
       isInvoiceGuess: isInvoiceGuess ?? this.isInvoiceGuess,
-      detectedTotalAmount: setDetectedTotalAmountNull ? null : detectedTotalAmount ?? this.detectedTotalAmount,
-      detectedCurrency: setDetectedCurrencyNull ? null : detectedCurrency ?? this.detectedCurrency,
-      lastProcessedAt: setLastProcessedAtNull ? null : lastProcessedAt ?? this.lastProcessedAt,
+      detectedTotalAmount: setDetectedTotalAmountNull
+          ? null
+          : detectedTotalAmount ?? this.detectedTotalAmount,
+      detectedCurrency: setDetectedCurrencyNull
+          ? null
+          : detectedCurrency ?? this.detectedCurrency,
+      lastProcessedAt: setLastProcessedAtNull
+          ? null
+          : lastProcessedAt ?? this.lastProcessedAt,
       localPath: localPath ?? this.localPath,
     );
   }
@@ -104,6 +119,7 @@ class JourneyImageInfo extends Equatable {
   List<Object?> get props => [
         id,
         url,
+        imagePath,
         hasPotentialText,
         detectedText,
         isInvoiceGuess,
@@ -112,4 +128,4 @@ class JourneyImageInfo extends Equatable {
         lastProcessedAt,
         localPath,
       ];
-} 
+}

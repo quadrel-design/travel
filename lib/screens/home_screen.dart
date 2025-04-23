@@ -4,13 +4,12 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:travel/models/journey.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:travel/widgets/app_title.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
 import 'package:travel/repositories/journey_repository.dart'; // Add import
 import 'package:travel/repositories/auth_repository.dart'; // Add import
 
-// --- State Management using StateNotifierProvider --- 
+// --- State Management using StateNotifierProvider ---
 
 // Define the state for the HomeScreen
 @immutable
@@ -44,7 +43,7 @@ class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
   final JourneyRepository _journeyRepository;
   final AuthRepository _authRepository;
 
-  HomeScreenNotifier(this._journeyRepository, this._authRepository) 
+  HomeScreenNotifier(this._journeyRepository, this._authRepository)
       : super(const HomeScreenState()) {
     loadJourneys(); // Load journeys on initialization
   }
@@ -60,13 +59,15 @@ class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
       if (!mounted) return;
       state = state.copyWith(journeys: loadedJourneys, isLoading: false);
     } catch (e) {
-      state = state.copyWith(error: 'Failed to load journeys', isLoading: false);
+      state =
+          state.copyWith(error: 'Failed to load journeys', isLoading: false);
     }
   }
 }
 
 // Create the Provider
-final homeScreenProvider = StateNotifierProvider<HomeScreenNotifier, HomeScreenState>((ref) {
+final homeScreenProvider =
+    StateNotifierProvider<HomeScreenNotifier, HomeScreenState>((ref) {
   final journeyRepo = ref.watch(journeyRepositoryProvider);
   final authRepo = ref.watch(authRepositoryProvider);
   return HomeScreenNotifier(journeyRepo, authRepo);
@@ -74,12 +75,9 @@ final homeScreenProvider = StateNotifierProvider<HomeScreenNotifier, HomeScreenS
 
 // --- End State Management Setup ---
 
-
 // Change to ConsumerStatefulWidget
 class HomeScreen extends ConsumerStatefulWidget {
-  final String title; // Keep title if passed via routing
-
-  const HomeScreen({super.key, required this.title});
+  const HomeScreen({super.key});
 
   @override
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
@@ -87,38 +85,21 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 // Change to ConsumerState
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  // Remove local state variables managed by Riverpod
-  // bool _isLoading = true;
-  // String? _error;
-  // List<Journey> _journeys = [];
-  
-  // Remove repository instances, access via ref
-  // final JourneyRepository _journeyRepository = JourneyRepository();
-  // final AuthRepository _authRepository = AuthRepository();
-
   final _dateFormat = DateFormat('dd/MM/yyyy');
 
   @override
   void initState() {
     super.initState();
-    // Initial load triggered by provider initialization
-    // Optional: Trigger refresh here if needed on screen init
-    // WidgetsBinding.instance.addPostFrameCallback((_) { 
-    //   ref.read(homeScreenProvider.notifier).loadJourneys();
-    // });
   }
-
-  // Remove _loadJourneys function - logic moved to Notifier
-  // Future<void> _loadJourneys() async { ... }
 
   void _goToCreateJourney() {
     context.push(AppRoutes.createJourney).then((_) {
-       ref.read(homeScreenProvider.notifier).loadJourneys(); 
+      ref.read(homeScreenProvider.notifier).loadJourneys();
     });
   }
-  
+
   void _refreshJourneys() {
-     ref.read(homeScreenProvider.notifier).loadJourneys();
+    ref.read(homeScreenProvider.notifier).loadJourneys();
   }
 
   @override
@@ -126,7 +107,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final screenState = ref.watch(homeScreenProvider);
     final journeys = screenState.journeys;
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context); // Get Material theme
+    final theme = Theme.of(context); // Get theme for error color
 
     Widget bodyContent;
     if (screenState.isLoading) {
@@ -136,13 +117,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(screenState.error!, style: TextStyle(color: theme.colorScheme.error)),
+            Text(screenState.error!,
+                style: TextStyle(color: theme.colorScheme.error)),
             const SizedBox(height: 10),
-            // Use Material Button (styling from theme)
-            ElevatedButton( 
-              onPressed: _refreshJourneys,
-              child: Text(l10n.homeScreenRetryButton)
-            )
+            ElevatedButton(
+                onPressed: _refreshJourneys,
+                child: Text(l10n.homeScreenRetryButton))
           ],
         ),
       );
@@ -150,25 +130,22 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       bodyContent = Center(child: Text(l10n.homeScreenNoJourneys));
     } else {
       bodyContent = ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8), 
+        padding: const EdgeInsets.symmetric(vertical: 8),
         itemCount: journeys.length,
         itemBuilder: (context, index) {
           final journey = journeys[index];
-          final dateRange = '${_dateFormat.format(journey.startDate)} - ${_dateFormat.format(journey.endDate)}';
+          final dateRange =
+              '${_dateFormat.format(journey.startDate)} - ${_dateFormat.format(journey.endDate)}';
           final subtitleText = '${journey.description}\n$dateRange';
 
-          return Card( 
-            // Styling (elevation, shape, margin, color) comes from antonettiCardTheme
-            child: ListTile( 
-              // Styling (padding, density, text) comes from antonettiListTileTheme & textTheme
-              title: Text(journey.title), 
-              subtitle: Text(subtitleText, style: theme.textTheme.bodySmall),
+          return Card(
+            child: ListTile(
+              title: Text(journey.title),
+              subtitle: Text(subtitleText),
               isThreeLine: true,
               onTap: () {
-                // Navigate to the detail screen, passing the Journey object
-                // context.push(AppRoutes.journeyDetail, extra: journey);
-                // --- CORRECTED NAVIGATION --- 
-                context.push('${AppRoutes.journeyDetail}/${journey.id}', extra: journey);
+                context.push('${AppRoutes.journeyDetail}/${journey.id}',
+                    extra: journey);
               },
             ),
           );
@@ -178,22 +155,21 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const AppTitle(), 
+        title: Text(l10n.yourJourneysTitle),
         actions: [
-          // Replace ShadButton with IconButton
           IconButton(
-            icon: const Icon(Icons.settings_outlined), // Material icon
-            tooltip: 'App Settings', // TODO: Localize
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'App Settings',
             onPressed: () => context.push(AppRoutes.appSettings),
           ),
         ],
       ),
       body: bodyContent,
       floatingActionButton: FloatingActionButton(
-         onPressed: _goToCreateJourney,
-         tooltip: l10n.homeScreenAddJourneyTooltip,
-         child: const Icon(Icons.add), 
-       ),
+        onPressed: _goToCreateJourney,
+        tooltip: l10n.homeScreenAddJourneyTooltip,
+        child: const Icon(Icons.add),
+      ),
     );
   }
 }

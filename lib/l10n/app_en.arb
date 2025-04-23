@@ -19,10 +19,10 @@
   "emailRegisteredDesc": "This email is already registered. Please sign in instead.",
   "emailNotConfirmedDesc": "Please confirm your email before signing in.",
   "invalidLoginCredentialsDesc": "Incorrect email or password.",
-  
+
   "signUpSuccessTitle": "Sign Up Successful",
   "signUpSuccessDesc": "Please check your email to confirm.",
-  
+
   "verificationErrorTitle": "Verification Error",
   "verificationErrorDesc": "Could not verify email. Please try again.",
 
@@ -86,16 +86,54 @@
 
   "detailScreenErrorMissingData": "Error: Journey data missing",
 
+  "journeyDetailInfoLabel": "Info",
+  "@journeyDetailInfoLabel": { "description": "Label for the Info tab in journey details" },
+  "journeyDetailExpensesLabel": "Expenses",
+  "@journeyDetailExpensesLabel": { "description": "Label for the Expenses tab in journey details" },
+  "journeyDetailParticipantsLabel": "Participants",
+  "@journeyDetailParticipantsLabel": { "description": "Label for the Participants tab in journey details" },
+  "journeyDetailImagesLabel": "Images",
+  "@journeyDetailImagesLabel": { "description": "Label for the Images tab in journey details" },
+
+  "galleryTitle": "Gallery",
+  "@galleryTitle": { "description": "Title for the image gallery page" },
+  "galleryEmptyState": "No images in gallery.",
+  "@galleryEmptyState": { "description": "Message shown when the gallery has no images" },
+  "galleryImageCount": "{index} of {total}",
+  "@galleryImageCount": {
+    "description": "Title showing the current image index and total count in the gallery page view",
+    "placeholders": {
+      "index": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
+  "galleryImageErrorLoading": "Could not load image",
+  "@galleryImageErrorLoading": { "description": "Error message when a gallery image fails to load" },
+  "galleryScanInProgressError": "Scan already in progress or image already scanned.",
+  "@galleryScanInProgressError": { "description": "Error shown if user tries to scan while another scan is running or if it's already done." },
+  "galleryScanInitiatedSnackbar": "Scan initiated...",
+  "@galleryScanInitiatedSnackbar": { "description": "Snackbar message indicating the image scan has started." },
+  "galleryScanErrorSnackbar": "Scan failed: {error}",
+  "@galleryScanErrorSnackbar": {
+    "description": "Snackbar message indicating the image scan failed.",
+    "placeholders": { "error": { "type": "String" } }
+  },
+
+  "deleteImageConfirmTitle": "Delete Image?",
+  "@deleteImageConfirmTitle": { "description": "Title for the image deletion confirmation dialog" },
+  "deleteImageConfirmDesc": "Are you sure you want to delete this image?",
+  "@deleteImageConfirmDesc": { "description": "Content text for the image deletion confirmation dialog" },
+  "imageDeleteSuccessSnackbar": "Image deleted successfully.",
+  "@imageDeleteSuccessSnackbar": { "description": "Snackbar message shown after successful image deletion" },
+  "imageDeleteErrorSnackbar": "Failed to delete image.",
+  "@imageDeleteErrorSnackbar": { "description": "Snackbar message shown after failed image deletion" },
+
   "galleryDetailTitle": "Image {index} of {total}",
   "@galleryDetailTitle": {
       "description": "Title for the image detail view showing current index and total count",
       "placeholders": {
-          "index": {
-              "type": "int"
-          },
-          "total": {
-              "type": "int"
-          }
+          "index": { "type": "int" },
+          "total": { "type": "int" }
       }
   },
   "downloadingImage": "Downloading image...",
@@ -118,7 +156,6 @@
   "@deleteButtonTooltip": {
       "description": "Tooltip for the button that deletes the current image"
   },
-
   "deleteImage": "Delete image",
   "@deleteImage": {
       "description": "Label for delete image button"
@@ -126,5 +163,144 @@
   "imageLoadError": "Could not load image",
   "@imageLoadError": {
       "description": "Error message when image failed to load"
-  }
-} 
+  },
+
+  "imageStatusNotScanned": "Not Scanned",
+  "@imageStatusNotScanned": { "description": "Status label for an image that hasn't been scanned for text yet" },
+  "imageStatusNoText": "No Text",
+  "@imageStatusNoText": { "description": "Status label for an image processed but no text was found" },
+  "imageStatusScanned": "Scanned",
+  "@imageStatusScanned": { "description": "Status label for an image successfully scanned (may or may not be invoice)" },
+  "imageStatusNoInvoice": "Not Invoice",
+  "@imageStatusNoInvoice": { "description": "Status label for an image scanned, text found, but deemed not an invoice" },
+  "imageStatusError": "Scan Error",
+  "@imageStatusError": { "description": "Status label for an image where the scanning process resulted in an error" },
+
+  "groupedButtonInfoTooltip": "View Info",
+  "@groupedButtonInfoTooltip": { "description": "Tooltip for the info button in the grouped actions" },
+  "groupedButtonRemoveFavoriteTooltip": "Remove from Favorites",
+  "@groupedButtonRemoveFavoriteTooltip": { "description": "Tooltip for the favorite button (when active) in the grouped actions" },
+  "groupedButtonAddFavoriteTooltip": "Add to Favorites",
+  "@groupedButtonAddFavoriteTooltip": { "description": "Tooltip for the favorite button (when inactive) in the grouped actions" },
+  "groupedButtonOptionsTooltip": "View Options",
+  "@groupedButtonOptionsTooltip": { "description": "Tooltip for the options/list/tune button in the grouped actions" },
+  "addImageFromGalleryTooltip": "Add image from gallery",
+  "@addImageFromGalleryTooltip": { "description": "Tooltip for the FAB to add an image from the device gallery" },
+
+  "appName": "TravelMouse",
+  "@appName": {
+    "description": "The name of the application"
+  },
+  "emailLabel": "Email",
+  "@emailLabel": {
+    "description": "Label for the email input field"
+  },
+  "emailHint": "Enter your email address",
+  "@emailHint": {
+    "description": "Hint text for the email input field"
+  },
+  "emailValidationError": "Please enter a valid email address.",
+  "@emailValidationError": {
+    "description": "Error message for invalid email format"
+  },
+  "passwordLabel": "Password",
+  "@passwordLabel": {
+    "description": "Label for the password input field"
+  },
+  "passwordHint": "Enter your password",
+  "@passwordHint": {
+    "description": "Hint text for the password input field"
+  },
+  "passwordValidationError": "Password must be at least 6 characters long.",
+  "@passwordValidationError": {
+    "description": "Error message for invalid password length"
+  },
+  "signInButton": "Sign In",
+  "@signInButton": {
+    "description": "Text for the sign in button"
+  },
+  "signUpButton": "Sign Up",
+  "@signUpButton": {
+    "description": "Text for the sign up button"
+  },
+  "signInPrompt": "Already have an account? Sign In",
+  "@signInPrompt": {
+    "description": "Prompt text to switch to sign in mode"
+  },
+  "signUpPrompt": "Don't have an account? Sign Up",
+  "@signUpPrompt": {
+    "description": "Prompt text to switch to sign up mode"
+  },
+  "forgotPasswordButton": "Forgot Password?",
+  "@forgotPasswordButton": {
+    "description": "Text for the forgot password button"
+  },
+  "yourJourneysTitle": "Your Journeys",
+  "@yourJourneysTitle": {
+    "description": "Title for the home screen displaying the list of journeys"
+  },
+
+  "journeySettingsTitle": "Journey Settings",
+  "@journeySettingsTitle": {
+    "description": "Title for the journey settings screen"
+  },
+  "journeyDeleteLabel": "Delete Journey",
+  "@journeyDeleteLabel": {
+    "description": "Label for the delete journey action"
+  },
+  "journeyDeleteConfirmTitle": "Confirm Deletion",
+  "@journeyDeleteConfirmTitle": {
+    "description": "Title for the delete confirmation dialog"
+  },
+  "journeyDeleteConfirmDesc": "Are you sure you want to delete the journey '{journeyTitle}'? This action cannot be undone.",
+  "@journeyDeleteConfirmDesc": {
+    "description": "Confirmation message asking the user to confirm journey deletion.",
+    "placeholders": {
+      "journeyTitle": {
+        "type": "String",
+        "example": "Trip to Paris"
+      }
+    }
+  },
+  "cancelButton": "Cancel",
+  "@cancelButton": {
+    "description": "Generic cancel button text"
+  },
+  "deleteButton": "Delete",
+  "@deleteButton": {
+    "description": "Generic delete button text"
+  },
+  "journeyDeleteSuccess": "Journey '{journeyTitle}' deleted successfully.",
+  "@journeyDeleteSuccess": {
+    "description": "Success message shown after deleting a journey.",
+    "placeholders": {
+      "journeyTitle": {
+        "type": "String",
+        "example": "Trip to Paris"
+      }
+    }
+  },
+  "deletingProgress": "Deleting...",
+  "@deletingProgress": {
+    "description": "Text indicating deletion is in progress"
+  },
+
+  "cancelButtonLabel": "Cancel",
+  "@cancelButtonLabel": { "description": "Generic Cancel button label (alternative)" },
+  "deleteButtonLabel": "Delete" ,
+  "@deleteButtonLabel": { "description": "Generic Delete button label (alternative)" },
+
+  "invoiceTotalLabel": "Total",
+  "@invoiceTotalLabel": { "description": "Label for the total amount in the invoice summary bar" },
+  "invoicePaidLabel": "Paid",
+  "@invoicePaidLabel": { "description": "Label for the paid amount in the invoice summary bar" },
+  "invoiceRemainingLabel": "Remaining",
+  "@invoiceRemainingLabel": { "description": "Label for the remaining amount in the invoice summary bar" },
+
+  "invoiceShareTooltip": "Share Invoice",
+  "@invoiceShareTooltip": { "description": "Tooltip for the share button on the invoice bottom bar" },
+  "invoiceScanTooltip": "Scan Text",
+  "@invoiceScanTooltip": { "description": "Tooltip for the scan button on the invoice bottom bar" },
+  "invoiceDeleteTooltip": "Delete Invoice",
+  "@invoiceDeleteTooltip": { "description": "Tooltip for the delete button on the invoice bottom bar" }
+}

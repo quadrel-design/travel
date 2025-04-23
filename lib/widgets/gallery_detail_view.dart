@@ -13,6 +13,7 @@ import 'package:http/http.dart' as http; // Add http import for http.get
 // Import AppLocalizations
 import '../providers/gallery_detail_provider.dart'; // Import the new provider
 import 'package:intl/intl.dart'; // Add intl import
+import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import AppLocalizations
 
 // Change to ConsumerStatefulWidget
 class GalleryDetailView extends ConsumerStatefulWidget {
@@ -64,40 +65,49 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
 
   Future<void> _handleScan(String imageId, String? imageUrl) async {
     if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!; // Get l10n instance
 
     // Check if another scan is already in progress globally for this view
-    if (ref.read(galleryDetailProvider(widget.images)).scanningImageId != null) {
-      widget.logger.w('Another scan is already in progress, ignoring request for $imageId');
+    if (ref.read(galleryDetailProvider(widget.images)).scanningImageId !=
+        null) {
+      widget.logger.w(
+          'Another scan is already in progress, ignoring request for $imageId');
       // Optionally show a snackbar
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Another scan is already running.')) // TODO: Localize
-      );
+          SnackBar(content: Text(l10n.galleryScanInProgressError)) // Use l10n
+          );
       return;
     }
 
     widget.logger.i('Initiating scan for image ID: $imageId');
 
     // Call the updated notifier method to set scanning state and clear old results
-    ref.read(galleryDetailProvider(widget.images).notifier).initiateScan(imageId);
+    ref
+        .read(galleryDetailProvider(widget.images).notifier)
+        .initiateScan(imageId);
 
     try {
       // Get the signed URL from the provider state
-      final state = ref.read(galleryDetailProvider(widget.images)); // Read state *after* initiating
+      final state = ref.read(galleryDetailProvider(
+          widget.images)); // Read state *after* initiating
       final signedUrls = state.signedUrls;
       final images = state.images; // Needed for current index check
       // Find the current index *again* in case the list changed (unlikely here, but safer)
       final currentIdx = images.indexWhere((img) => img.id == imageId);
       if (currentIdx == -1) {
-           throw Exception('Current image not found in state after initiating scan.');
+        throw Exception(
+            'Current image not found in state after initiating scan.');
       }
 
-      String? urlToDownload = imageUrl; // Fallback to public URL passed initially
+      String? urlToDownload =
+          imageUrl; // Fallback to public URL passed initially
 
       if (currentIdx < signedUrls.length && signedUrls[currentIdx] != null) {
         urlToDownload = signedUrls[currentIdx]!;
         widget.logger.d("Using signed URL for download: $urlToDownload");
       } else if (imageUrl != null) {
-        widget.logger.w("Signed URL not available or index mismatch for index $currentIdx. Falling back to initial public URL: $imageUrl");
+        widget.logger.w(
+            "Signed URL not available or index mismatch for index $currentIdx. Falling back to initial public URL: $imageUrl");
       } else {
         throw Exception('Image URL is null, cannot download.');
       }
@@ -130,21 +140,27 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
 
       if (response.status != 200) {
         final errorMsg = response.data?['error'] ?? 'Unknown error';
-        widget.logger.e('Edge function invocation failed with status ${response.status}', error: response.data);
+        widget.logger.e(
+            'Edge function invocation failed with status ${response.status}',
+            error: response.data);
         throw Exception('Failed to process image: $errorMsg');
       }
 
-      widget.logger.i('Edge function call successful for scan (ID $imageId). DB update pending via Realtime.');
+      widget.logger.i(
+          'Edge function call successful for scan (ID $imageId). DB update pending via Realtime.');
       // No need to set state here, Realtime listener or error handler clears scanningImageId
-
     } catch (e, stackTrace) {
-      widget.logger.e('Error during scan process for image ID $imageId', error: e, stackTrace: stackTrace);
+      widget.logger.e('Error during scan process for image ID $imageId',
+          error: e, stackTrace: stackTrace);
       // Set error state in provider (this will also clear scanningImageId)
-      ref.read(galleryDetailProvider(widget.images).notifier).setScanError(imageId, e.toString());
+      ref
+          .read(galleryDetailProvider(widget.images).notifier)
+          .setScanError(imageId, e.toString());
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error scanning image: ${e.toString()}')) // Consider localizing
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(
+                    'Error scanning image: ${e.toString()}')) // Consider localizing
+            );
       }
     }
     // No finally block needed to manage scanning state, handled by provider
@@ -160,7 +176,7 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     final imageUrlToDelete = imageToDelete.url;
     final imageIdToDelete = imageToDelete.id;
 
-    // --- Add Confirmation Dialog --- 
+    // --- Add Confirmation Dialog ---
     final bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
@@ -169,7 +185,8 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
           // title: Text(l10n.deleteImageConfirmationTitle),
           title: const Text('Delete Image?'), // Placeholder
           // content: Text(l10n.deleteImageConfirmationContent),
-          content: const Text('Are you sure you want to permanently delete this image?'), // Placeholder
+          content: const Text(
+              'Are you sure you want to permanently delete this image?'), // Placeholder
           actions: <Widget>[
             TextButton(
               // child: Text(l10n.cancelButton),
@@ -193,38 +210,54 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     }
     // --- End Confirmation Dialog ---
 
-    setState(() { _isDeleting = true; });
-    widget.logger.i('Attempting delete via callback for: $imageUrlToDelete (ID: $imageIdToDelete)');
+    setState(() {
+      _isDeleting = true;
+    });
+    widget.logger.i(
+        'Attempting delete via callback for: $imageUrlToDelete (ID: $imageIdToDelete)');
 
     try {
       await widget.onDeleteImage(imageUrlToDelete, imageIdToDelete);
-      widget.logger.i('Parent delete callback successful for: $imageUrlToDelete');
+      widget.logger
+          .i('Parent delete callback successful for: $imageUrlToDelete');
 
       // The parent (Overview Screen) is responsible for its own success message/handling
       // widget.onImageDeletedSuccessfully(imageUrlToDelete); // Maybe not needed here?
 
       // Provider state update is crucial for removing the image from *this* view
       if (mounted) {
-          ref.read(galleryDetailProvider(widget.images).notifier).handleDeletion(imageIdToDelete);
-          widget.logger.i('Called handleDeletion on notifier for ID: $imageIdToDelete');
-          // Check if the list became empty after deletion
-          final remainingImages = ref.read(galleryDetailProvider(widget.images)).images;
-          if (remainingImages.isEmpty && mounted) {
-             widget.logger.i('Image list empty after deletion, popping detail view.');
-             Navigator.of(context).pop(); // Go back if no images left
-          }
-      }
-
-    } catch (e) {
-        widget.logger.e('Error during parent delete callback for $imageUrlToDelete', error: e);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            // SnackBar(content: Text(l10n.deleteImageErrorSnackbar(e.toString()))),
-            SnackBar(content: Text('Error deleting image: ${e.toString()}')) // Placeholder
-          );
+        ref
+            .read(galleryDetailProvider(widget.images).notifier)
+            .handleDeletion(imageIdToDelete);
+        widget.logger
+            .i('Called handleDeletion on notifier for ID: $imageIdToDelete');
+        // Check if the list became empty after deletion
+        final remainingImages =
+            ref.read(galleryDetailProvider(widget.images)).images;
+        if (remainingImages.isEmpty && mounted) {
+          widget.logger
+              .i('Image list empty after deletion, popping detail view.');
+          Navigator.of(context).pop(); // Go back if no images left
         }
+      }
+    } catch (e) {
+      widget.logger.e(
+          'Error during parent delete callback for $imageUrlToDelete',
+          error: e);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            // SnackBar(content: Text(l10n.deleteImageErrorSnackbar(e.toString()))),
+            SnackBar(
+                content: Text(
+                    'Error deleting image: ${e.toString()}')) // Placeholder
+            );
+      }
     } finally {
-        if (mounted) setState(() { _isDeleting = false; });
+      if (mounted) {
+        setState(() {
+          _isDeleting = false;
+        });
+      }
     }
   }
 
@@ -233,7 +266,8 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     final state = ref.watch(galleryDetailProvider(widget.images));
     final images = state.images;
     final generalError = state.generalError; // Watch general error
-    final notifier = ref.read(galleryDetailProvider(widget.images).notifier); // Read notifier for actions
+    final notifier = ref.read(galleryDetailProvider(widget.images)
+        .notifier); // Read notifier for actions
 
     final NumberFormat currencyFormatter = NumberFormat.currency(
       locale: 'de_DE', // Example locale, adjust as needed
@@ -247,7 +281,9 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
 
     // Ensure currentIndex is valid after potential deletions
     currentIndex = min(currentIndex, images.length - 1);
-    if (currentIndex < 0) currentIndex = 0; // Handle case where list becomes empty
+    if (currentIndex < 0) {
+      currentIndex = 0; // Handle case where list becomes empty
+    }
 
     // Access current image data safely AFTER adjusting currentIndex
     final currentImageInfo = images.isNotEmpty ? images[currentIndex] : null;
@@ -260,9 +296,12 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
           if (generalError != null)
             MaterialBanner(
               padding: const EdgeInsets.all(10),
-              content: Text(generalError, style: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer)),
+              content: Text(generalError,
+                  style: TextStyle(
+                      color: Theme.of(context).colorScheme.onErrorContainer)),
               backgroundColor: Theme.of(context).colorScheme.errorContainer,
-              leading: Icon(Icons.error_outline, color: Theme.of(context).colorScheme.onErrorContainer),
+              leading: Icon(Icons.error_outline,
+                  color: Theme.of(context).colorScheme.onErrorContainer),
               actions: [
                 TextButton(
                   child: const Text('DISMISS'), // Placeholder
@@ -272,7 +311,6 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
                 ),
               ],
             ),
-          
           Expanded(
             child: _buildGalleryBody(context, state, currencyFormatter),
           ),
@@ -281,12 +319,14 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
     );
   }
 
-  AppBar _buildAppBar(BuildContext context, GalleryDetailState state, JourneyImageInfo? currentImageInfo, GalleryDetailNotifier notifier) {
+  AppBar _buildAppBar(BuildContext context, GalleryDetailState state,
+      JourneyImageInfo? currentImageInfo, GalleryDetailNotifier notifier) {
     final images = state.images;
     final scanningImageId = state.scanningImageId; // Get scanning state
 
     // Determine if the *current* image is being scanned
-    final bool isCurrentItemScanning = currentImageInfo != null && scanningImageId == currentImageInfo.id;
+    final bool isCurrentItemScanning =
+        currentImageInfo != null && scanningImageId == currentImageInfo.id;
     // Determine if *any* image is being scanned (to disable button)
     final bool isAnyItemScanning = scanningImageId != null;
 
@@ -299,25 +339,39 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
         IconButton(
           // Show spinner only if the *current* image is scanning
           icon: isCurrentItemScanning
-                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                : const Icon(Icons.document_scanner_outlined),
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.document_scanner_outlined),
           // Disable button if *any* item is scanning or current info is null
           onPressed: currentImageInfo == null || isAnyItemScanning
-                ? null
-                : () => _handleScan(currentImageInfo.id, currentImageInfo.url),
+              ? null
+              : () => _handleScan(currentImageInfo.id, currentImageInfo.url),
           tooltip: 'Scan Image', // Placeholder
         ),
         IconButton(
-          icon: _isDeleting ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.delete_outline),
+          icon: _isDeleting
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
+              : const Icon(Icons.delete_outline),
           // Disable delete if an item is scanning (to avoid conflicts? Optional)
-          onPressed: _isDeleting || currentImageInfo == null || isAnyItemScanning ? null : _handleDelete,
+          onPressed:
+              _isDeleting || currentImageInfo == null || isAnyItemScanning
+                  ? null
+                  : _handleDelete,
           tooltip: 'Delete Image', // Placeholder
         ),
       ],
     );
   }
 
-  Widget _buildGalleryBody(BuildContext context, GalleryDetailState state, NumberFormat currencyFormatter) {
+  Widget _buildGalleryBody(BuildContext context, GalleryDetailState state,
+      NumberFormat currencyFormatter) {
     final images = state.images;
     final signedUrls = state.signedUrls;
     final isLoadingSignedUrls = state.isLoadingSignedUrls;
@@ -332,12 +386,15 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
             builder: (context, index) {
               // Recalculate provider for each item using provider state
               ImageProvider itemImageProvider;
-              bool itemShowLoadingIndicator = isLoadingSignedUrls || (index >= signedUrls.length || signedUrls[index] == null);
+              bool itemShowLoadingIndicator = isLoadingSignedUrls ||
+                  (index >= signedUrls.length || signedUrls[index] == null);
 
               if (!itemShowLoadingIndicator) {
-                 itemImageProvider = CachedNetworkImageProvider(signedUrls[index]!); 
+                itemImageProvider =
+                    CachedNetworkImageProvider(signedUrls[index]!);
               } else {
-                 itemImageProvider = CachedNetworkImageProvider(images[index].url); // Fallback
+                itemImageProvider =
+                    CachedNetworkImageProvider(images[index].url); // Fallback
               }
 
               return PhotoViewGalleryPageOptions(
@@ -364,46 +421,66 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
           ),
         ),
         if (state.images.isNotEmpty && currentIndex < state.images.length)
-          _buildInfoPanel(context, state.images[currentIndex], currencyFormatter, state.scanError[state.images[currentIndex].id], scanningImageId),
+          _buildInfoPanel(
+              context,
+              state.images[currentIndex],
+              currencyFormatter,
+              state.scanError[state.images[currentIndex].id],
+              scanningImageId),
       ],
     );
   }
 
-  Widget _buildInfoPanel(BuildContext context, JourneyImageInfo imageInfo, NumberFormat currencyFormatter, String? scanError, String? scanningImageId) {
+  Widget _buildInfoPanel(
+      BuildContext context,
+      JourneyImageInfo imageInfo,
+      NumberFormat currencyFormatter,
+      String? scanError,
+      String? scanningImageId) {
     // Determine if this specific image is being scanned
     bool isScanning = scanningImageId == imageInfo.id;
 
     Widget statusWidget;
     if (scanError != null) {
-        statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.error_outline, color: Colors.red, size: 16),
-          SizedBox(width: 4),
-          Text('Scan Error', style: TextStyle(color: Colors.red)), // Placeholder
-        ]);
+      statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.error_outline, color: Colors.red, size: 16),
+        SizedBox(width: 4),
+        Text('Scan Error', style: TextStyle(color: Colors.red)), // Placeholder
+      ]);
     } else if (isScanning) {
-        statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
-          SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.orange)),
-          SizedBox(width: 4),
-          Text('Processing...', style: TextStyle(color: Colors.orange)), // Placeholder
-        ]);
-    } else if (imageInfo.lastProcessedAt != null && imageInfo.hasPotentialText == true) {
-        statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.check_circle_outline, color: Colors.green, size: 16),
-          SizedBox(width: 4),
-          Text('Scan Complete', style: TextStyle(color: Colors.green)), // Placeholder
-        ]);
-    } else if (imageInfo.lastProcessedAt != null && imageInfo.hasPotentialText == false) {
-        statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.cancel_outlined, color: Colors.grey, size: 16),
-          SizedBox(width: 4),
-          Text('No Text Found', style: TextStyle(color: Colors.grey)), // Placeholder
-        ]);
+      statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+                strokeWidth: 2, color: Colors.orange)),
+        SizedBox(width: 4),
+        Text('Processing...',
+            style: TextStyle(color: Colors.orange)), // Placeholder
+      ]);
+    } else if (imageInfo.lastProcessedAt != null &&
+        imageInfo.hasPotentialText == true) {
+      statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.check_circle_outline, color: Colors.green, size: 16),
+        SizedBox(width: 4),
+        Text('Scan Complete',
+            style: TextStyle(color: Colors.green)), // Placeholder
+      ]);
+    } else if (imageInfo.lastProcessedAt != null &&
+        imageInfo.hasPotentialText == false) {
+      statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.cancel_outlined, color: Colors.grey, size: 16),
+        SizedBox(width: 4),
+        Text('No Text Found',
+            style: TextStyle(color: Colors.grey)), // Placeholder
+      ]);
     } else {
-        statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(Icons.help_outline, color: Colors.grey, size: 16),
-          SizedBox(width: 4),
-          Text('Ready to Scan', style: TextStyle(color: Colors.grey)), // Placeholder
-        ]);
+      statusWidget = const Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(Icons.help_outline, color: Colors.grey, size: 16),
+        SizedBox(width: 4),
+        Text('Ready to Scan',
+            style: TextStyle(color: Colors.grey)), // Placeholder
+      ]);
     }
 
     return Container(
@@ -414,41 +491,48 @@ class _GalleryDetailViewState extends ConsumerState<GalleryDetailView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-             children: [
-               const Text('Scan Status', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-               statusWidget,
-             ],
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text('Scan Status',
+                  style: TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold)),
+              statusWidget,
+            ],
           ),
           if (scanError != null)
             Padding(
               padding: const EdgeInsets.only(top: 4.0),
-              child: Text(scanError, style: const TextStyle(color: Colors.red, fontSize: 12)),
+              child: Text(scanError,
+                  style: const TextStyle(color: Colors.red, fontSize: 12)),
             ),
           const SizedBox(height: 8),
-          if (imageInfo.lastProcessedAt != null && imageInfo.hasPotentialText == true)
-             Row(
-               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-               children: [
-                  const Text('Detected Amount', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  Text(
-                    imageInfo.detectedTotalAmount != null
-                        ? '${currencyFormatter.format(imageInfo.detectedTotalAmount)} ${imageInfo.detectedCurrency ?? ''}'.trim()
-                        : 'N/A', // Placeholder
-                    style: const TextStyle(color: Colors.white),
-                  ),
-               ],
-             ),
-           if (imageInfo.lastProcessedAt != null)
-             Padding(
-               padding: const EdgeInsets.only(top: 4.0),
-               child: Text(
-                 'Last Processed: ${DateFormat.yMd().add_jm().format(imageInfo.lastProcessedAt!.toLocal())}', // Placeholder
-                 style: const TextStyle(color: Colors.grey, fontSize: 10),
-               ),
-             ),
+          if (imageInfo.lastProcessedAt != null &&
+              imageInfo.hasPotentialText == true)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Detected Amount',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.bold)),
+                Text(
+                  imageInfo.detectedTotalAmount != null
+                      ? '${currencyFormatter.format(imageInfo.detectedTotalAmount)} ${imageInfo.detectedCurrency ?? ''}'
+                          .trim()
+                      : 'N/A', // Placeholder
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ],
+            ),
+          if (imageInfo.lastProcessedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: Text(
+                'Last Processed: ${DateFormat.yMd().add_jm().format(imageInfo.lastProcessedAt!.toLocal())}', // Placeholder
+                style: const TextStyle(color: Colors.grey, fontSize: 10),
+              ),
+            ),
         ],
       ),
     );
   }
-} 
+}

@@ -35,7 +35,8 @@ class GalleryOverviewScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final journeyImagesAsyncValue = ref.watch(journeyImagesStreamProvider(journey.id));
+    final journeyImagesAsyncValue =
+        ref.watch(journeyImagesStreamProvider(journey.id));
     final uploadState = ref.watch(galleryUploadStateProvider);
     // final l10n = AppLocalizations.of(context)!;
 
@@ -47,12 +48,17 @@ class GalleryOverviewScreen extends ConsumerWidget {
       // Pass context instead of l10n for now
       body: _buildBody(context, ref, /*l10n,*/ journeyImagesAsyncValue),
       // Pass context instead of l10n for now
-      floatingActionButton: _buildFloatingActionButton(context, ref, /*l10n,*/ uploadState),
+      floatingActionButton:
+          _buildFloatingActionButton(context, ref, /*l10n,*/ uploadState),
     );
   }
 
   // Remove l10n parameter for now
-  Widget _buildBody(BuildContext context, WidgetRef ref, /*AppLocalizations l10n,*/ AsyncValue<List<JourneyImageInfo>> journeyImagesAsyncValue) {
+  Widget _buildBody(
+      BuildContext context,
+      WidgetRef ref,
+      /*AppLocalizations l10n,*/ AsyncValue<List<JourneyImageInfo>>
+          journeyImagesAsyncValue) {
     final logger = ref.watch(loggerProvider);
     final repo = ref.watch(journeyRepositoryProvider);
 
@@ -112,8 +118,17 @@ class GalleryOverviewScreen extends ConsumerWidget {
 
     return journeyImagesAsyncValue.when(
       data: (images) {
-        if (images.isEmpty) {
-          return const Center(child: Text('No images yet. Tap + to add.'));
+        // Filter out images with empty IDs or URLs before building the grid
+        final validImages = images
+            .where((img) => img.id.isNotEmpty && img.url.isNotEmpty)
+            .toList();
+
+        if (validImages.isEmpty) {
+          // Update text slightly if original list had items but they were invalid
+          return Center(
+              child: Text(images.isEmpty
+                  ? 'No images yet. Tap + to add.'
+                  : 'No valid images found.'));
         }
         return GridView.builder(
           // Use layout constants
@@ -123,26 +138,33 @@ class GalleryOverviewScreen extends ConsumerWidget {
             crossAxisSpacing: kGridCrossAxisSpacing,
             mainAxisSpacing: kGridMainAxisSpacing,
           ),
-          itemCount: images.length,
+          // Use the filtered list length and access items from it
+          itemCount: validImages.length,
           itemBuilder: (context, index) {
-            final imageInfo = images[index];
+            final imageInfo = validImages[index]; // Use item from filtered list
 
             return GestureDetector(
               onTap: () {
                 logger.d('Tapped on image index $index, navigating to detail.');
+                // Find the original index in the unfiltered list if needed for detail view?
+                // Or maybe pass only validImages to detail view?
+                // For now, let's find original index:
+                // final originalIndex = images.indexWhere((img) => img.id == imageInfo.id); // Removed unused variable
+
                 Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => GalleryDetailView(
-                      images: images, // Pass the full list
-                      initialIndex: index,
+                      images:
+                          validImages, // Pass only valid images to detail view
+                      initialIndex: index, // Index within the valid list
                       logger: logger,
-                      // Update onDeleteImage callback to accept and pass imageId
-                      // We get the imageId from imageInfo corresponding to the url/index
-                      onDeleteImage: (url, id) => repo.deleteJourneyImage(url, id),
+                      onDeleteImage: (url, id) =>
+                          repo.deleteJourneyImage(url, id),
                       onImageDeletedSuccessfully: (deletedUrl) {
-                         logger.i('Detail view reported successful deletion for $deletedUrl, list should update via stream.');
-                         // No manual list update needed here due to stream
+                        logger.i(
+                            'Detail view reported successful deletion for $deletedUrl, list should update via stream.');
+                        // No manual list update needed here due to stream
                       },
                     ),
                   ),
@@ -162,8 +184,10 @@ class GalleryOverviewScreen extends ConsumerWidget {
                     CachedNetworkImage(
                       imageUrl: imageInfo.url,
                       fit: BoxFit.cover,
-                      placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
-                      errorWidget: (context, url, error) => const Icon(Icons.error),
+                      placeholder: (context, url) =>
+                          const Center(child: CircularProgressIndicator()),
+                      errorWidget: (context, url, error) =>
+                          const Icon(Icons.error),
                     ),
                   ],
                 ),
@@ -174,62 +198,75 @@ class GalleryOverviewScreen extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (error, stack) {
-         logger.e('Error loading journey images', error: error, stackTrace: stack);
-         return Center(child: Text('Error loading images: $error'));
+        logger.e('Error loading journey images',
+            error: error, stackTrace: stack);
+        return Center(child: Text('Error loading images: $error'));
       },
     );
   }
 
   // Remove l10n parameter for now
-  Widget _buildFloatingActionButton(BuildContext context, WidgetRef ref, /*AppLocalizations l10n,*/ bool isUploading) {
-      final logger = ref.watch(loggerProvider);
-      final repo = ref.watch(journeyRepositoryProvider);
+  Widget _buildFloatingActionButton(BuildContext context, WidgetRef ref,
+      /*AppLocalizations l10n,*/ bool isUploading) {
+    final logger = ref.watch(loggerProvider);
+    final repo = ref.watch(journeyRepositoryProvider);
 
-      Future<void> addImage() async {
-        if (ref.read(galleryUploadStateProvider)) {
-          logger.w('Upload already in progress, ignoring FAB tap.');
-          return;
-        }
+    Future<void> addImage() async {
+      // Store context-dependent variables before await
+      final scaffoldMessenger = ScaffoldMessenger.of(context);
+      // final theme = Theme.of(context); // Remove unused variable
+      // final l10n = AppLocalizations.of(context)!; // Store if uncommenting l10n
 
-        logger.d('Add image FAB tapped');
-        final picker = ImagePicker();
-        final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
-
-        if (pickedFile != null) {
-          logger.i('Image picked: ${pickedFile.path}');
-          ref.read(galleryUploadStateProvider.notifier).state = true;
-          try {
-            final fileBytes = await pickedFile.readAsBytes();
-            final fileName = pickedFile.name;
-            logger.d('Uploading image: $fileName');
-            await repo.uploadJourneyImage(fileBytes, fileName, journey.id);
-            logger.i('Successfully uploaded image: $fileName for Journey ${journey.id}');
-          } catch (e, stackTrace) {
-            logger.e('Failed to upload image', error: e, stackTrace: stackTrace);
-            if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                 // SnackBar(content: Text(l10n.imageUploadErrorSnackbar(e.toString()))),
-                 SnackBar(content: Text('Error uploading image: ${e.toString()}')), // Placeholder
-              );
-            }
-          } finally {
-             if (context.mounted) { // Check mounted again just in case
-               ref.read(galleryUploadStateProvider.notifier).state = false;
-             }
-          }
-        } else {
-          logger.d('Image picking cancelled by user.');
-        }
+      if (ref.read(galleryUploadStateProvider)) {
+        logger.w('Upload already in progress, ignoring FAB tap.');
+        return;
       }
 
-      return FloatingActionButton(
-        // tooltip: isUploading ? l10n.uploadingStatus : l10n.addPhotoTooltip,
-        tooltip: isUploading ? 'Uploading...' : 'Add Photo', // Placeholder
-        onPressed: isUploading ? null : addImage,
-        child: isUploading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : const Icon(Icons.add_a_photo),
-      );
-  }
+      logger.d('Add image FAB tapped');
+      final picker = ImagePicker();
+      final XFile? pickedFile =
+          await picker.pickImage(source: ImageSource.gallery);
 
+      if (pickedFile != null) {
+        logger.i('Image picked: ${pickedFile.path}');
+        ref.read(galleryUploadStateProvider.notifier).state = true;
+        try {
+          final fileBytes = await pickedFile.readAsBytes();
+          final fileName = pickedFile.name;
+          logger.d('Uploading image: $fileName');
+          await repo.uploadJourneyImage(fileBytes, fileName, journey.id);
+          logger.i(
+              'Successfully uploaded image: $fileName for Journey ${journey.id}');
+        } catch (e, stackTrace) {
+          logger.e('Failed to upload image', error: e, stackTrace: stackTrace);
+          if (context.mounted) {
+            // Use stored scaffoldMessenger after await
+            scaffoldMessenger.showSnackBar(
+              // SnackBar(content: Text(l10n.imageUploadErrorSnackbar(e.toString()))), // Use stored l10n if uncommented
+              SnackBar(
+                  content: Text(
+                      'Error uploading image: ${e.toString()}')), // Placeholder
+              // backgroundColor: theme.colorScheme.error, // Use stored theme if needed
+            );
+          }
+        } finally {
+          if (context.mounted) {
+            // Check mounted again just in case
+            ref.read(galleryUploadStateProvider.notifier).state = false;
+          }
+        }
+      } else {
+        logger.d('Image picking cancelled by user.');
+      }
+    }
+
+    return FloatingActionButton(
+      // tooltip: isUploading ? l10n.uploadingStatus : l10n.addPhotoTooltip,
+      tooltip: isUploading ? 'Uploading...' : 'Add Photo', // Placeholder
+      onPressed: isUploading ? null : addImage,
+      child: isUploading
+          ? const CircularProgressIndicator(color: Colors.white)
+          : const Icon(Icons.add_a_photo),
+    );
+  }
 }

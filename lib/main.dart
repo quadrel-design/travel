@@ -72,15 +72,25 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Splash screen while checking auth state initially
       GoRoute(
         path: AppRoutes.splash,
-        builder: (context, state) => const SplashScreen(), // Add const
+        builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: AppRoutes.auth,
-        builder: (context, state) => const AuthScreen(), // Add const
+        builder: (context, state) =>
+            // Wrap AuthScreen with a standard light theme
+            Theme(
+          data: ThemeData.light(), // Apply standard light theme
+          child: const AuthScreen(),
+        ),
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const HomeScreen(title: 'TravelMouse'),
+        builder: (context, state) =>
+            // Wrap HomeScreen with a standard light theme
+            Theme(
+          data: ThemeData.light(),
+          child: const HomeScreen(), // Remove title argument
+        ),
         routes: const [
           // Example nested route if needed
         ],
@@ -99,7 +109,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             // Replace print with logger
             logger.w('Journey ID or Journey object missing for detail route');
             // Maybe return a Scaffold with an error message
-            return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
+            return const Scaffold(
+                body: Center(child: Text('Error: Journey data missing')));
           }
           return JourneyDetailOverviewScreen(journey: journey);
         },
@@ -107,38 +118,43 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: 'info',
             builder: (context, state) {
-               final journey = state.extra as Journey?;
-               if (journey == null) return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
-               return JourneyDetailScreen(journey: journey);
+              final journey = state.extra as Journey?;
+              if (journey == null) {
+                return const Scaffold(
+                    body: Center(child: Text('Error: Journey data missing')));
+              }
+              return JourneyDetailScreen(journey: journey);
             },
           ),
           GoRoute(
             path: 'gallery',
             builder: (context, state) {
               final journey = state.extra as Journey?;
-               if (journey == null) {
-                 // Replace print with logger
-                 logger.w('Error: Journey object missing for gallery route');
-                 return const Scaffold(body: Center(child: Text('Error: Journey data missing')));
-               }
+              if (journey == null) {
+                // Replace print with logger
+                logger.w('Error: Journey object missing for gallery route');
+                return const Scaffold(
+                    body: Center(child: Text('Error: Journey data missing')));
+              }
               return GalleryOverviewScreen(journey: journey);
             },
           ),
-          // --- Add Expense List Route --- 
+          // --- Add Expense List Route ---
           GoRoute(
             name: 'journeyExpenses', // Define a name
             path: 'expenses', // Define the sub-path
             builder: (context, state) {
-               final journeyId = state.pathParameters['journeyId'];
-               if (journeyId == null || journeyId.isEmpty) {
-                  // Replace print with logger
-                  logger.w('Journey ID missing for expenses route');
-                  return const Scaffold(body: Center(child: Text('Error: Journey ID missing')));
-               }
+              final journeyId = state.pathParameters['journeyId'];
+              if (journeyId == null || journeyId.isEmpty) {
+                // Replace print with logger
+                logger.w('Journey ID missing for expenses route');
+                return const Scaffold(
+                    body: Center(child: Text('Error: Journey ID missing')));
+              }
               return ExpenseListScreen(journeyId: journeyId);
             },
           ),
-          // --- End Add Expense List Route --- 
+          // --- End Add Expense List Route ---
         ],
       ),
       // Update Settings Route Path
@@ -150,7 +166,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (BuildContext context, GoRouterState state) {
       return determineRedirect(authRepository, state.matchedLocation);
     },
-    errorBuilder: (context, state) => _buildErrorScreen(context, state, logger), // Pass logger to error builder
+    errorBuilder: (context, state) => _buildErrorScreen(
+        context, state, logger), // Pass logger to error builder
   );
 });
 
@@ -190,9 +207,11 @@ class MyApp extends ConsumerWidget {
 }
 
 // --- Simple Error Screen Widget ---
-Widget _buildErrorScreen(BuildContext context, GoRouterState state, Logger logger) {
+Widget _buildErrorScreen(
+    BuildContext context, GoRouterState state, Logger logger) {
   // final l10n = AppLocalizations.of(context)!;
-  logger.e('GoRouter navigation error: ${state.error}'); // Use logger instead of print
+  logger.e(
+      'GoRouter navigation error: ${state.error}'); // Use logger instead of print
 
   return Scaffold(
     appBar: AppBar(
@@ -205,7 +224,8 @@ Widget _buildErrorScreen(BuildContext context, GoRouterState state, Logger logge
         padding: const EdgeInsets.all(16.0),
         // Use localization
         // child: Text(l10n.navigationErrorText(state.error?.toString() ?? 'Unknown error')),
-        child: Text('Error: ${state.error?.toString() ?? 'Unknown error'}'), // Placeholder
+        child: Text(
+            'Error: ${state.error?.toString() ?? 'Unknown error'}'), // Placeholder
       ),
     ),
   );
