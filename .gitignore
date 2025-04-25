@@ -107,3 +107,8 @@ amplifytools.xcconfig
 .secret-*
 **.sample
 #amplify-do-not-edit-end
+
+# Firebase configuration files
+**/ios/Runner/GoogleService-Info.plist
+**/android/app/google-services.json
+firebase_options.dart
