@@ -1,15 +1,14 @@
 import 'dart:async'; // Added for Timer
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import generated class
+// Import generated class
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:logger/logger.dart'; // Import logger
 import 'package:travel/providers/repository_providers.dart'; // Import providers
 import 'package:travel/providers/auth_providers.dart'; // Import auth specific providers
 import 'package:travel/providers/logging_provider.dart'; // Import logger provider
-import 'package:travel/constants/app_routes.dart'; // Import routes
+// Import routes
 // Import Firebase Auth (needed for error types maybe)
 import 'package:firebase_auth/firebase_auth.dart'; // Needed for FirebaseAuthException
 
@@ -125,10 +124,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       ref.read(authErrorProvider.notifier).state =
           null; // Clear previous errors
       try {
-        // Use values from controllers directly
-        await ref.read(authRepositoryProvider).signInWithPassword(
-            _emailController.text.trim(), _passwordController.text.trim());
-        // Navigation is handled by the GoRouter redirect based on auth state change
+        await ref.read(authRepositoryProvider).signInWithEmailAndPassword(
+              email: _emailController.text.trim(),
+              password: _passwordController.text.trim(),
+            );
         _logger.i(
             'Sign in attempt successful for ${_emailController.text.trim()}');
       } on FirebaseAuthException catch (e) {
@@ -170,19 +169,16 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       ref.read(authErrorProvider.notifier).state =
           null; // Clear previous errors
       try {
-        // Use values from controllers directly
-        await ref.read(authRepositoryProvider).signUp(
-              _emailController.text.trim(),
-              _passwordController.text.trim(),
+        await ref.read(authRepositoryProvider).createUserWithEmailAndPassword(
+              email: _emailController.text.trim(),
+              password: _passwordController.text.trim(),
             );
-        // Send verification email immediately after registration attempt
         await ref.read(authRepositoryProvider).sendVerificationEmail();
         _logger.i(
             'Registration attempt successful for ${_emailController.text.trim()}, verification sent.');
-        // Navigate to wait screen *after* successful registration and email sent attempt
         ref.read(authNavigationProvider.notifier).state =
             AuthNavigationState.waitForVerification;
-        _startVerificationTimer(ref); // Start timer after navigating
+        _startVerificationTimer(ref);
       } on FirebaseAuthException catch (e) {
         // Catch specific Firebase exception
         _logger.e('Registration failed', error: e);
@@ -361,12 +357,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           // --- Email Field ---
           TextFormField(
             controller: _emailController,
-            decoration: InputDecoration(
+            decoration: const InputDecoration(
               // labelText: l10n.emailLabel,
               labelText: 'Email', // Placeholder
               // hintText: l10n.emailHint,
               hintText: 'Enter your email', // Placeholder
-              prefixIcon: const Icon(Icons.email),
+              prefixIcon: Icon(Icons.email),
             ),
             keyboardType: TextInputType.emailAddress,
             autocorrect: false,
@@ -418,19 +414,54 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           const SizedBox(height: 24),
 
           // --- Submit Button ---
-          isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ElevatedButton(
-                  // Decide action based on isLogin
-                  onPressed: () => isLogin
-                      ? _signInWithEmailAndPassword(context, ref)
-                      : _registerWithEmailAndPassword(context, ref),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                  // child: Text(isLogin ? l10n.signInButton : l10n.signUpButton),
-                  child: Text(isLogin ? 'Sign In' : 'Sign Up'), // Placeholder
+          if (isLoading)
+            const Center(child: CircularProgressIndicator())
+          else ...[
+            ElevatedButton(
+              onPressed: () => isLogin
+                  ? _signInWithEmailAndPassword(context, ref)
+                  : _registerWithEmailAndPassword(context, ref),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              child: Text(isLogin ? 'Sign In' : 'Sign Up'), // Placeholder
+            ),
+
+            const SizedBox(height: 16),
+
+            // --- OR Divider ---
+            const Row(
+              children: [
+                Expanded(child: Divider()),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16),
+                  child: Text('OR'),
                 ),
+                Expanded(child: Divider()),
+              ],
+            ),
+
+            const SizedBox(height: 16),
+
+            // --- Google Sign In Button ---
+            ElevatedButton.icon(
+              onPressed: () {
+                _signInWithGoogle(context, ref);
+              },
+              icon: Image.asset(
+                'assets/images/google_signin_logo.png',
+                height: 24,
+              ),
+              label: const Text('Sign in with Google'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black87,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              ),
+            ),
+          ],
+
           const SizedBox(height: 12),
 
           // --- Auth Mode Switch Button ---
@@ -553,5 +584,39 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           ),
       ],
     );
+  }
+
+  // Add Google Sign In Method
+  void _signInWithGoogle(BuildContext context, WidgetRef ref) async {
+    ref.read(authLoadingProvider.notifier).state = true;
+    ref.read(authErrorProvider.notifier).state = null;
+
+    try {
+      await ref.read(authRepositoryProvider).signInWithGoogle();
+      _logger.i('Google sign in successful');
+    } on FirebaseAuthException catch (e) {
+      _logger.e('Google sign in failed', error: e);
+      String errorMessage = 'An unknown error occurred.';
+
+      if (e.code == 'account-exists-with-different-credential') {
+        errorMessage = 'An account already exists with this email.';
+      } else if (e.code == 'invalid-credential') {
+        errorMessage = 'Invalid credentials.';
+      } else if (e.code == 'user-disabled') {
+        errorMessage = 'This account has been disabled.';
+      } else if (e.code == 'ERROR_ABORTED_BY_USER') {
+        errorMessage = 'Sign in cancelled by user.';
+      }
+
+      ref.read(authErrorProvider.notifier).state = errorMessage;
+    } catch (e) {
+      _logger.e('Unexpected error during Google sign in', error: e);
+      ref.read(authErrorProvider.notifier).state =
+          'An unexpected error occurred during Google sign in.';
+    } finally {
+      if (mounted) {
+        ref.read(authLoadingProvider.notifier).state = false;
+      }
+    }
   }
 }

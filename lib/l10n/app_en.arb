@@ -309,5 +309,170 @@
   "checkYourEmailInstruction": "Please check your inbox (and spam folder!) for a verification link to complete your registration.",
   "resendEmailButton": "Resend Verification Email",
   "verificationEmailResent": "Verification email resent.",
-  "errorResendingVerification": "Error Resending Verification"
+  "errorResendingVerification": "Error Resending Verification",
+
+  "appTitle": "Travel",
+  "@appTitle": { "description": "The name of the application" },
+
+  "loginTitle": "Login",
+  "@loginTitle": { "description": "Title for the login page" },
+
+  "loginEmailLabel": "Email",
+  "@loginEmailLabel": { "description": "Label for the email input field" },
+
+  "loginPasswordLabel": "Password",
+  "@loginPasswordLabel": { "description": "Label for the password input field" },
+
+  "loginButtonLabel": "Login",
+  "@loginButtonLabel": { "description": "Label for the login button" },
+
+  "loginErrorInvalidEmail": "Invalid email address",
+  "@loginErrorInvalidEmail": { "description": "Error message shown when an invalid email is entered" },
+
+  "loginErrorEmptyPassword": "Password cannot be empty",
+  "@loginErrorEmptyPassword": { "description": "Error message shown when password is empty" },
+
+  "loginErrorAuthFailed": "Authentication failed",
+  "@loginErrorAuthFailed": { "description": "Error message shown when login fails" },
+
+  "registerTitle": "Register",
+  "@registerTitle": { "description": "Title for the registration page" },
+
+  "registerEmailLabel": "Email",
+  "@registerEmailLabel": { "description": "Label for the email input field in registration" },
+
+  "registerPasswordLabel": "Password",
+  "@registerPasswordLabel": { "description": "Label for the password input field in registration" },
+
+  "registerConfirmPasswordLabel": "Confirm Password",
+  "@registerConfirmPasswordLabel": { "description": "Label for the confirm password input field" },
+
+  "registerButtonLabel": "Register",
+  "@registerButtonLabel": { "description": "Label for the register button" },
+
+  "registerErrorPasswordMismatch": "Passwords do not match",
+  "@registerErrorPasswordMismatch": { "description": "Error message shown when passwords don't match" },
+
+  "registerErrorWeakPassword": "Password is too weak",
+  "@registerErrorWeakPassword": { "description": "Error message shown when password is too weak" },
+
+  "registerErrorEmailInUse": "Email is already in use",
+  "@registerErrorEmailInUse": { "description": "Error message shown when email is already registered" },
+
+  "homeTitle": "My Journeys",
+  "@homeTitle": { "description": "Title for the home page showing journeys" },
+
+  "homeEmptyState": "No journeys yet",
+  "@homeEmptyState": { "description": "Message shown when there are no journeys" },
+
+  "homeAddJourneyTooltip": "Add new journey",
+  "@homeAddJourneyTooltip": { "description": "Tooltip for the add journey FAB" },
+
+  "journeyTitleLabel": "Journey Title",
+  "@journeyTitleLabel": { "description": "Label for journey title input" },
+
+  "journeyDescriptionLabel": "Description",
+  "@journeyDescriptionLabel": { "description": "Label for journey description input" },
+
+  "journeyStartDateLabel": "Start Date",
+  "@journeyStartDateLabel": { "description": "Label for journey start date" },
+
+  "journeyEndDateLabel": "End Date",
+  "@journeyEndDateLabel": { "description": "Label for journey end date" },
+
+  "journeyLocationLabel": "Location",
+  "@journeyLocationLabel": { "description": "Label for journey location" },
+
+  "journeyCreateTitle": "New Journey",
+  "@journeyCreateTitle": { "description": "Title for journey creation page" },
+
+  "journeyCreateButtonLabel": "Create Journey",
+  "@journeyCreateButtonLabel": { "description": "Label for journey create button" },
+
+  "journeyEditTitle": "Edit Journey",
+  "@journeyEditTitle": { "description": "Title for journey edit page" },
+
+  "journeyEditButtonLabel": "Save Changes",
+  "@journeyEditButtonLabel": { "description": "Label for journey edit save button" },
+
+  "journeyDeleteConfirmTitle": "Delete Journey?",
+  "@journeyDeleteConfirmTitle": { "description": "Title for journey deletion confirmation dialog" },
+
+  "journeyDeleteConfirmMessage": "Are you sure you want to delete this journey? This action cannot be undone.",
+  "@journeyDeleteConfirmMessage": { "description": "Message in journey deletion confirmation dialog" },
+
+  "deleteButtonLabel": "Delete",
+  "@deleteButtonLabel": { "description": "Label for delete buttons" },
+
+  "cancelButtonLabel": "Cancel",
+  "@cancelButtonLabel": { "description": "Label for cancel buttons" },
+
+  "saveButtonLabel": "Save",
+  "@saveButtonLabel": { "description": "Label for save buttons" },
+
+  "errorGeneric": "An error occurred",
+  "@errorGeneric": { "description": "Generic error message" },
+
+  "errorNetworkGeneric": "Network error occurred",
+  "@errorNetworkGeneric": { "description": "Generic network error message" },
+
+  "errorInvalidInput": "Invalid input",
+  "@errorInvalidInput": { "description": "Generic invalid input error message" },
+
+  "invoiceCaptureTitle": "Invoices",
+  "@invoiceCaptureTitle": { "description": "Title for the invoice capture page" },
+
+  "invoiceCaptureEmptyState": "No invoices captured yet.",
+  "@invoiceCaptureEmptyState": { "description": "Message shown when there are no invoices" },
+
+  "invoiceCaptureImageCount": "Image {index} of {total}",
+  "@invoiceCaptureImageCount": {
+    "description": "Title showing the current image index and total count in the invoice capture view",
+    "placeholders": {
+      "index": { "type": "String" },
+      "total": { "type": "String" }
+    }
+  },
+
+  "invoiceCaptureImageErrorLoading": "Could not load image",
+  "@invoiceCaptureImageErrorLoading": { "description": "Error message when an invoice image fails to load" },
+
+  "invoiceCaptureScanInProgressError": "Scan already in progress for another invoice.",
+  "@invoiceCaptureScanInProgressError": { "description": "Error shown if user tries to scan while another scan is running or if it's already done." },
+
+  "invoiceCaptureScanInitiatedSnackbar": "Scan initiated...",
+  "@invoiceCaptureScanInitiatedSnackbar": { "description": "Snackbar message indicating the invoice scan has started." },
+
+  "invoiceCaptureScanErrorSnackbar": "Scan failed: {error}",
+  "@invoiceCaptureScanErrorSnackbar": {
+    "description": "Snackbar message indicating the invoice scan failed.",
+    "placeholders": { "error": { "type": "String" } }
+  },
+
+  "deleteInvoiceConfirmTitle": "Delete Invoice?",
+  "@deleteInvoiceConfirmTitle": { "description": "Title for the invoice deletion confirmation dialog" },
+
+  "deleteInvoiceConfirmDesc": "Are you sure you want to delete this invoice?",
+  "@deleteInvoiceConfirmDesc": { "description": "Content text for the invoice deletion confirmation dialog" },
+
+  "invoiceDeleteSuccessSnackbar": "Invoice deleted successfully.",
+  "@invoiceDeleteSuccessSnackbar": { "description": "Snackbar message shown after successful invoice deletion" },
+
+  "invoiceDeleteErrorSnackbar": "Failed to delete invoice.",
+  "@invoiceDeleteErrorSnackbar": { "description": "Snackbar message shown after failed invoice deletion" },
+
+  "invoiceCaptureDetailTitle": "Invoice {index} of {total}",
+  "@invoiceCaptureDetailTitle": {
+    "description": "Title for the invoice detail view showing current index and total count",
+    "placeholders": {
+      "index": { "type": "int" },
+      "total": { "type": "int" }
+    }
+  },
+
+  "downloadingInvoice": "Downloading invoice...",
+  "@downloadingInvoice": { "description": "Message shown while downloading an invoice image" },
+
+  "addInvoiceFromGalleryTooltip": "Add invoice from gallery",
+  "@addInvoiceFromGalleryTooltip": { "description": "Tooltip for the FAB to add an invoice from the device gallery" }
 }

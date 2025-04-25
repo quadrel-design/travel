@@ -9,7 +9,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/widgets/image_status_chip.dart';
-import 'package:travel/widgets/gallery_detail_view.dart';
+import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:http/http.dart' as http;
@@ -18,7 +18,6 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-// Function to determine status (can be moved to a helper file)
 ImageStatus determineImageStatus(JourneyImageInfo imageInfo) {
   if (imageInfo.lastProcessedAt != null) {
     if (imageInfo.hasPotentialText == true) {
@@ -27,21 +26,21 @@ ImageStatus determineImageStatus(JourneyImageInfo imageInfo) {
       return ImageStatus.noTextFound;
     }
   } else {
-    // If not processed, assume ready or pending
     return ImageStatus.ready;
   }
 }
 
-class GalleryOverviewScreen extends ConsumerStatefulWidget {
+class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Journey journey;
-  const GalleryOverviewScreen({super.key, required this.journey});
+  const InvoiceCaptureOverviewScreen({super.key, required this.journey});
 
   @override
-  ConsumerState<GalleryOverviewScreen> createState() =>
-      _GalleryOverviewScreenState();
+  ConsumerState<InvoiceCaptureOverviewScreen> createState() =>
+      _InvoiceCaptureOverviewScreenState();
 }
 
-class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
+class _InvoiceCaptureOverviewScreenState
+    extends ConsumerState<InvoiceCaptureOverviewScreen> {
   late final Logger _logger;
 
   @override
@@ -84,13 +83,12 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    // Watch the stream provider for journey images
     final journeyImagesAsyncValue =
         ref.watch(journeyImagesStreamProvider(widget.journey.id));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Gallery: ${widget.journey.title}'),
+        title: Text('Invoices: ${widget.journey.title}'),
       ),
       body: _buildBody(context, journeyImagesAsyncValue),
       floatingActionButton: FloatingActionButton(
@@ -121,7 +119,7 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
         );
       },
       errorWidget: (context, url, error) {
-        _logger.e('[GALLERY_OVERVIEW] Error loading image:', error: error);
+        _logger.e('[INVOICE_CAPTURE] Error loading image:', error: error);
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -144,10 +142,10 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
     return journeyImagesAsyncValue.when(
       data: (images) {
         _logger.d(
-            '[GALLERY_OVERVIEW] Received ${images.length} images from stream');
+            '[INVOICE_CAPTURE] Received ${images.length} images from stream');
 
         if (images.isEmpty) {
-          return const Center(child: Text("No images yet."));
+          return const Center(child: Text("No invoices captured yet."));
         }
 
         return GridView.builder(
@@ -167,7 +165,7 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
                 trailing: IconButton(
                   icon: const Icon(Icons.delete, color: Colors.white),
                   onPressed: () => _deleteImage(context, imageInfo),
-                  tooltip: 'Delete Image',
+                  tooltip: 'Delete Invoice',
                 ),
               ),
               child: GestureDetector(
@@ -175,7 +173,7 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => GalleryDetailView(
+                      builder: (context) => InvoiceCaptureDetailView(
                         journeyId: widget.journey.id,
                         initialIndex: index,
                         images: images,
@@ -190,11 +188,11 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
         );
       },
       loading: () {
-        _logger.d('[GALLERY_OVERVIEW] Loading images...');
+        _logger.d('[INVOICE_CAPTURE] Loading images...');
         return const Center(child: CircularProgressIndicator());
       },
       error: (error, stack) {
-        _logger.e('[GALLERY_OVERVIEW] Error loading images',
+        _logger.e('[INVOICE_CAPTURE] Error loading images',
             error: error, stackTrace: stack);
         return Center(
           child: Text('Error: $error'),
@@ -211,8 +209,8 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
       context: context,
       builder: (BuildContext ctx) {
         return AlertDialog(
-          title: const Text("Delete Image?"),
-          content: const Text("Are you sure you want to delete this image?"),
+          title: const Text("Delete Invoice?"),
+          content: const Text("Are you sure you want to delete this invoice?"),
           actions: <Widget>[
             TextButton(
               child: const Text("Cancel"),
@@ -230,21 +228,21 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
     if (confirmed != true) return;
 
     try {
-      _logger.d("🗑️ Starting image deletion...");
+      _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteJourneyImage(
           widget.journey.id, imageInfo.id, p.basename(imageInfo.imagePath));
-      _logger.i("🗑️ Image deleted successfully");
+      _logger.i("🗑️ Invoice deleted successfully");
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image deleted successfully.')),
+          const SnackBar(content: Text('Invoice deleted successfully.')),
         );
       }
     } catch (e) {
-      _logger.e("🗑️ Error deleting image", error: e);
+      _logger.e("🗑️ Error deleting invoice", error: e);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting image: $e')),
+          SnackBar(content: Text('Error deleting invoice: $e')),
         );
       }
     }
@@ -277,7 +275,7 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
       if (context.mounted) {
         _logger.d("📸 Showing success message");
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image uploaded successfully!')),
+          const SnackBar(content: Text('Invoice uploaded successfully!')),
         );
       }
     } catch (e, stack) {
@@ -285,7 +283,7 @@ class _GalleryOverviewScreenState extends ConsumerState<GalleryOverviewScreen> {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error uploading image: $e'),
+            content: Text('Error uploading invoice: $e'),
             duration: const Duration(seconds: 5),
           ),
         );

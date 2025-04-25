@@ -9,8 +9,12 @@ class AppRoutes {
   static const journeyDetail = '/journey-detail';
   static const appSettings = '/app-settings';
   static const String userManagement = '/user-management';
-  static const String journeyGallery = '/journey-detail/gallery';
+  static const String journeyInvoices = '/journey-detail/invoices';
   static const String uiAppBars = '/ui-app-bars';
-  static const String galleryOverview = '/gallery-overview';
+  static const String invoiceCaptureOverview = '/invoice-capture-overview';
+  static const String journeySettings = '/journey-settings';
+  static const String journeyExpenses = '/journey-expenses';
+  static const String expenseList = '/expense-list';
+  static const String journeyCreate = '/journey-create';
   // Add other routes here as needed
 }

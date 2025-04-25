@@ -8,7 +8,7 @@ import 'screens/journey_create.dart';
 import 'package:go_router/go_router.dart';
 import 'screens/splash_screen.dart';
 import 'dart:async'; // Import dart:async for StreamSubscription
-import 'screens/gallery_overview_screen.dart'; // Import renamed gallery screen
+import 'screens/invoice_capture_overview_screen.dart'; // Import renamed gallery screen
 import 'models/journey.dart'; // Import Journey model
 import 'screens/settings/app_settings_screen.dart'; // Update import for settings screen (using current filename)
 import 'repositories/auth_repository.dart'; // Import AuthRepository
@@ -20,6 +20,10 @@ import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
 import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
 import 'providers/logging_provider.dart'; // Add import for logger
 import 'package:travel/screens/auth_wait_screen.dart'; // Add import for wait screen
+import 'package:travel/screens/invoice_capture_screen.dart';
+import 'package:travel/screens/journey_settings_screen.dart';
+import 'package:travel/screens/journey_expenses_screen.dart';
+import 'package:travel/screens/user_management_screen.dart';
 
 // Add Firebase imports
 import 'package:firebase_core/firebase_core.dart';
@@ -154,19 +158,17 @@ final routerProvider = Provider<GoRouter>((ref) {
               // Add gallery route nested under journey detail
               routes: [
                 GoRoute(
-                  path: AppRoutes.galleryOverview
-                      .split('/')
-                      .last, // Relative path: 'gallery-overview'
+                  path: AppRoutes.invoiceCaptureOverview.split('/').last,
                   builder: (context, state) {
                     final journey = state.extra as Journey?;
                     if (journey != null) {
-                      return GalleryOverviewScreen(journey: journey);
+                      return InvoiceCaptureOverviewScreen(journey: journey);
                     } else {
                       return Scaffold(
                           appBar: AppBar(title: const Text('Error')),
                           body: const Center(
-                              child:
-                                  Text('Journey data missing for gallery.')));
+                              child: Text(
+                                  'Journey data missing for invoice capture.')));
                     }
                   },
                 ),
@@ -178,6 +180,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.appSettings.split('/').last, // Relative path
             builder: (context, state) => const AppSettingsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.userManagement.split('/').last, // Relative path
+            builder: (context, state) => const UserManagementScreen(),
+          ),
+          GoRoute(
+            path:
+                '${AppRoutes.journeyDetail.split('/').last}/:journeyId/expenses',
+            builder: (context, state) {
+              final journeyId = state.pathParameters['journeyId'];
+              if (journeyId != null) {
+                return ExpenseListScreen(journeyId: journeyId);
+              } else {
+                return const Scaffold(
+                  body: Center(child: Text('Missing journey ID')),
+                );
+              }
+            },
           ),
         ],
       ),

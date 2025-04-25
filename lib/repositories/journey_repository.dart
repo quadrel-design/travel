@@ -106,10 +106,8 @@ class JourneyRepositoryImpl implements JourneyRepository {
       _logger.i('Successfully updated journey ID: ${journey.id}');
     } on FirebaseException catch (e, stackTrace) {
       // Catch FirebaseException
-      _logger.e(
-          'FirebaseException updating journey ${journey.id}', // Log FirebaseException
-          error: e,
-          stackTrace: stackTrace);
+      _logger.e('[JOURNEY] Error updating journey:',
+          error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
           // Use custom exception
           'Failed to update journey: ${e.message}',
@@ -180,7 +178,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
           'Successfully deleted journey ID: $journeyId and associated data.');
     } on FirebaseException catch (e, stackTrace) {
       // Catch Firestore exceptions
-      _logger.e('FirebaseException deleting journey record $journeyId',
+      _logger.e('[JOURNEY] Error deleting journey:',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
           'Failed to delete journey record: ${e.message}', e, stackTrace);
@@ -310,7 +308,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
         return null;
       }
     }).handleError((error, stackTrace) {
-      _logger.e('Error fetching single journey stream ($journeyId)',
+      _logger.e('[JOURNEY] Error getting journey by ID:',
           error: error, stackTrace: stackTrace);
       throw DatabaseFetchException(
           'Failed to fetch journey details: ${error.toString()}',
@@ -525,7 +523,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
           .map((doc) => Journey.fromJson(doc.data()).copyWith(id: doc.id))
           .toList();
     }).handleError((error, stackTrace) {
-      _logger.e('Error fetching user journeys stream',
+      _logger.e('[JOURNEY] Error getting journeys:',
           error: error, stackTrace: stackTrace);
       throw DatabaseFetchException(
           'Failed to fetch journeys: ${error.toString()}', error, stackTrace);

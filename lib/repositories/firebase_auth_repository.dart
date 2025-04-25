@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:google_sign_in/google_sign_in.dart';
 import 'package:logger/logger.dart';
 import './auth_repository.dart'; // Import the abstract class
 import '../providers/logging_provider.dart'; // Import logger provider if used
@@ -7,10 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Ref for logge
 // Concrete implementation using Firebase Authentication
 class FirebaseAuthRepository implements AuthRepository {
   final firebase_auth.FirebaseAuth _firebaseAuth;
+  final GoogleSignIn _googleSignIn;
   final Logger _logger;
 
   // Constructor takes FirebaseAuth instance and Logger
-  FirebaseAuthRepository(this._firebaseAuth, this._logger);
+  FirebaseAuthRepository(this._firebaseAuth, this._logger)
+      : _googleSignIn = GoogleSignIn();
 
   // --- Implement abstract methods ---
 
@@ -22,37 +25,43 @@ class FirebaseAuthRepository implements AuthRepository {
   firebase_auth.User? get currentUser => _firebaseAuth.currentUser;
 
   @override
-  Future<void> signUp(String email, String password) async {
+  Future<firebase_auth.UserCredential> createUserWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
     try {
-      _logger.i('Attempting to sign up user: $email');
-      await _firebaseAuth.createUserWithEmailAndPassword(
+      _logger.i('Attempting to create user account: $email');
+      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      // Send verification email immediately after successful creation
       await sendVerificationEmail();
-      _logger.i('Sign up successful for: $email');
+      _logger.i('Account creation successful for: $email');
+      return credential;
     } on firebase_auth.FirebaseAuthException catch (e) {
-      _logger.e('FirebaseAuthException during sign up for $email',
+      _logger.e('FirebaseAuthException during account creation for $email',
           error: e, stackTrace: StackTrace.current);
-      // Rethrow to be handled by the UI layer
       rethrow;
     } catch (e, stackTrace) {
-      _logger.e('Unexpected error during sign up for $email',
+      _logger.e('Unexpected error during account creation for $email',
           error: e, stackTrace: stackTrace);
       rethrow;
     }
   }
 
   @override
-  Future<void> signInWithPassword(String email, String password) async {
+  Future<firebase_auth.UserCredential> signInWithEmailAndPassword({
+    required String email,
+    required String password,
+  }) async {
     try {
       _logger.i('Attempting to sign in user: $email');
-      await _firebaseAuth.signInWithEmailAndPassword(
+      final credential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email,
         password: password,
       );
       _logger.i('Sign in successful for: $email');
+      return credential;
     } on firebase_auth.FirebaseAuthException catch (e) {
       _logger.e('FirebaseAuthException during sign in for $email',
           error: e, stackTrace: StackTrace.current);
@@ -65,11 +74,50 @@ class FirebaseAuthRepository implements AuthRepository {
   }
 
   @override
+  Future<firebase_auth.UserCredential> signInWithGoogle() async {
+    try {
+      _logger.i('Attempting Google Sign-In');
+      // Trigger the authentication flow
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+
+      if (googleUser == null) {
+        throw firebase_auth.FirebaseAuthException(
+          code: 'ERROR_ABORTED_BY_USER',
+          message: 'Sign in aborted by user',
+        );
+      }
+
+      // Obtain the auth details from the request
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
+
+      // Create a new credential
+      final credential = firebase_auth.GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Sign in to Firebase with the Google credential
+      final userCredential =
+          await _firebaseAuth.signInWithCredential(credential);
+      _logger.i('Google Sign-In successful for: ${googleUser.email}');
+      return userCredential;
+    } catch (e, stackTrace) {
+      _logger.e('Error during Google Sign-In',
+          error: e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  @override
   Future<void> signOut() async {
     try {
       final userEmail = _firebaseAuth.currentUser?.email ?? 'unknown user';
       _logger.i('Signing out user: $userEmail');
-      await _firebaseAuth.signOut();
+      await Future.wait([
+        _firebaseAuth.signOut(),
+        _googleSignIn.signOut(),
+      ]);
       _logger.i('Sign out successful for: $userEmail');
     } catch (e, stackTrace) {
       _logger.e('Error during sign out', error: e, stackTrace: stackTrace);
@@ -104,15 +152,14 @@ class FirebaseAuthRepository implements AuthRepository {
       } catch (e, stackTrace) {
         _logger.e('Error sending verification email to ${user.email}',
             error: e, stackTrace: stackTrace);
-        // Decide if we should rethrow or just log
         rethrow;
       }
     } else if (user == null) {
       _logger.w('Attempted to send verification email, but user is null.');
-      // Optionally throw an error or handle appropriately
-    } else {
-      _logger.i(
-          'Attempted to send verification email, but email (${user.email}) is already verified.');
+      throw firebase_auth.FirebaseAuthException(
+        code: 'no-user',
+        message: 'No user is currently signed in.',
+      );
     }
   }
 }

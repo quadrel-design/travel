@@ -8,7 +8,10 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 class JourneyDetailOverviewScreen extends StatelessWidget {
   final Journey journey;
 
-  const JourneyDetailOverviewScreen({super.key, required this.journey});
+  const JourneyDetailOverviewScreen({
+    super.key,
+    required this.journey,
+  });
 
   // Restore the helper function
   // /*
@@ -36,6 +39,12 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
     );
   }
   // */
+
+  void _navigateToInvoiceCapture(BuildContext context) {
+    final fullPath =
+        '/home/journey-detail/${journey.id}/invoice-capture-overview';
+    context.push(fullPath, extra: journey);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -94,11 +103,7 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
                 label: l10n.journeyDetailImagesLabel, // Use l10n
                 onTap: () {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // Construct the full path explicitly
-              // Note: AppRoutes.journeyDetail and AppRoutes.galleryOverview are likely just segments
-              final fullPath =
-                  '/home/journey-detail/${journey.id}/gallery-overview';
-              context.push(fullPath, extra: journey);
+              _navigateToInvoiceCapture(context);
             }),
           ],
         ),

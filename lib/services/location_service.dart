@@ -25,7 +25,7 @@ class LocationService {
     }
 
     if (_apiKey.isEmpty) {
-      _logger.e('Google Places API key is not configured');
+      _logger.e('[LOCATION] Google Places API key is not configured');
       return [];
     }
 
@@ -35,14 +35,14 @@ class LocationService {
       );
 
       if (response.statusCode != 200) {
-        _logger
-            .e('Failed to fetch location suggestions: ${response.statusCode}');
+        _logger.e(
+            '[LOCATION] Failed to fetch location suggestions: ${response.statusCode}');
         return [];
       }
 
       final data = json.decode(response.body);
       if (data['status'] != 'OK') {
-        _logger.e('Google Places API error: ${data['status']}');
+        _logger.e('[LOCATION] Google Places API error: ${data['status']}');
         return [];
       }
 
@@ -51,7 +51,7 @@ class LocationService {
           .map((prediction) => prediction['description'] as String)
           .toList();
     } catch (e, stackTrace) {
-      _logger.e('Error fetching location suggestions',
+      _logger.e('[LOCATION] Error fetching location suggestions',
           error: e, stackTrace: stackTrace);
       return [];
     }
