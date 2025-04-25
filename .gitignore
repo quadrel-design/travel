@@ -85,6 +85,8 @@ flutter/
 
 # Google Cloud service account keys
 lib/config/*_service_account_key.json
+functions/splitbase-7ec0f-9618a4571647.json
+**/splitbase-7ec0f-*.json
 
 #amplify-do-not-edit-begin
 amplify/\#current-cloud-backend
