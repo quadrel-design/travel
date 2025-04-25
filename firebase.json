@@ -1,0 +1,53 @@
+{
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          {
+            "key": "Access-Control-Allow-Origin",
+            "value": "*"
+          },
+          {
+            "key": "Access-Control-Allow-Methods",
+            "value": "GET, HEAD, PUT, POST, DELETE, OPTIONS"
+          },
+          {
+            "key": "Access-Control-Allow-Headers",
+            "value": "Content-Type, Content-Length, Content-Disposition, Authorization, X-Requested-With, Accept, Origin"
+          },
+          {
+            "key": "Access-Control-Allow-Credentials",
+            "value": "true"
+          }
+        ]
+      }
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "storage": {
+    "rules": "storage.rules",
+    "cors": [
+      {
+        "origin": ["*"],
+        "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
+        "responseHeader": ["Content-Type", "Content-Length", "Content-Disposition", "Cache-Control", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        "maxAgeSeconds": 3600
+      }
+    ]
+  }
+} 

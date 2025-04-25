@@ -1,15 +1,17 @@
+import 'dart:async'; // Added for Timer
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-// Import AppTitle
-// Import color constants
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import generated class
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
+import 'package:logger/logger.dart'; // Import logger
 import 'package:travel/providers/repository_providers.dart'; // Import providers
+import 'package:travel/providers/auth_providers.dart'; // Import auth specific providers
+import 'package:travel/providers/logging_provider.dart'; // Import logger provider
 import 'package:travel/constants/app_routes.dart'; // Import routes
-// Import the helper widget
+// Import Firebase Auth (needed for error types maybe)
+import 'package:firebase_auth/firebase_auth.dart'; // Needed for FirebaseAuthException
 
 // Change to ConsumerStatefulWidget
 class AuthScreen extends ConsumerStatefulWidget {
@@ -22,182 +24,288 @@ class AuthScreen extends ConsumerStatefulWidget {
 
 // Change to ConsumerState
 class _AuthScreenState extends ConsumerState<AuthScreen> {
-  // Re-introduce Form key
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  late Logger _logger; // Initialize in initState
 
-  bool _isSignUp = false; // Start in Sign In mode
-  bool _isLoading = false;
+  // Local state for password visibility
+  bool _obscurePassword = true;
+
+  // Timer for email verification check
+  Timer? _verificationTimer;
 
   @override
   void initState() {
     super.initState();
+    _logger = ref.read(loggerProvider); // Initialize logger
     if (kDebugMode) {
-      // Access dotenv directly, no context needed here
       _emailController.text = dotenv.env['DEV_EMAIL'] ?? '';
       _passwordController.text = dotenv.env['DEV_PASSWORD'] ?? '';
     }
+    // Check initial auth state for verification wait
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authState = ref.read(authNavigationProvider);
+      if (authState == AuthNavigationState.waitForVerification) {
+        _startVerificationTimer(ref);
+      }
+    });
   }
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _verificationTimer?.cancel(); // Cancel timer on dispose
     super.dispose();
   }
 
-  // Helper to show SnackBar
-  void _showErrorSnackBar(BuildContext context, String title, String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        // Simpler content for standard Material
-        content: Text('$title: $message'),
-        backgroundColor: Theme.of(context).colorScheme.error,
-      ),
-    );
+  void _startVerificationTimer(WidgetRef ref) {
+    _verificationTimer?.cancel(); // Cancel any existing timer
+    _logger.d('Starting email verification check timer.');
+    // Check immediately and then periodically
+    _checkEmailVerificationStatus(ref);
+    _verificationTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      _logger.d('Periodic email verification check running...');
+      _checkEmailVerificationStatus(ref);
+    });
   }
 
-  void _showSuccessSnackBar(
-      BuildContext context, String title, String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        // Simpler content for standard Material
-        content: Text('$title: $message'),
-        backgroundColor:
-            Theme.of(context).colorScheme.primary, // Or another success color
-      ),
-    );
+  // Corrected _checkEmailVerificationStatus
+  void _checkEmailVerificationStatus(WidgetRef ref) async {
+    final currentUser = ref.read(authRepositoryProvider).currentUser;
+    if (currentUser != null &&
+        _verificationTimer != null &&
+        _verificationTimer!.isActive) {
+      try {
+        // Show loading indicator while checking
+        ref.read(authLoadingProvider.notifier).state = true;
+        await currentUser.reload();
+        final freshUser = ref
+            .read(authRepositoryProvider)
+            .currentUser; // Re-fetch after reload
+        if (freshUser != null && freshUser.emailVerified) {
+          _logger.i('Email verified for ${freshUser.email}');
+          _verificationTimer?.cancel();
+          // Let GoRouter handle navigation via auth state change
+          // ref.read(authNavigationProvider.notifier).state = AuthNavigationState.login; // No need to manually set state
+          ref.read(authErrorProvider.notifier).state = null; // Clear any errors
+        } else {
+          _logger
+              .d('Email verification still pending for ${currentUser.email}');
+        }
+      } catch (e) {
+        // <-- FIX: Reverted back to catch (e)
+        // Error during reload or verification check
+        // No need to show error to user unless it's persistent
+        // ref.read(authErrorProvider.notifier).state = e.toString(); // Keep this commented if e isn't used for user message
+        _logger.e('Email verification check failed',
+            error: e); // <-- FIX: Log the actual error 'e'
+      } finally {
+        // Always stop loading indicator after check attempt
+        if (mounted) {
+          ref.read(authLoadingProvider.notifier).state = false;
+        }
+      }
+    } else {
+      _logger.w('Verification check skipped: User null or timer inactive.');
+      // Optionally cancel timer if user becomes null
+      if (currentUser == null) {
+        _verificationTimer?.cancel();
+      }
+      ref.read(authErrorProvider.notifier).state =
+          'User is not logged in or timer not active.';
+    }
   }
 
-  // --- Forgot Password Handler ---
-  Future<void> _handleForgotPassword() async {
-    final l10n = AppLocalizations.of(context)!;
-    final authRepository = ref.read(authRepositoryProvider);
+  void _signInWithEmailAndPassword(BuildContext context, WidgetRef ref) async {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
+      ref.read(authLoadingProvider.notifier).state = true;
+      ref.read(authErrorProvider.notifier).state =
+          null; // Clear previous errors
+      try {
+        // Use values from controllers directly
+        await ref.read(authRepositoryProvider).signInWithPassword(
+            _emailController.text.trim(), _passwordController.text.trim());
+        // Navigation is handled by the GoRouter redirect based on auth state change
+        _logger.i(
+            'Sign in attempt successful for ${_emailController.text.trim()}');
+      } on FirebaseAuthException catch (e) {
+        // Catch specific Firebase exception
+        _logger.e('Sign in failed', error: e);
+        String errorMessage = 'An unknown error occurred.'; // Default message
+        // Provide more specific user-friendly messages
+        if (e.code == 'user-not-found' ||
+            e.code == 'wrong-password' ||
+            e.code == 'invalid-credential') {
+          errorMessage = 'Invalid email or password.';
+        } else if (e.code == 'user-disabled') {
+          errorMessage = 'This user account has been disabled.';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = 'The email address is not valid.';
+        }
+        ref.read(authErrorProvider.notifier).state = errorMessage;
+      } catch (e) {
+        // Generic catch for other errors
+        _logger.e('Sign in failed with unexpected error', error: e);
+        ref.read(authErrorProvider.notifier).state =
+            'An unexpected error occurred during sign in.';
+      } finally {
+        // Ensure loading state is reset even if widget is disposed during async operation
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(authLoadingProvider.notifier).state = false;
+          }
+        });
+      }
+    }
+  }
+
+  void _registerWithEmailAndPassword(
+      BuildContext context, WidgetRef ref) async {
+    if (_formKey.currentState!.validate()) {
+      _formKey.currentState!.save();
+      ref.read(authLoadingProvider.notifier).state = true;
+      ref.read(authErrorProvider.notifier).state =
+          null; // Clear previous errors
+      try {
+        // Use values from controllers directly
+        await ref.read(authRepositoryProvider).signUp(
+              _emailController.text.trim(),
+              _passwordController.text.trim(),
+            );
+        // Send verification email immediately after registration attempt
+        await ref.read(authRepositoryProvider).sendVerificationEmail();
+        _logger.i(
+            'Registration attempt successful for ${_emailController.text.trim()}, verification sent.');
+        // Navigate to wait screen *after* successful registration and email sent attempt
+        ref.read(authNavigationProvider.notifier).state =
+            AuthNavigationState.waitForVerification;
+        _startVerificationTimer(ref); // Start timer after navigating
+      } on FirebaseAuthException catch (e) {
+        // Catch specific Firebase exception
+        _logger.e('Registration failed', error: e);
+        String errorMessage = 'An unknown error occurred.'; // Default message
+        if (e.code == 'weak-password') {
+          errorMessage = 'The password provided is too weak.';
+        } else if (e.code == 'email-already-in-use') {
+          errorMessage = 'An account already exists for that email.';
+        } else if (e.code == 'invalid-email') {
+          errorMessage = 'The email address is not valid.';
+        }
+        ref.read(authErrorProvider.notifier).state = errorMessage;
+      } catch (e) {
+        // Generic catch
+        _logger.e('Registration failed with unexpected error', error: e);
+        ref.read(authErrorProvider.notifier).state =
+            'An unexpected error occurred during registration.';
+      } finally {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            ref.read(authLoadingProvider.notifier).state = false;
+          }
+        });
+      }
+    }
+  }
+
+  void _resetPassword(BuildContext context, WidgetRef ref) async {
+    // Use email from controller
     final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      // Use the simpler snackbar helper
-      _showErrorSnackBar(
-          context, l10n.missingInfoTitle, l10n.enterEmailFirstDesc);
+    // Capture context-dependent objects BEFORE await
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final focusScope = FocusScope.of(context);
+
+    final emailRegExp = RegExp(r"^[a-zA-Z0-9.]+@[a-zA-Z0-9]+\.[a-zA-Z]+");
+    if (email.isEmpty || !emailRegExp.hasMatch(email)) {
+      ref.read(authErrorProvider.notifier).state =
+          'Please enter a valid email address to reset password.';
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-    });
-
+    ref.read(authLoadingProvider.notifier).state = true;
+    ref.read(authErrorProvider.notifier).state = null;
     try {
-      final redirectUri =
-          kIsWeb ? Uri.parse('http://localhost:3000/update-password') : null;
-      final redirectTo = redirectUri?.toString();
-
-      await authRepository.resetPasswordForEmail(email, redirectTo: redirectTo);
+      await ref.read(authRepositoryProvider).resetPasswordForEmail(email);
+      // Add specific check right before using context after await
       if (mounted) {
-        // Use the simpler snackbar helper
-        _showSuccessSnackBar(context, l10n.passwordResetEmailSentTitle,
-            l10n.passwordResetEmailSentDesc);
+        // Use captured scaffoldMessenger
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+              content:
+                  Text('Password reset email sent. Please check your inbox.')),
+        );
+        // Use captured focusScope
+        focusScope.unfocus(); // Hide keyboard
       }
-    } on AuthException {
-      String localizedTitle = l10n.errorTitle;
-      String localizedDesc = l10n.passwordResetFailedDesc;
-      if (mounted) {
-        _showErrorSnackBar(context, localizedTitle, localizedDesc);
+      _logger.i('Password reset email sent to $email');
+    } on FirebaseAuthException catch (e) {
+      // Catch specific Firebase exception
+      _logger.e('Password reset failed for $email', error: e);
+      String errorMessage = 'An unknown error occurred.'; // Default message
+      if (e.code == 'user-not-found') {
+        errorMessage = 'No user found for that email.';
+      } else if (e.code == 'invalid-email') {
+        errorMessage = 'The email address is not valid.';
       }
-    } catch (_) {
+      ref.read(authErrorProvider.notifier).state = errorMessage;
+      // Add check here before showing potential SnackBar for specific errors (optional)
       if (mounted) {
-        _showErrorSnackBar(
-            context, l10n.errorTitle, l10n.logoutUnexpectedErrorDesc);
+        // Use captured scaffoldMessenger if showing snackbar here
+        // scaffoldMessenger.showSnackBar(...);
+      }
+    } catch (e) {
+      // Generic catch
+      _logger.e('Password reset failed for $email with unexpected error',
+          error: e);
+      ref.read(authErrorProvider.notifier).state =
+          'An unexpected error occurred.';
+      // Add specific check right before using context after await (error case)
+      if (mounted) {
+        // Use captured scaffoldMessenger
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(content: Text('Failed to send password reset email.')),
+        );
       }
     } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          ref.read(authLoadingProvider.notifier).state = false;
+        }
+      });
     }
   }
-  // --- End Forgot Password Handler ---
 
-  Future<void> _submit() async {
-    final l10n = AppLocalizations.of(context)!;
-    final authRepository = ref.read(authRepositoryProvider);
-    final isValid = _formKey.currentState?.validate() ?? false;
-    if (!isValid) {
-      return;
-    }
-
+  // Method to toggle password visibility
+  void _togglePasswordVisibility() {
     setState(() {
-      _isLoading = true;
+      _obscurePassword = !_obscurePassword;
     });
-    FocusScope.of(context).unfocus();
-
-    try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
-
-      if (_isSignUp) {
-        await authRepository.signUp(email, password);
-        if (mounted) {
-          _showSuccessSnackBar(
-              context, l10n.signUpSuccessTitle, l10n.signUpSuccessDesc);
-          // Keep optional logic
-          // _formKey.currentState?.reset();
-          // _emailController.clear();
-          // _passwordController.clear();
-        }
-      } else {
-        await authRepository.signInWithPassword(email, password);
-        if (mounted) {
-          context.go(AppRoutes.home);
-        }
-      }
-    } on AuthException catch (e) {
-      String localizedTitle = l10n.authErrorTitle;
-      String localizedDesc = e.message; // Default to raw message
-      // Keep specific error message handling
-      if (_isSignUp &&
-          e.message.toLowerCase().contains('user already registered')) {
-        localizedTitle = l10n.emailRegisteredTitle;
-        localizedDesc = l10n.emailRegisteredDesc;
-      } else if (!_isSignUp &&
-          e.message.toLowerCase().contains('email not confirmed')) {
-        localizedDesc = l10n.emailNotConfirmedDesc;
-      } else if (!_isSignUp &&
-          e.message.toLowerCase().contains('invalid login credentials')) {
-        localizedTitle = l10n.signInFailedTitle;
-        localizedDesc = l10n.invalidLoginCredentialsDesc;
-      }
-      if (mounted) {
-        _showErrorSnackBar(context, localizedTitle, localizedDesc);
-      }
-    } catch (_) {
-      if (mounted) {
-        _showErrorSnackBar(context, l10n.errorTitle, l10n.unexpectedErrorDesc);
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    Theme.of(context);
+    // final l10n = AppLocalizations.of(context)!; // L10N_COMMENT_OUT
+    final currentAuthState = ref.watch(authNavigationProvider);
+    final isLoading = ref.watch(authLoadingProvider);
+    final errorMessage = ref.watch(authErrorProvider);
+
+    // Determine if showing login or sign up form
+    bool showLoginForm = currentAuthState == AuthNavigationState.login;
+    bool showWaitScreen =
+        currentAuthState == AuthNavigationState.waitForVerification;
 
     return Scaffold(
-      appBar: AppBar(
-        // Replace custom AppTitle with standard Text
-        title: Text(l10n.appName), // Ensure l10n.appName exists
-        centerTitle: true, // Keep centered
-      ),
+      // Use a simple AppBar for wait screen
+      appBar: showWaitScreen
+          // ? AppBar(title: Text(l10n.verifyEmailTitle)) // L10N_COMMENT_OUT
+          ? AppBar(title: const Text('Verify Email')) // Placeholder
+          : AppBar(
+              // title: Text(l10n.appName),
+              title: const Text('Travel App'), // Placeholder
+              centerTitle: true,
+            ),
       body: Container(
         constraints: const BoxConstraints.expand(),
         decoration: const BoxDecoration(
@@ -206,124 +314,244 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             fit: BoxFit.cover,
           ),
         ),
-        alignment: Alignment.center, // Center content
+        alignment: Alignment.center,
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20.0),
-            // Replace custom Container with Material Card
             child: ConstrainedBox(
-              constraints:
-                  const BoxConstraints(maxWidth: 400), // Typical max width
+              constraints: const BoxConstraints(maxWidth: 400),
               child: Card(
                 elevation: 4.0,
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
-                  child: Form(
-                    key: _formKey,
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        // --- Email Field (Standard TextFormField) ---
-                        TextFormField(
-                          controller: _emailController,
-                          decoration: InputDecoration(
-                            // Use standard labels/hints/icons
-                            labelText: l10n.emailLabel, // Ensure key exists
-                            hintText: l10n.emailHint, // Ensure key exists
-                            prefixIcon: const Icon(Icons.email),
-                          ),
-                          keyboardType: TextInputType.emailAddress,
-                          autocorrect: false,
-                          textCapitalization: TextCapitalization.none,
-                          validator: (value) {
-                            if (value == null ||
-                                value.trim().isEmpty ||
-                                !value.contains('@')) {
-                              // Ensure key exists
-                              return l10n.emailValidationError;
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-
-                        // --- Password Field (Standard TextFormField) ---
-                        TextFormField(
-                          controller: _passwordController,
-                          decoration: InputDecoration(
-                            // Use standard labels/hints/icons
-                            labelText: l10n.passwordLabel, // Ensure key exists
-                            hintText: l10n.passwordHint, // Ensure key exists
-                            prefixIcon: const Icon(Icons.lock),
-                          ),
-                          obscureText: true,
-                          validator: (value) {
-                            if (value == null || value.trim().length < 6) {
-                              // Ensure key exists
-                              return l10n.passwordValidationError;
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 24),
-
-                        // --- Submit Button (Standard ElevatedButton) ---
-                        _isLoading
-                            ? const Center(child: CircularProgressIndicator())
-                            : ElevatedButton(
-                                onPressed: _submit,
-                                style: ElevatedButton.styleFrom(
-                                  // Optional standard styling
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 12),
-                                ),
-                                // Ensure keys exist
-                                child: Text(_isSignUp
-                                    ? l10n.signUpButton
-                                    : l10n.signInButton),
-                              ),
-                        const SizedBox(height: 12),
-
-                        // --- Auth Mode Switch Button (Standard TextButton) ---
-                        if (!_isLoading)
-                          TextButton(
-                            onPressed: () {
-                              setState(() {
-                                _isSignUp = !_isSignUp;
-                                _formKey.currentState?.reset();
-                                // Keep filled dev creds if switching
-                                if (!kDebugMode) {
-                                  _emailController.clear();
-                                  _passwordController.clear();
-                                }
-                              });
-                            },
-                            // Ensure keys exist
-                            child: Text(_isSignUp
-                                ? l10n.signInPrompt
-                                : l10n.signUpPrompt),
-                          ),
-
-                        // --- Forgot Password Button (Standard TextButton) ---
-                        if (!_isSignUp && !_isLoading)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 8.0),
-                            child: TextButton(
-                              onPressed: _handleForgotPassword,
-                              // Ensure key exists
-                              child: Text(l10n.forgotPasswordButton),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
+                  child: showWaitScreen
+                      ? _buildWaitForVerification(
+                          context, ref, errorMessage, isLoading)
+                      : _buildAuthForm(
+                          context, ref, showLoginForm, isLoading, errorMessage),
                 ),
               ),
             ),
           ),
         ),
       ),
+    );
+  }
+
+  // Extracted Auth Form Widget
+  Widget _buildAuthForm(BuildContext context, WidgetRef ref, bool isLogin,
+      bool isLoading, String? errorMessage) {
+    return Form(
+      key: _formKey,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // --- Error Message Display ---
+          if (errorMessage != null && !isLoading)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16.0),
+              child: Text(
+                errorMessage,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+                textAlign: TextAlign.center,
+              ),
+            ),
+
+          // --- Email Field ---
+          TextFormField(
+            controller: _emailController,
+            decoration: InputDecoration(
+              // labelText: l10n.emailLabel,
+              labelText: 'Email', // Placeholder
+              // hintText: l10n.emailHint,
+              hintText: 'Enter your email', // Placeholder
+              prefixIcon: const Icon(Icons.email),
+            ),
+            keyboardType: TextInputType.emailAddress,
+            autocorrect: false,
+            textCapitalization: TextCapitalization.none,
+            validator: (value) {
+              if (value == null ||
+                  value.trim().isEmpty ||
+                  !value.contains('@')) {
+                // return l10n.emailValidationError;
+                return 'Please enter a valid email address.'; // Placeholder
+              }
+              return null;
+            },
+            onSaved: (value) {
+              // No need to save to separate variable if using controller directly
+            },
+          ),
+          const SizedBox(height: 16),
+
+          // --- Password Field ---
+          TextFormField(
+            controller: _passwordController,
+            decoration: InputDecoration(
+              // labelText: l10n.passwordLabel,
+              labelText: 'Password', // Placeholder
+              // hintText: l10n.passwordHint,
+              hintText: 'Enter your password', // Placeholder
+              prefixIcon: const Icon(Icons.lock),
+              suffixIcon: IconButton(
+                // Added suffix icon
+                icon: Icon(
+                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
+                ),
+                onPressed: _togglePasswordVisibility,
+              ),
+            ),
+            obscureText: _obscurePassword, // Use local state
+            validator: (value) {
+              if (value == null || value.trim().length < 6) {
+                // return l10n.passwordValidationError;
+                return 'Password must be at least 6 characters long.'; // Placeholder
+              }
+              return null;
+            },
+            onSaved: (value) {
+              // No need to save to separate variable if using controller directly
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // --- Submit Button ---
+          isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ElevatedButton(
+                  // Decide action based on isLogin
+                  onPressed: () => isLogin
+                      ? _signInWithEmailAndPassword(context, ref)
+                      : _registerWithEmailAndPassword(context, ref),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  // child: Text(isLogin ? l10n.signInButton : l10n.signUpButton),
+                  child: Text(isLogin ? 'Sign In' : 'Sign Up'), // Placeholder
+                ),
+          const SizedBox(height: 12),
+
+          // --- Auth Mode Switch Button ---
+          if (!isLoading)
+            TextButton(
+              onPressed: () {
+                // Toggle between Login and SignUp states
+                ref.read(authNavigationProvider.notifier).state = isLogin
+                    ? AuthNavigationState.signUp
+                    : AuthNavigationState.login;
+                _formKey.currentState?.reset();
+                ref.read(authErrorProvider.notifier).state =
+                    null; // Clear errors on switch
+                if (!kDebugMode) {
+                  _emailController.clear();
+                  _passwordController.clear();
+                }
+              },
+              // child: Text(isLogin ? l10n.signUpPrompt : l10n.signInPrompt),
+              child: Text(isLogin
+                  ? 'Need an account? Sign up'
+                  : 'Have an account? Sign in'), // Placeholder
+            ),
+
+          // --- Forgot Password Button ---
+          if (isLogin && !isLoading) // Show only in login mode
+            Padding(
+              padding: const EdgeInsets.only(top: 8.0),
+              child: TextButton(
+                onPressed: () => _resetPassword(context, ref),
+                // child: Text(l10n.forgotPasswordButton),
+                child: const Text('Forgot Password?'), // Placeholder
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // Extracted Wait for Verification Widget
+  Widget _buildWaitForVerification(BuildContext context, WidgetRef ref,
+      String? errorMessage, bool isLoading) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Text(l10n.verifyEmailTitle, style: Theme.of(context).textTheme.headlineSmall), // L10N_COMMENT_OUT
+        Text('Verify Your Email',
+            style: Theme.of(context).textTheme.headlineSmall), // Placeholder
+        const SizedBox(height: 16),
+        Text(
+            // l10n.verifyEmailMessage(_emailController.text.isNotEmpty ? _emailController.text : 'your email address'), // L10N_COMMENT_OUT
+            'A verification link has been sent to ${_emailController.text.isNotEmpty ? _emailController.text : 'your email address'}. Please check your inbox and click the link.', // Placeholder
+            textAlign: TextAlign.center),
+        const SizedBox(height: 24),
+        // --- Error Message Display ---
+        if (errorMessage != null && !isLoading)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16.0),
+            child: Text(
+              errorMessage,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              textAlign: TextAlign.center,
+            ),
+          ),
+        if (isLoading) const CircularProgressIndicator(),
+        if (!isLoading)
+          ElevatedButton.icon(
+            icon: const Icon(Icons.refresh),
+            // label: Text(l10n.checkVerificationButton), // L10N_COMMENT_OUT
+            label: const Text('Check Verification Status'), // Placeholder
+            onPressed: () => _checkEmailVerificationStatus(ref),
+          ),
+        const SizedBox(height: 12),
+        if (!isLoading)
+          TextButton(
+            onPressed: () async {
+              // Resend verification email
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+              ref.read(authLoadingProvider.notifier).state = true;
+              ref.read(authErrorProvider.notifier).state = null;
+              try {
+                await ref.read(authRepositoryProvider).sendVerificationEmail();
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(content: Text('Verification email resent.')),
+                  );
+                }
+              } catch (e) {
+                _logger.e("Error resending verification email", error: e);
+                if (mounted) {
+                  scaffoldMessenger.showSnackBar(
+                    const SnackBar(
+                        content: Text('Failed to resend verification email.')),
+                  );
+                }
+                ref.read(authErrorProvider.notifier).state =
+                    "Failed to resend email.";
+              } finally {
+                if (mounted) {
+                  ref.read(authLoadingProvider.notifier).state = false;
+                }
+              }
+            },
+            // child: Text(l10n.resendVerificationEmailButton), // L10N_COMMENT_OUT
+            child: const Text('Resend Verification Email'), // Placeholder
+          ),
+        const SizedBox(height: 12),
+        if (!isLoading)
+          TextButton(
+            // Button to go back to Login
+            onPressed: () {
+              _verificationTimer?.cancel(); // Stop timer
+              ref.read(authNavigationProvider.notifier).state =
+                  AuthNavigationState.login;
+              ref.read(authErrorProvider.notifier).state = null; // Clear errors
+            },
+            // child: Text(l10n.backToLoginButton), // L10N_COMMENT_OUT
+            child: const Text('Back to Login'), // Placeholder
+          ),
+      ],
     );
   }
 }

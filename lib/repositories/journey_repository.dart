@@ -1,23 +1,78 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/journey.dart';
 import 'dart:typed_data'; // For Uint8List
-import 'package:path/path.dart' as p;
-import 'package:uuid/uuid.dart';
-import 'package:logger/logger.dart'; // Import Logger
-import 'repository_exceptions.dart'; // Import custom exceptions
-import '../models/journey_image_info.dart';
 
-class JourneyRepository {
+// Firebase Imports
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+
+// Remove Supabase import
+// import 'package:supabase_flutter/supabase_flutter.dart';
+
+import 'package:logger/logger.dart'; // Import Logger
+import '../models/journey.dart';
+import '../models/journey_image_info.dart';
+import 'repository_exceptions.dart'; // Import custom exceptions
+
+// Abstract class defining the contract for Journey data operations
+abstract class JourneyRepository {
+  // --- Journey Methods ---
+
+  /// Fetches all journeys for the currently logged-in user as a stream.
+  Stream<List<Journey>> fetchUserJourneys();
+
+  /// Fetches a single journey by its ID as a stream.
+  Stream<Journey?> getJourneyStream(String journeyId);
+
+  /// Adds a new journey to the data store.
+  /// Returns the newly created Journey object with its generated ID.
+  Future<Journey> addJourney(Journey journey);
+
+  /// Updates an existing journey.
+  Future<void> updateJourney(Journey journey);
+
+  /// Deletes a journey and its associated data (like images).
+  Future<void> deleteJourney(String journeyId);
+
+  // --- Journey Image Methods ---
+
+  /// Fetches all image metadata for a specific journey as a stream.
+  Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId);
+
+  /// Uploads an image file for a specific journey.
+  /// Returns the JourneyImageInfo object containing metadata and the download URL.
+  Future<JourneyImageInfo> uploadJourneyImage(
+      String journeyId, List<int> imageBytes, String fileName);
+
+  /// Deletes a specific image associated with a journey, including its storage file.
+  Future<void> deleteJourneyImage(
+      String journeyId, String imageId, String fileName);
+
+  // --- Potentially needed methods (Add if required by other parts of the app) ---
+
+  // Future<void> updateJourneyImageMetadata(String journeyId, JourneyImageInfo imageInfo);
+
+  // Note: Removed getJourneys (use fetchUserJourneys stream), createJourney (use addJourney),
+  // deleteSingleJourneyImage (use deleteJourneyImage), addImageReference (Firestore handles this)
+  // compared to the original interface deduced from the error messages.
+}
+
+class JourneyRepositoryImpl implements JourneyRepository {
   // --- Dependency Injection ---
-  final SupabaseClient _supabaseClient;
+  // Replace SupabaseClient with Firestore and Storage
+  final FirebaseFirestore _firestore;
+  final FirebaseStorage _storage;
+  final FirebaseAuth _auth;
   final Logger _logger;
 
-  JourneyRepository(this._supabaseClient, this._logger);
+  // Update constructor
+  JourneyRepositoryImpl(
+      this._firestore, this._storage, this._auth, this._logger);
   // --- End Dependency Injection ---
 
   // Helper to get current user ID, throws NotAuthenticatedException if null
   String _getCurrentUserId() {
-    final userId = _supabaseClient.auth.currentUser?.id;
+    // Use FirebaseAuth and uid
+    final userId = _auth.currentUser?.uid;
     if (userId == null) {
       _logger.e('User ID is null, operation requires authentication.');
       throw NotAuthenticatedException(
@@ -26,100 +81,40 @@ class JourneyRepository {
     return userId;
   }
 
-  // Helper to extract storage path from URL
-  String? _extractStoragePath(String url) {
-    try {
-      final uri = Uri.parse(url);
-      const bucketName = 'journey_images'; // Assuming this is your bucket name
-      final pathSegments = uri.pathSegments;
-      // Find the segment after 'object/public' and the bucket name
-      final bucketIndex = pathSegments.indexOf(bucketName);
-      if (bucketIndex == -1 || bucketIndex + 1 >= pathSegments.length) {
-        _logger.w(
-            'Could not find bucket "$bucketName" or path segments after it in URL: $url');
-        return null;
-      }
-      // Join the segments after the bucket name
-      return pathSegments.sublist(bucketIndex + 1).join('/');
-    } catch (e) {
-      _logger.e('Failed to parse path from URL: $url', error: e);
-      return null;
-    }
-  }
-
-  Future<List<Journey>> getJourneys() async {
-    try {
-      final userId = _getCurrentUserId();
-      _logger.d('Fetching journeys for user: $userId');
-      final data = await _supabaseClient
-          .from('journeys')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
-
-      _logger.d('Fetched ${data.length} journeys from DB.');
-      final journeys = data.map((item) => Journey.fromJson(item)).toList();
-      return journeys;
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException fetching journeys',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseFetchException(
-          'Failed to fetch journeys: ${e.message}', e, stackTrace);
-    } on NotAuthenticatedException {
-      // Re-throw specific exception
-      rethrow;
-    } catch (e, stackTrace) {
-      _logger.e('Unexpected error fetching journeys',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseFetchException(
-          'An unexpected error occurred while fetching journeys.',
-          e,
-          stackTrace);
-    }
-  }
-
-  Future<void> createJourney(String title) async {
-    try {
-      final userId = _getCurrentUserId();
-      _logger.d('Creating journey "$title" for user: $userId');
-      await _supabaseClient.from('journeys').insert({
-        'user_id': userId,
-        'title': title,
-      });
-      _logger.i('Successfully created journey "$title".');
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException creating journey "$title"',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseOperationException(
-          'Failed to create journey: ${e.message}', e, stackTrace);
-    } on NotAuthenticatedException {
-      // Re-throw specific exception
-      rethrow;
-    } catch (e, stackTrace) {
-      _logger.e('Unexpected error creating journey "$title"',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseOperationException(
-          'An unexpected error occurred while creating the journey.',
-          e,
-          stackTrace);
-    }
-  }
-
+  @override
   Future<void> updateJourney(Journey journey) async {
     try {
-      final userId = _getCurrentUserId(); // Ensure user is logged in
-      _logger.d('Updating journey ID: ${journey.id}');
-      await _supabaseClient
-          .from('journeys')
-          .update(journey.toJson()) // Use the model's toJson
-          .eq('id', journey.id)
-          .eq('user_id', userId); // Ensure user owns the journey
+      // Use user ID check primarily for logging or if rules aren't set up
+      final userId = _getCurrentUserId();
+      _logger.d('Updating journey ID: ${journey.id} for user: $userId');
+
+      // Prepare data, remove id and potentially user_id if handled by rules
+      final journeyData = journey.toJson();
+      journeyData.remove('id');
+      // journeyData.remove('user_id'); // Keep if needed for rules/queries
+      // Consider adding an 'updated_at' timestamp
+      journeyData['updated_at'] = FieldValue.serverTimestamp();
+
+      // Use Firestore update by document ID
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journey.id)
+          .update(journeyData);
+
       _logger.i('Successfully updated journey ID: ${journey.id}');
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException updating journey ${journey.id}',
-          error: e, stackTrace: stackTrace);
+    } on FirebaseException catch (e, stackTrace) {
+      // Catch FirebaseException
+      _logger.e(
+          'FirebaseException updating journey ${journey.id}', // Log FirebaseException
+          error: e,
+          stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'Failed to update journey: ${e.message}', e, stackTrace);
+          // Use custom exception
+          'Failed to update journey: ${e.message}',
+          e,
+          stackTrace);
     } on NotAuthenticatedException {
       // Re-throw specific exception
       rethrow;
@@ -133,55 +128,59 @@ class JourneyRepository {
     }
   }
 
+  @override
   Future<void> deleteJourney(String journeyId) async {
+    String userId =
+        'unknown_user'; // Default for logging if user ID fetch fails
     try {
-      final userId = _getCurrentUserId();
+      userId = _getCurrentUserId();
       _logger
           .d('Attempting to delete journey ID: $journeyId for user: $userId');
 
-      // 1. Delete associated images from storage (optional, based on RLS policies)
-      //    If RLS handles cascade deletes in storage, this might not be strictly needed here,
-      //    but explicit deletion can be safer.
+      // --- 1. Delete associated images from Firebase Storage ---
       final storagePath = '$userId/$journeyId';
       _logger.d('Listing files in storage path: $storagePath for deletion.');
-      final fileList = await _supabaseClient.storage
-          .from('journey_images')
-          .list(path: storagePath);
-      final filePathsToDelete =
-          fileList.map((file) => '$storagePath/${file.name}').toList();
 
-      if (filePathsToDelete.isNotEmpty) {
-        _logger.d('Deleting ${filePathsToDelete.length} files from storage...');
-        await _supabaseClient.storage
-            .from('journey_images')
-            .remove(filePathsToDelete);
-        _logger.d('Storage files deleted.');
-      } else {
-        _logger.d('No files found in storage path $storagePath to delete.');
+      try {
+        final listResult = await _storage.ref().child(storagePath).listAll();
+        final fileRefsToDelete = listResult.items;
+
+        if (fileRefsToDelete.isNotEmpty) {
+          _logger
+              .d('Deleting ${fileRefsToDelete.length} files from storage...');
+          // Delete all files concurrently
+          await Future.wait(fileRefsToDelete.map((ref) => ref.delete()));
+          _logger.d('Storage files deleted.');
+        } else {
+          _logger.d('No files found in storage path $storagePath to delete.');
+        }
+        // Catch FirebaseException for storage operations
+      } on FirebaseException catch (e, stackTrace) {
+        _logger.e('FirebaseException deleting journey content $journeyId',
+            error: e, stackTrace: stackTrace);
+        // Decide if this is critical - maybe only log and continue to delete DB record?
+        // For now, we'll throw a specific exception.
+        throw ImageDeleteException(
+            'Failed to delete images from storage: ${e.message}',
+            e,
+            stackTrace);
       }
 
-      // 2. Delete the journey record from the database
+      // --- 2. Delete the journey record from Firestore ---
       _logger.d('Deleting journey record ID: $journeyId from database.');
-      await _supabaseClient
-          .from('journeys')
-          .delete()
-          .eq('id', journeyId)
-          .eq('user_id', userId);
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journeyId)
+          .delete();
+      // Note: Firestore rules should prevent unauthorized deletion
 
       _logger.i(
           'Successfully deleted journey ID: $journeyId and associated data.');
-    } on StorageException catch (e, stackTrace) {
-      // Catch storage specific errors
-      _logger.e('StorageException deleting journey content $journeyId',
-          error: e, stackTrace: stackTrace);
-      // Decide if this is critical - maybe only log and continue to delete DB record?
-      // For now, we'll throw a specific exception.
-      throw ImageDeleteException(
-          'Failed to delete journey images from storage: ${e.message}',
-          e,
-          stackTrace);
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException deleting journey record $journeyId',
+    } on FirebaseException catch (e, stackTrace) {
+      // Catch Firestore exceptions
+      _logger.e('FirebaseException deleting journey record $journeyId',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
           'Failed to delete journey record: ${e.message}', e, stackTrace);
@@ -191,6 +190,8 @@ class JourneyRepository {
     } catch (e, stackTrace) {
       _logger.e('Unexpected error deleting journey $journeyId',
           error: e, stackTrace: stackTrace);
+      // Determine if it was storage or db based on where it happened?
+      // For now, throw generic DatabaseOperationException
       throw DatabaseOperationException(
           'An unexpected error occurred while deleting the journey.',
           e,
@@ -198,115 +199,273 @@ class JourneyRepository {
     }
   }
 
-  Future<String> uploadJourneyImage(
-      Uint8List imageBytes, String fileName, String journeyId) async {
-    final imageRecordId = const Uuid().v4();
-    final userId = _getCurrentUserId();
-    final fileExt = p.extension(fileName);
-    // Updated filePath to include journeyId
-    final filePath = '$userId/$journeyId/$imageRecordId$fileExt';
-    _logger.d(
-        'Attempting to upload image to path: $filePath (Record ID: $imageRecordId) for Journey: $journeyId');
-
+  @override
+  Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId) {
+    _logger.d('[REPO STREAM] Creating image stream for journey $journeyId');
     try {
-      await _supabaseClient.storage.from('journey_images').uploadBinary(
-            filePath,
-            imageBytes,
-            // fileOptions: FileOptions(contentType: pickedFile.mimeType) // Consider adding later
-          );
-      final imageUrl =
-          _supabaseClient.storage.from('journey_images').getPublicUrl(filePath);
-      _logger.i('Image uploaded successfully to: $imageUrl');
+      // Use Firestore snapshots stream
+      // IMPORTANT: Path corrected to use subcollection within journey
+      final query = _firestore
+          .collection('users')
+          .doc(_getCurrentUserId()) // Use helper to ensure user ID
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .orderBy('uploadedAt', descending: true); // Order by upload time
 
-      // Pass journeyId down to addImageReference
-      await addImageReference(imageUrl, journeyId, id: imageRecordId);
+      final stream = query.snapshots(); // Get the stream of QuerySnapshots
 
-      return imageUrl; // Return the public URL
-    } on StorageException catch (e, stackTrace) {
-      _logger.e('StorageException during image upload for $filePath',
-          error: e, stackTrace: stackTrace);
-      // Attempt to delete the failed upload if possible?
-      throw ImageUploadException('Storage failed: ${e.message}', e, stackTrace);
-    } on AddImageReferenceException {
-      // Let specific exception bubble up
-      _logger.w(
-          'Image uploaded to storage ($filePath), but failed to add DB reference. Manual cleanup might be needed.');
-      // Consider attempting to delete the orphaned storage file here
-      // await _supabaseClient.storage.from('journey_images').remove([filePath]);
-      rethrow;
-    } on NotAuthenticatedException {
-      // Re-throw specific exception
-      rethrow;
+      // Map the stream data
+      return stream.map((querySnapshot) {
+        _logger.d(
+            '[REPO STREAM MAP] Stream emitted ${querySnapshot.docs.length} docs for journey $journeyId');
+        return querySnapshot.docs
+            .map((doc) {
+              try {
+                // Map Firestore document to JourneyImageInfo, adding document ID
+                final data = doc.data();
+                // ID is implicitly the document ID
+                final info =
+                    JourneyImageInfo.fromJson(data).copyWith(id: doc.id);
+                _logger.d(
+                    '[REPO STREAM MAP INNER] Mapped doc ${doc.id} to: ${info.id}, ${info.url}, ${info.lastProcessedAt}');
+                return info;
+              } catch (e, stackTrace) {
+                _logger.e(
+                    '[REPO STREAM MAP INNER] Error mapping item: ${doc.id}',
+                    error: e,
+                    stackTrace: stackTrace);
+                return null; // Indicate mapping failure
+              }
+            })
+            .where((item) => item != null) // Filter out failed mappings
+            .cast<JourneyImageInfo>()
+            .toList();
+      }).handleError((error, stackTrace) {
+        // Add error handling to the stream
+        _logger.e('[REPO STREAM] Error in image stream for journey $journeyId',
+            error: error, stackTrace: stackTrace);
+        throw DatabaseFetchException(
+            'Failed to fetch images: ${error.toString()}', error, stackTrace);
+      });
     } catch (e, stackTrace) {
-      _logger.e('Unexpected error during image upload for $filePath',
-          error: e, stackTrace: stackTrace);
-      throw ImageUploadException(
-          'An unexpected error occurred during upload.', e, stackTrace);
+      _logger.e(
+          '[REPO STREAM] Error creating Firestore stream for journey $journeyId',
+          error: e,
+          stackTrace: stackTrace);
+      // Return an error stream or rethrow, depending on desired behavior
+      return Stream.error(DatabaseFetchException(
+          'Failed to create image stream: $e', e, stackTrace));
     }
   }
 
-  // Method to add just the image reference
-  Future<void> addImageReference(String imageUrl, String journeyId,
-      {String? id}) async {
-    final imageRecordId = id ?? const Uuid().v4();
-    final userId =
-        _getCurrentUserId(); // Keep user check for logging/potential future use
-    _logger.d(
-        'Adding image reference to DB. ID: $imageRecordId, URL: $imageUrl, JourneyID: $journeyId');
+  @override
+  Future<Journey> addJourney(Journey journey) async {
+    final userId = _getCurrentUserId(); // Use helper
+    _logger.i('Adding journey: ${journey.title} for user: $userId');
+    try {
+      // Add user ID and timestamps if not already set
+      final journeyWithMeta = journey.copyWith(
+        userId: userId,
+        // createdAt: DateTime.now(), // Add if model supports it
+        // updatedAt: DateTime.now(), // Add if model supports it
+      );
+      final docRef = await _firestore
+          .collection('users')
+          .doc(userId) // Use obtained userId
+          .collection('journeys')
+          .add(journeyWithMeta.toJson());
+      _logger.i('Journey added with ID: ${docRef.id}');
+      // Return the Journey object with the new ID
+      return journeyWithMeta.copyWith(id: docRef.id);
+    } on FirebaseException catch (e, s) {
+      _logger.e('FirebaseException adding journey: ${e.message}',
+          error: e, stackTrace: s);
+      throw DatabaseOperationException(
+          'Failed to add journey: ${e.code}', e, s);
+    } catch (e, s) {
+      _logger.e('Unknown error adding journey', error: e, stackTrace: s);
+      throw DatabaseOperationException(
+          'An unexpected error occurred while adding the journey.', e, s);
+    }
+  }
+
+  @override
+  Stream<Journey?> getJourneyStream(String journeyId) {
+    final userId = _getCurrentUserId(); // Use helper
+    _logger
+        .d('Setting up stream for single journey: $journeyId for user $userId');
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('journeys')
+        .doc(journeyId)
+        .snapshots()
+        .map((snapshot) {
+      if (snapshot.exists && snapshot.data() != null) {
+        _logger.d('Received snapshot for journey $journeyId');
+        return Journey.fromJson(snapshot.data()!).copyWith(id: snapshot.id);
+      } else {
+        _logger.w('Journey $journeyId does not exist or has no data.');
+        return null;
+      }
+    }).handleError((error, stackTrace) {
+      _logger.e('Error fetching single journey stream ($journeyId)',
+          error: error, stackTrace: stackTrace);
+      throw DatabaseFetchException(
+          'Failed to fetch journey details: ${error.toString()}',
+          error,
+          stackTrace);
+    });
+  }
+
+  @override
+  Future<JourneyImageInfo> uploadJourneyImage(
+      String journeyId, List<int> imageBytes, String fileName) async {
+    final userId = _getCurrentUserId(); // Use helper
+    _logger
+        .i('Uploading image $fileName to journey $journeyId for user $userId');
+
+    // Construct the storage path using user ID
+    final imagePath = 'users/$userId/journeys/$journeyId/images/$fileName';
+    final imageRef = _storage.ref().child(imagePath);
 
     try {
-      await _supabaseClient.from('journey_images').insert({
-        'id': imageRecordId,
-        'user_id': userId, // Add user_id field back
-        'journey_id': journeyId, // Keep journey_id field
-        'image_url': imageUrl,
-      });
-      _logger.i(
-          'Successfully added image reference to DB. ID: $imageRecordId for Journey $journeyId');
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException adding image reference $imageRecordId',
-          error: e, stackTrace: stackTrace);
-      throw AddImageReferenceException(
-          'Database insert failed: ${e.message}', e, stackTrace);
-    } on NotAuthenticatedException {
-      // Re-throw specific exception
-      rethrow;
-    } catch (e, stackTrace) {
-      _logger.e('Unexpected error adding image reference $imageRecordId',
-          error: e, stackTrace: stackTrace);
-      throw AddImageReferenceException(
-          'An unexpected error occurred adding the DB reference.',
-          e,
-          stackTrace);
+      // Use Uint8List here as required by putData
+      final uploadTask = await imageRef.putData(Uint8List.fromList(imageBytes));
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      _logger.i('Image uploaded successfully: $downloadUrl');
+
+      // Use correct constructor parameters for JourneyImageInfo
+      final imageInfo = JourneyImageInfo(
+        id: '', // Firestore will generate ID
+        url: downloadUrl,
+        imagePath: imagePath, // Use the storage path
+        // Initialize other fields as needed
+        hasPotentialText: null,
+        lastProcessedAt: null,
+        detectedText: null,
+        detectedTotalAmount: null,
+        detectedCurrency: null,
+        isInvoiceGuess: false,
+      );
+
+      final docRef = await _firestore
+          .collection('users')
+          .doc(userId) // Use obtained userId
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .add(imageInfo.toJson()); // Use the toJson method
+
+      _logger.i('Image metadata added to Firestore with ID: ${docRef.id}');
+      // Return the JourneyImageInfo object with the new ID
+      return imageInfo.copyWith(id: docRef.id);
+    } on FirebaseException catch (e, s) {
+      _logger.e('FirebaseException uploading image: ${e.message}',
+          error: e, stackTrace: s);
+      if (e.code == 'object-not-found') {
+        throw ImageUploadException('Storage object not found.', e, s);
+      } else if (e.code == 'unauthorized') {
+        throw NotAuthenticatedException(
+            'Unauthorized to upload image. Check Storage rules.');
+      } else {
+        throw ImageUploadException(
+            'Firebase error during upload: ${e.code}', e, s);
+      }
+    } catch (e, s) {
+      _logger.e('Unknown error uploading image', error: e, stackTrace: s);
+      throw ImageUploadException(
+          'An unexpected error occurred while uploading the image.', e, s);
+    }
+  }
+
+  @override
+  Future<void> deleteJourneyImage(
+      String journeyId, String imageId, String fileName) async {
+    final userId = _getCurrentUserId(); // Use helper
+    _logger.i(
+        'Deleting image $fileName (ID: $imageId) from journey $journeyId for user $userId');
+
+    // Construct the storage path using user ID
+    final imagePath = 'users/$userId/journeys/$journeyId/images/$fileName';
+    final imageRef = _storage.ref().child(imagePath);
+    final docRef = _firestore
+        .collection('users')
+        .doc(userId) // Use obtained userId
+        .collection('journeys')
+        .doc(journeyId)
+        .collection('images')
+        .doc(imageId);
+
+    try {
+      // Start both deletions, prioritize Firestore doc deletion
+      await docRef.delete();
+      _logger.i('Firestore document for image $imageId deleted.');
+
+      try {
+        await imageRef.delete();
+        _logger.i('Storage file $fileName deleted.');
+      } on FirebaseException catch (storageError, storageStackTrace) {
+        // Log storage deletion error but don't throw if Firestore deletion succeeded
+        _logger.e(
+            'FirebaseException deleting storage file $fileName: ${storageError.message}',
+            error: storageError,
+            stackTrace: storageStackTrace);
+      } catch (storageError, storageStackTrace) {
+        _logger.e('Unknown error deleting storage file $fileName',
+            error: storageError, stackTrace: storageStackTrace);
+      }
+    } on FirebaseException catch (e, s) {
+      _logger.e('FirebaseException deleting image metadata: ${e.message}',
+          error: e, stackTrace: s);
+      throw DatabaseOperationException(
+          'Failed to delete image metadata: ${e.code}', e, s);
+    } catch (e, s) {
+      _logger.e('Unknown error deleting image', error: e, stackTrace: s);
+      throw DatabaseOperationException(
+          'An unexpected error occurred while deleting the image.', e, s);
     }
   }
 
   // --- Add Method to Delete Single Journey Image ---
   Future<void> deleteSingleJourneyImage(
       String imageId, String imagePath) async {
-    final userId = _getCurrentUserId();
+    // Get user ID for logging/potential rules
+    final userId = _getCurrentUserId(); // Throws if not logged in
     _logger.d(
         'Attempting to delete single image. ID: $imageId, Path: $imagePath, User: $userId');
+
+    // Flag to track if storage deletion succeeded
+    bool storageDeleteSucceeded = false;
 
     if (imagePath.isEmpty) {
       _logger.w(
           'Image path is empty for image ID $imageId. Cannot delete from storage. Attempting DB delete only.');
-      // Optionally throw or just proceed to delete DB record
+      // Proceed directly to DB delete
     } else {
       // 1. Delete from Storage
       try {
         _logger.d('Deleting image from storage: $imagePath');
-        await _supabaseClient.storage
-            .from('journey_images')
-            .remove([imagePath]);
+        await _storage.ref().child(imagePath).delete();
         _logger.d('Successfully deleted image from storage: $imagePath');
-      } on StorageException catch (e, stackTrace) {
-        _logger.e('StorageException deleting image $imagePath',
+        storageDeleteSucceeded = true;
+        // Catch FirebaseException for storage
+      } on FirebaseException catch (e, stackTrace) {
+        _logger.e('FirebaseException deleting image $imagePath',
             error: e, stackTrace: stackTrace);
-        // Decide if this is critical. If storage delete fails, should we stop?
-        // For now, we log the error and proceed to delete the DB record, but throw at the end.
-        throw ImageDeleteException(
-            'Failed to delete image from storage: ${e.message}', e, stackTrace);
+        // If object not found, maybe proceed? For now, treat as failure.
+        if (e.code == 'object-not-found') {
+          _logger.w(
+              'Image $imagePath not found in storage, proceeding to delete DB record.');
+          storageDeleteSucceeded =
+              true; // Treat as success for DB deletion logic
+        } else {
+          throw ImageDeleteException(
+              'Failed to delete image from storage: ${e.message}',
+              e,
+              stackTrace);
+        }
       } catch (e, stackTrace) {
         // Catch other potential errors during storage removal
         _logger.e('Unexpected error deleting image from storage $imagePath',
@@ -318,203 +477,59 @@ class JourneyRepository {
       }
     }
 
-    // 2. Delete from Database
+    // 2. Delete from Database (only if storage deletion wasn't explicitly blocked by error)
     try {
       _logger.d('Deleting image record from DB: $imageId');
-      await _supabaseClient
-          .from('journey_images')
-          .delete()
-          .eq('id', imageId)
-          .eq('user_id', userId); // Ensure user owns the image record
+      await _firestore.collection('journey_images').doc(imageId).delete();
       _logger.i('Successfully deleted image record from DB: $imageId');
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException deleting image record $imageId',
+      // Catch FirebaseException for database
+    } on FirebaseException catch (e, stackTrace) {
+      _logger.e('FirebaseException deleting image record $imageId',
           error: e, stackTrace: stackTrace);
+      // If storage delete succeeded but DB failed, log warning
+      if (storageDeleteSucceeded) {
+        _logger.w(
+            'Storage file $imagePath deleted, but failed to delete DB reference for ID $imageId. Manual cleanup might be needed.');
+      }
       throw DatabaseOperationException(
-          'Failed to delete image record: ${e.message}', e, stackTrace);
+          'DB delete failed: ${e.message}', e, stackTrace);
+    } on NotAuthenticatedException {
+      // Re-throw specific exception
+      rethrow;
     } catch (e, stackTrace) {
       // Catch other potential errors during DB deletion
       _logger.e('Unexpected error deleting image record $imageId',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred during database deletion.',
-          e,
-          stackTrace);
+          'An unexpected error occurred during DB deletion.', e, stackTrace);
     }
   }
+
   // --- End Method to Delete Single Journey Image ---
 
-  // Stream for journey images (Now uses journeyId)
-  Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId) {
-    _logger.d('Creating stream for journey images for journey ID: $journeyId');
-    try {
-      // final userId = _getCurrentUserId();
-      final stream = _supabaseClient
-          .from('journey_images')
-          .stream(primaryKey: ['id'])
-          // Filter by journey ID - This is essential, re-adding it.
-          .eq('journey_id', journeyId)
-          .order('created_at'); // Order by creation time
-
-      // Log raw stream events BEFORE mapping
-      final loggedStream = stream.handleError((error, stackTrace) {
-        _logger.e(
-            '[REPO STREAM ERROR] Error in raw stream for journey $journeyId',
-            error: error,
-            stackTrace: stackTrace);
-      }).map((listOfMaps) {
-        // Log just before processing the list
-        _logger.d(
-            '[REPO STREAM MAP] Outer map received ${listOfMaps.length} raw items for journey $journeyId');
-        // Process list, log before individual item mapping
-        return listOfMaps
-            .map((map) {
-              // Log the map content
-              _logger.d(
-                  '[REPO STREAM MAP INNER] Processing map: ${map.toString()}');
-              try {
-                final info = JourneyImageInfo.fromMap(map); // Actual mapping
-                // Log the created object
-                _logger.d(
-                    '[REPO STREAM MAP INNER] Mapped to: ${info.id}, ${info.url}, ${info.lastProcessedAt}');
-                return info;
-              } catch (e) {
-                _logger.e(
-                    '[REPO STREAM MAP INNER] Error mapping item: ${map['id']}',
-                    error: e);
-                // Optionally return a placeholder or rethrow, for now returning null
-                // Returning a specific error object might be better
-                return null; // Indicate mapping failure for this item
-              }
-            })
-            .where(
-                (item) => item != null) // Filter out items that failed to map
-            .cast<JourneyImageInfo>() // Cast back to the correct type
-            .toList();
-      });
-
-      return loggedStream; // Return the stream with logging/error handling
-    } on NotAuthenticatedException {
-      _logger.e('Cannot get journey images stream: User not authenticated.');
-      return Stream.error(
-          NotAuthenticatedException('User must be logged in to view images.'));
-    } catch (e, stackTrace) {
-      _logger.e('Error setting up journey images stream for journey $journeyId',
-          error: e, stackTrace: stackTrace);
-      return Stream.error(DatabaseFetchException(
-          'Failed to setup image stream', e, stackTrace));
-    }
-  }
-
-  // Modify signature to accept imageId
-  Future<void> deleteJourneyImage(String imageUrl, String imageId) async {
-    final imagePath = _extractStoragePath(imageUrl);
-    if (imagePath == null) {
-      _logger.e(
-          'Could not extract storage path from URL, cannot delete: $imageUrl');
-      throw ImageDeleteException('Invalid image URL format.');
-    }
-    _logger.d('Attempting to delete image ID: $imageId, Path: $imagePath');
-
-    try {
-      // Delete from storage
-      await _supabaseClient.storage.from('journey_images').remove([imagePath]);
-      _logger.i('Successfully deleted image from storage: $imagePath');
-
-      // Delete from database using the unique ID
-      _logger
-          .d('Attempting to delete image reference from DB for ID: $imageId');
-      await _supabaseClient.from('journey_images').delete().eq('id', imageId);
-      _logger
-          .i('Successfully deleted image reference from DB for ID: $imageId');
-    } on StorageException catch (e, stackTrace) {
-      _logger.e('StorageException deleting image $imagePath (ID: $imageId)',
-          error: e, stackTrace: stackTrace);
-      throw ImageDeleteException(
-          'Storage delete failed: ${e.message}', e, stackTrace);
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException deleting image reference for ID $imageId',
-          error: e, stackTrace: stackTrace);
-      // If storage delete succeeded but DB failed, log warning
-      _logger.w(
-          'Storage file $imagePath deleted, but failed to delete DB reference for ID $imageId. Manual cleanup might be needed.');
-      throw DatabaseOperationException(
-          'DB delete failed: ${e.message}', e, stackTrace);
-    } catch (e, stackTrace) {
-      _logger.e('Unexpected error deleting image $imagePath (ID: $imageId)',
-          error: e, stackTrace: stackTrace);
-      throw ImageDeleteException(
-          'An unexpected error occurred during deletion.', e, stackTrace);
-    }
-  }
-
-  // Update alias method to accept userId parameter
-  Future<List<Journey>> fetchUserJourneys(String userId) async {
-    _logger.d('fetchUserJourneys called for user: $userId');
-    // This is similar to getJourneys but uses the provided userId
-    try {
-      _logger.d('Fetching journeys for provided user: $userId');
-      final data = await _supabaseClient
-          .from('journeys')
-          .select()
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
-
-      _logger.d('Fetched ${data.length} journeys from DB for user $userId.');
-      final journeys = data.map((item) => Journey.fromJson(item)).toList();
-      return journeys;
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException fetching journeys for $userId',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseFetchException(
-          'Failed to fetch journeys: ${e.message}', e, stackTrace);
-    } catch (e, stackTrace) {
-      _logger.e('Unexpected error fetching journeys for $userId',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseFetchException(
-          'An unexpected error occurred while fetching journeys.',
-          e,
-          stackTrace);
-    }
-  }
-
-  // Add full journey creation method to match the call in test_data.dart
-  Future<String> addJourney(Journey journey) async {
-    try {
-      final userId = _getCurrentUserId();
+  // --- ADDED Implementation for fetchUserJourneys ---
+  @override
+  Stream<List<Journey>> fetchUserJourneys() {
+    final userId = _getCurrentUserId(); // Use helper
+    _logger.d('Setting up stream for user journeys: $userId');
+    return _firestore
+        .collection('users')
+        .doc(userId)
+        .collection('journeys')
+        // .orderBy('startDate', descending: true) // Optional: Order journeys
+        .snapshots()
+        .map((snapshot) {
       _logger.d(
-          'Creating journey with title: "${journey.title}" for user: $userId');
-
-      // Convert to map and ensure user_id is set
-      final journeyData = journey.toJson();
-      journeyData['user_id'] = userId;
-
-      // If journey has an ID, use it, otherwise Supabase will generate one
-      final String? journeyId = journey.id.isNotEmpty ? journey.id : null;
-      if (journeyId != null) {
-        journeyData['id'] = journeyId;
-      }
-
-      final response =
-          await _supabaseClient.from('journeys').insert(journeyData).select();
-      final insertedId = response.isNotEmpty ? response[0]['id'] : null;
-
-      _logger.i('Successfully created journey with ID: $insertedId');
-      return insertedId ?? '';
-    } on PostgrestException catch (e, stackTrace) {
-      _logger.e('PostgrestException creating journey',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseOperationException(
-          'Failed to create journey: ${e.message}', e, stackTrace);
-    } on NotAuthenticatedException {
-      rethrow;
-    } catch (e, stackTrace) {
-      _logger.e('Unexpected error creating journey',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseOperationException(
-          'An unexpected error occurred while creating the journey.',
-          e,
-          stackTrace);
-    }
+          'Received journey snapshot with ${snapshot.docs.length} documents.');
+      return snapshot.docs
+          .map((doc) => Journey.fromJson(doc.data()).copyWith(id: doc.id))
+          .toList();
+    }).handleError((error, stackTrace) {
+      _logger.e('Error fetching user journeys stream',
+          error: error, stackTrace: stackTrace);
+      throw DatabaseFetchException(
+          'Failed to fetch journeys: ${error.toString()}', error, stackTrace);
+    });
   }
+  // --- End fetchUserJourneys ---
 }

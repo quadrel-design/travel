@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/journey.dart';
-import '../providers/repository_providers.dart';
+// import '../providers/repository_providers.dart'; // Remove unused import
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:logger/logger.dart';
 
 class JourneySettingsScreen extends ConsumerStatefulWidget {
   final Journey journey;
@@ -16,6 +17,7 @@ class JourneySettingsScreen extends ConsumerStatefulWidget {
 
 class _JourneySettingsScreenState extends ConsumerState<JourneySettingsScreen> {
   bool _isDeleting = false;
+  final _logger = Logger();
 
   Future<void> _askDeleteConfirmation(BuildContext context) async {
     final l10n = AppLocalizations.of(context)!;
@@ -62,9 +64,11 @@ class _JourneySettingsScreenState extends ConsumerState<JourneySettingsScreen> {
     });
 
     try {
-      await ref
-          .read(journeyRepositoryProvider)
-          .deleteJourney(widget.journey.id);
+      // final journeyRepository = ref.read(journeyRepositoryProvider); // Comment out repo access
+      // await journeyRepository.deleteJourney(widget.journey.id); // Comment out delete call
+      _logger.i('Simulated successful journey delete: ${widget.journey.id}');
+      await Future.delayed(const Duration(milliseconds: 300));
+
       if (!mounted) return;
 
       navigator.pop();

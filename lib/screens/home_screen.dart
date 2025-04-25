@@ -6,7 +6,6 @@ import 'package:travel/models/journey.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
-import 'package:travel/repositories/journey_repository.dart'; // Add import
 import 'package:travel/repositories/auth_repository.dart'; // Add import
 
 // --- State Management using StateNotifierProvider ---
@@ -40,27 +39,25 @@ class HomeScreenState {
 
 // Create the StateNotifier
 class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
-  final JourneyRepository _journeyRepository;
   final AuthRepository _authRepository;
 
-  HomeScreenNotifier(this._journeyRepository, this._authRepository)
-      : super(const HomeScreenState()) {
+  HomeScreenNotifier(this._authRepository) : super(const HomeScreenState()) {
     loadJourneys(); // Load journeys on initialization
   }
 
   Future<void> loadJourneys() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
-      final userId = _authRepository.currentUser?.id;
+      final userId = _authRepository.currentUser?.uid;
       if (userId == null) {
         throw Exception('User not logged in');
       }
-      final loadedJourneys = await _journeyRepository.getJourneys();
+      final loadedJourneys = <Journey>[];
       if (!mounted) return;
       state = state.copyWith(journeys: loadedJourneys, isLoading: false);
     } catch (e) {
-      state =
-          state.copyWith(error: 'Failed to load journeys', isLoading: false);
+      state = state.copyWith(
+          error: 'Failed to load journeys: $e', isLoading: false);
     }
   }
 }
@@ -68,89 +65,31 @@ class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
 // Create the Provider
 final homeScreenProvider =
     StateNotifierProvider<HomeScreenNotifier, HomeScreenState>((ref) {
-  final journeyRepo = ref.watch(journeyRepositoryProvider);
   final authRepo = ref.watch(authRepositoryProvider);
-  return HomeScreenNotifier(journeyRepo, authRepo);
+  return HomeScreenNotifier(authRepo);
 });
 
 // --- End State Management Setup ---
 
-// Change to ConsumerStatefulWidget
-class HomeScreen extends ConsumerStatefulWidget {
+// Change to ConsumerWidget (or ConsumerStatefulWidget if other state needed later)
+class HomeScreen extends ConsumerWidget {
+  // Changed to ConsumerWidget
   const HomeScreen({super.key});
 
-  @override
-  ConsumerState<HomeScreen> createState() => _HomeScreenState();
-}
-
-// Change to ConsumerState
-class _HomeScreenState extends ConsumerState<HomeScreen> {
-  final _dateFormat = DateFormat('dd/MM/yyyy');
+  // Removed dateFormat from here, move to build if needed locally
 
   @override
-  void initState() {
-    super.initState();
-  }
-
-  void _goToCreateJourney() {
-    context.push(AppRoutes.createJourney).then((_) {
-      ref.read(homeScreenProvider.notifier).loadJourneys();
-    });
-  }
-
-  void _refreshJourneys() {
-    ref.read(homeScreenProvider.notifier).loadJourneys();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final screenState = ref.watch(homeScreenProvider);
-    final journeys = screenState.journeys;
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Watch the new stream provider
+    final journeysAsyncValue = ref.watch(userJourneysStreamProvider);
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context); // Get theme for error color
+    final theme = Theme.of(context);
+    final dateFormat = DateFormat('dd/MM/yyyy'); // Local instance if needed
 
-    Widget bodyContent;
-    if (screenState.isLoading) {
-      bodyContent = const Center(child: CircularProgressIndicator());
-    } else if (screenState.error != null) {
-      bodyContent = Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(screenState.error!,
-                style: TextStyle(color: theme.colorScheme.error)),
-            const SizedBox(height: 10),
-            ElevatedButton(
-                onPressed: _refreshJourneys,
-                child: Text(l10n.homeScreenRetryButton))
-          ],
-        ),
-      );
-    } else if (journeys.isEmpty) {
-      bodyContent = Center(child: Text(l10n.homeScreenNoJourneys));
-    } else {
-      bodyContent = ListView.builder(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: journeys.length,
-        itemBuilder: (context, index) {
-          final journey = journeys[index];
-          final dateRange =
-              '${_dateFormat.format(journey.startDate)} - ${_dateFormat.format(journey.endDate)}';
-          final subtitleText = '${journey.description}\n$dateRange';
-
-          return Card(
-            child: ListTile(
-              title: Text(journey.title),
-              subtitle: Text(subtitleText),
-              isThreeLine: true,
-              onTap: () {
-                context.push('${AppRoutes.journeyDetail}/${journey.id}',
-                    extra: journey);
-              },
-            ),
-          );
-        },
-      );
+    // Helper for navigation, still needed
+    void goToCreateJourney() {
+      context.push(AppRoutes.createJourney);
+      // No need to manually refresh anymore, stream provider handles updates
     }
 
     return Scaffold(
@@ -164,9 +103,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ],
       ),
-      body: bodyContent,
+      // Use AsyncValue.when to handle loading/error/data states
+      body: journeysAsyncValue.when(
+        data: (journeys) {
+          if (journeys.isEmpty) {
+            return Center(child: Text(l10n.homeScreenNoJourneys));
+          }
+          // Build the list view if data is available
+          return ListView.builder(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            itemCount: journeys.length,
+            itemBuilder: (context, index) {
+              final journey = journeys[index];
+              final dateRange =
+                  '${dateFormat.format(journey.startDate)} - ${dateFormat.format(journey.endDate)}';
+              final subtitleText = '${journey.description}\n$dateRange';
+
+              return Card(
+                child: ListTile(
+                  title: Text(journey.title),
+                  subtitle: Text(subtitleText),
+                  isThreeLine: true,
+                  onTap: () {
+                    // Construct the path for the nested route
+                    final journeyDetailPath =
+                        AppRoutes.journeyDetail.split('/').last;
+                    context.push('/home/$journeyDetailPath/${journey.id}',
+                        extra: journey);
+                  },
+                ),
+              );
+            },
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stack) {
+          // Consider logging the error stack here
+          // ref.read(loggerProvider).e('Error loading journeys', error: error, stackTrace: stack);
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Error loading journeys: $error',
+                    style: TextStyle(color: theme.colorScheme.error)),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  // Refresh logic might need reconsideration - ref.refresh might work
+                  onPressed: () => ref.refresh(userJourneysStreamProvider),
+                  child: Text(l10n.homeScreenRetryButton),
+                )
+              ],
+            ),
+          );
+        },
+      ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _goToCreateJourney,
+        onPressed: goToCreateJourney,
         tooltip: l10n.homeScreenAddJourneyTooltip,
         child: const Icon(Icons.add),
       ),

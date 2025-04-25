@@ -7,8 +7,12 @@ import 'package:uuid/uuid.dart';
 // Use flutter/foundation.dart for kDebugMode checks if needed for logging
 import 'package:flutter/foundation.dart';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../repositories/journey_repository.dart'; // Import JourneyRepository
+// Import custom exceptions
+import '../repositories/repository_exceptions.dart';
+
+// Import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 final random = Random();
 const uuid = Uuid();
@@ -106,7 +110,8 @@ void processTestData() {
   // Add actual logic here if needed
 }
 
-Future<void> insertTestJourneys(JourneyRepository journeyRepository, String userId) async {
+Future<void> insertTestJourneys(
+    JourneyRepository journeyRepository, String userId) async {
   final journeys = [
     Journey(
       id: 'journey-1',
@@ -138,64 +143,93 @@ Future<void> insertTestJourneys(JourneyRepository journeyRepository, String user
   for (final journey in journeys) {
     try {
       await journeyRepository.addJourney(journey);
-    } on PostgrestException catch (error) {
-      // Handle potential duplicate key errors if run multiple times
-      if (error.code != '23505') { // 23505 is unique_violation
-      }
+    } on FirebaseException catch (_) {
+      // Handle potential duplicate key errors (less direct in Firestore, maybe check specific codes?)
+      // Firestore doesn't have a direct 'unique_violation' code like Postgres.
+      // We might rely on the repository handling it or just log here.
+      // if (error.code != 'already-exists') { // Example check (code might differ)
+      // }
+      // Error ignored for test data creation
+    } on DatabaseOperationException catch (_) {
+      // If the repo threw its custom exception
+      // Error ignored for test data creation
     } catch (_) {
       // Error ignored for test data creation
     }
   }
 }
 
-Future<void> clearTestData(JourneyRepository journeyRepository, String userId) async {
+Future<void> clearTestData(
+    JourneyRepository journeyRepository, String userId) async {
   // print('Clearing test journeys for user $userId...');
-  final journeys = await journeyRepository.fetchUserJourneys(userId);
-  journeys.sort((a, b) => b.startDate.compareTo(a.startDate));
 
-  for (final journey in journeys) {
-    // Check if title indicates it's test data before deleting (optional safety)
-    if (journey.title.contains('Adventure') || journey.title.contains('Expedition')) {
+  // Fetch the first list emitted by the stream, then sort and iterate
+  try {
+    final List<Journey> journeysList =
+        await journeyRepository.fetchUserJourneys().first;
+    journeysList.sort((a, b) => b.startDate.compareTo(a.startDate));
+
+    for (final journey in journeysList) {
+      // Check if title indicates it's test data before deleting (optional safety)
+      if (journey.title.contains('Adventure') ||
+          journey.title.contains('Expedition')) {
         try {
           await journeyRepository.deleteJourney(journey.id);
         } catch (_) {
-           // Error ignored for test data deletion
+          // Error ignored for test data deletion
         }
+      }
     }
+  } catch (e) {
+    // Handle potential errors fetching the stream (e.g., user not logged in)
+    print('Error fetching journeys for clearing test data: $e');
   }
 }
 
-// Function to insert sample data
-// This is a basic example; you might want more robust error handling
+// Function to insert sample data - Migrated to Firestore
 Future<void> insertSampleData() async {
-  final supabase = Supabase.instance.client;
+  // Get Firestore instance
+  final firestore = FirebaseFirestore.instance;
 
-  // Insert Users (Example: assuming a 'users' table)
-  // Adapt table and column names as needed
+  // Insert Users (Example: using set with merge for upsert-like behavior)
   try {
-    // Note: Supabase auth handles user creation typically.
-    // This is just for related data assuming users exist.
-    // Consider fetching existing users or using auth IDs.
-    // await supabase.from('users').upsert([user1.toJson(), user2.toJson()]); 
-  } catch (_) {
-    // print('Error inserting users: $e'); // Error ignored for test data
+    // Assuming user1.id and user2.id are intended Firestore document IDs
+    final userBatch = firestore.batch();
+    userBatch.set(firestore.collection('users').doc(user1.id),
+        updatedUser1.toJson(), SetOptions(merge: true));
+    userBatch.set(firestore.collection('users').doc(user2.id),
+        updatedUser2.toJson(), SetOptions(merge: true));
+    await userBatch.commit();
+    // print('Upserted sample users.');
+  } catch (e) {
+    // print('Error inserting/updating users: $e'); // Error ignored for test data
   }
 
-  // Insert Journeys (Example: assuming a 'journeys' table)
-  // ... insert journey logic using journeyRepository ...
+  // Insert Journeys logic is handled by insertTestJourneys using the repository
 
-  // Insert Expenses (Example: assuming an 'expenses' table)
+  // Insert Expenses (Example: using a batch write)
   try {
-    await supabase.from('expenses').upsert(sampleExpenses.map((e) => e.toJson()).toList());
-     // print('Inserted ${sampleExpenses.length} expenses.');
-  } catch (_) {
+    final expenseBatch = firestore.batch();
+    for (final expense in sampleExpenses) {
+      // Use expense.id as document ID or let Firestore generate one?
+      // If using expense.id:
+      final docRef = firestore.collection('expenses').doc(expense.id);
+      expenseBatch.set(docRef, expense.toJson());
+      // If letting Firestore generate IDs:
+      // final docRef = firestore.collection('expenses').doc(); // Create ref with new ID
+      // expenseBatch.set(docRef, expense.toJson());
+    }
+    await expenseBatch.commit();
+    // print('Inserted ${sampleExpenses.length} expenses.');
+  } catch (e) {
     // print('Error inserting expenses: $e'); // Error ignored for test data
   }
 }
 
 // Helper function to assign expenses randomly to journeys
 // You might not need this if expenses are predefined per journey
-List<Expense> assignExpensesToJourneys(List<Journey> journeys, List<local_user.User> users) {
+List<Expense> assignExpensesToJourneys(
+    List<Journey> journeys, List<local_user.User> users) {
   final List<Expense> assignedExpenses = [];
   for (final journey in journeys) {
     int numExpenses = random.nextInt(5) + 1; // 1 to 5 expenses per journey
@@ -205,9 +239,22 @@ List<Expense> assignExpensesToJourneys(List<Journey> journeys, List<local_user.U
           id: const Uuid().v4(),
           journeyId: journey.id,
           title: 'Sample Expense ${i + 1} for ${journey.title}',
-          amount: (random.nextDouble() * 100).roundToDouble(), // Random amount up to 100
-          date: journey.startDate.add(Duration(days: random.nextInt( (journey.endDate.difference(journey.startDate).inDays).abs() > 0 ? (journey.endDate.difference(journey.startDate).inDays).abs() : 1 ))), // Random date within journey duration
-          category: ['Food', 'Transport', 'Activity', 'Accommodation', 'Other'][random.nextInt(5)],
+          amount: (random.nextDouble() * 100)
+              .roundToDouble(), // Random amount up to 100
+          date: journey.startDate.add(Duration(
+              days: random.nextInt(
+                  (journey.endDate.difference(journey.startDate).inDays).abs() >
+                          0
+                      ? (journey.endDate.difference(journey.startDate).inDays)
+                          .abs()
+                      : 1))), // Random date within journey duration
+          category: [
+            'Food',
+            'Transport',
+            'Activity',
+            'Accommodation',
+            'Other'
+          ][random.nextInt(5)],
           paidBy: users[random.nextInt(users.length)].id, // Random user pays
           sharedWith: const [], // Already const
         ),
@@ -215,4 +262,52 @@ List<Expense> assignExpensesToJourneys(List<Journey> journeys, List<local_user.U
     }
   }
   return assignedExpenses;
+}
+
+Future<void> deleteAllUserData(String userId) async {
+  // **DANGEROUS:** Be very careful with this function!
+  // Consider adding extra confirmation steps.
+
+  // Delete Firestore data (Journeys, Expenses, Images)
+  try {
+    final userJourneysRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('journeys');
+    final journeysSnapshot = await userJourneysRef.get();
+    final batch = FirebaseFirestore.instance.batch();
+
+    for (final journeyDoc in journeysSnapshot.docs) {
+      // Delete expenses subcollection
+      final expensesRef = journeyDoc.reference.collection('expenses');
+      final expensesSnapshot = await expensesRef.get();
+      for (final expenseDoc in expensesSnapshot.docs) {
+        batch.delete(expenseDoc.reference);
+      }
+
+      // Delete images subcollection
+      final imagesRef = journeyDoc.reference.collection('images');
+      final imagesSnapshot = await imagesRef.get();
+      for (final imageDoc in imagesSnapshot.docs) {
+        batch.delete(imageDoc.reference);
+      }
+
+      // Delete the journey itself
+      batch.delete(journeyDoc.reference);
+    }
+    await batch.commit();
+    // print('Deleted Firestore data for user: $userId'); // Remove print
+  } catch (_) {
+    // Ensure this one is already '_'
+    // Replace 'error' with '_'
+    // print('Error deleting Firestore data for user $userId: $_'); // Remove print
+    // Rethrow or handle as needed
+    rethrow; // Use rethrow to re-throw the caught exception
+  }
+
+  // Delete Storage data (Images)
+  // ... (Storage deletion logic - needs implementation)
+
+  // Delete Authentication user
+  // ... (Auth deletion logic - likely handled elsewhere or needs careful coordination)
 }

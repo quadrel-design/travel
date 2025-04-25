@@ -59,8 +59,8 @@
   "homeScreenRefreshTooltip": "Refresh Journeys",
 
   "createJourneyTitle": "Create Journey",
-  "createJourneyErrorUserNotLoggedIn": "User not logged in. Please sign in again.",
-  "saveButton": "Save",
+  "createJourneyErrorUserNotLoggedIn": "User not logged in. Cannot create journey.",
+  "saveButton": "Save Journey",
 
   "journeyFormFieldNameLabel": "Travel Name",
   "journeyFormFieldNameDesc": "Enter a descriptive name for your trip.",
@@ -109,7 +109,7 @@
   },
   "galleryImageErrorLoading": "Could not load image",
   "@galleryImageErrorLoading": { "description": "Error message when a gallery image fails to load" },
-  "galleryScanInProgressError": "Scan already in progress or image already scanned.",
+  "galleryScanInProgressError": "Scan already in progress for another image.",
   "@galleryScanInProgressError": { "description": "Error shown if user tries to scan while another scan is running or if it's already done." },
   "galleryScanInitiatedSnackbar": "Scan initiated...",
   "@galleryScanInitiatedSnackbar": { "description": "Snackbar message indicating the image scan has started." },
@@ -160,7 +160,7 @@
   "@deleteImage": {
       "description": "Label for delete image button"
   },
-  "imageLoadError": "Could not load image",
+  "imageLoadError": "Error loading image",
   "@imageLoadError": {
       "description": "Error message when image failed to load"
   },
@@ -302,5 +302,12 @@
   "invoiceScanTooltip": "Scan Text",
   "@invoiceScanTooltip": { "description": "Tooltip for the scan button on the invoice bottom bar" },
   "invoiceDeleteTooltip": "Delete Invoice",
-  "@invoiceDeleteTooltip": { "description": "Tooltip for the delete button on the invoice bottom bar" }
+  "@invoiceDeleteTooltip": { "description": "Tooltip for the delete button on the invoice bottom bar" },
+
+  "verifyEmailTitle": "Verify Your Email",
+  "verificationEmailSentTitle": "Verification Email Sent!",
+  "checkYourEmailInstruction": "Please check your inbox (and spam folder!) for a verification link to complete your registration.",
+  "resendEmailButton": "Resend Verification Email",
+  "verificationEmailResent": "Verification email resent.",
+  "errorResendingVerification": "Error Resending Verification"
 }

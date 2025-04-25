@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:supabase_flutter/supabase_flutter.dart'; // Remove unused import
+// import 'package:travel/l10n/l10n_provider.dart'; // Remove this import
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/providers/repository_providers.dart';
-// import 'package:travel/repositories/auth_repository.dart'; // Unused import
-// import 'package:travel/widgets/app_title.dart'; // Unused import
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+// import 'package:travel/providers/test_data_provider.dart'; // Remove incorrect import
+// import 'package:travel/utils/app_colors.dart'; // Remove incorrect import
+// import 'package:travel/widgets/confirm_dialog.dart'; // Remove incorrect import
+import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add this for l10n
 
 class AppSettingsScreen extends ConsumerWidget {
   const AppSettingsScreen({super.key});
@@ -14,25 +16,36 @@ class AppSettingsScreen extends ConsumerWidget {
   // Helper SnackBar methods (or move to utils)
   void _showErrorSnackBar(BuildContext context, String title, String message) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontWeight: FontWeight.bold)), Text(message)]), backgroundColor: Theme.of(context).colorScheme.error));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Text(message)
+            ]),
+        backgroundColor: Theme.of(context).colorScheme.error));
   }
 
-  Future<void> _handleLogout(BuildContext context, WidgetRef ref) async {
-    final l10n = AppLocalizations.of(context)!;
-    final authRepository = ref.read(authRepositoryProvider);
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final l10n = AppLocalizations.of(context)!; // Get l10n
     try {
-      await authRepository.signOut();
+      await ref.read(authRepositoryProvider).signOut();
+      // Navigate to auth screen after sign out
       if (context.mounted) {
-        context.go(AppRoutes.auth);
+        // Use goNamed for clarity if routes are named
+        context.go(AppRoutes.auth); // Adjust if route name is different
       }
-    } on AuthException catch (e) {
-      if (context.mounted) {
-        _showErrorSnackBar(context, l10n.logoutErrorTitle, e.message);
-      }
+      // Replace specific Supabase exception with generic catch
     } catch (e) {
-       if (context.mounted) {
-         _showErrorSnackBar(context, l10n.errorTitle, l10n.logoutUnexpectedErrorDesc);
-       }
+      // Handle sign-out errors (e.g., show a snackbar)
+      if (context.mounted) {
+        // Use the error snackbar function if available, or standard SnackBar
+        _showErrorSnackBar(context, l10n.logoutErrorTitle, e.toString());
+        // ScaffoldMessenger.of(context).showSnackBar(
+        //   SnackBar(content: Text('${l10n.logoutErrorTitle}: $e')),
+        // );
+      }
     }
   }
 
@@ -60,7 +73,7 @@ class AppSettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
-          icon: const Icon(Icons.chevron_left), 
+          icon: const Icon(Icons.chevron_left),
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () => context.go(AppRoutes.home),
         ),
@@ -75,44 +88,45 @@ class AppSettingsScreen extends ConsumerWidget {
             child: Text(
               l10n.settingsGroupTitle,
               style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
           ),
           buildSettingsTile(
             leadingIcon: Icons.bookmark_border,
             title: l10n.settingsItemSaved,
-            onTap: () { },
+            onTap: () {},
           ),
           buildSettingsTile(
             leadingIcon: Icons.archive_outlined,
             title: l10n.settingsItemArchive,
-            onTap: () { },
+            onTap: () {},
           ),
           buildSettingsTile(
             leadingIcon: Icons.history_outlined,
             title: l10n.settingsItemActivity,
-            onTap: () { },
+            onTap: () {},
           ),
           buildSettingsTile(
             leadingIcon: Icons.notifications_none,
             title: l10n.settingsItemNotifications,
-            onTap: () { },
+            onTap: () {},
           ),
           buildSettingsTile(
             leadingIcon: Icons.timer_outlined,
             title: l10n.settingsItemTimeManagement,
-            onTap: () { /* print('Time Management tapped'); */ },
+            onTap: () {/* print('Time Management tapped'); */},
           ),
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            padding:
+                const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
             child: Divider(color: theme.colorScheme.outline.withAlpha(128)),
           ),
           buildSettingsTile(
             leadingIcon: Icons.logout,
             title: l10n.settingsItemLogout,
-            onTap: () => _handleLogout(context, ref),
+            onTap: () => _signOut(context, ref),
           ),
         ],
       ),

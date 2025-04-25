@@ -94,9 +94,11 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
                 label: l10n.journeyDetailImagesLabel, // Use l10n
                 onTap: () {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // --- Construct path with ID for sub-route ---
-              context.push('${AppRoutes.journeyDetail}/${journey.id}/gallery',
-                  extra: journey);
+              // Construct the full path explicitly
+              // Note: AppRoutes.journeyDetail and AppRoutes.galleryOverview are likely just segments
+              final fullPath =
+                  '/home/journey-detail/${journey.id}/gallery-overview';
+              context.push(fullPath, extra: journey);
             }),
           ],
         ),

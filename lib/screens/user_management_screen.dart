@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 // import 'package:provider/provider.dart'; // Remove unused import
 import '../models/user.dart' as app_user;
-import 'package:supabase_flutter/supabase_flutter.dart';
+// Import Firestore
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -27,17 +28,28 @@ class UserManagementScreenState extends State<UserManagementScreen> {
       _error = null;
     });
     try {
-      final response = await Supabase.instance.client
-          .from('users') // Assuming your table is named 'users'
-          .select();
+      // Use Firestore
+      final firestore = FirebaseFirestore.instance;
+      final querySnapshot = await firestore.collection('users').get();
 
-      final List<app_user.User> loadedUsers = response
-          .map((data) => app_user.User.fromJson(data))
-          .toList();
+      // Map Firestore documents, including the ID
+      final List<app_user.User> loadedUsers = querySnapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id; // Add Firestore document ID
+        return app_user.User.fromJson(data);
+      }).toList();
 
       if (mounted) {
         setState(() {
           _users = loadedUsers;
+          _isLoading = false;
+        });
+      }
+      // Catch FirebaseException
+    } on FirebaseException catch (e) {
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to load users: ${e.message}';
           _isLoading = false;
         });
       }
@@ -76,9 +88,23 @@ class UserManagementScreenState extends State<UserManagementScreen> {
         _isLoading = true;
       });
       try {
-        await Supabase.instance.client.from('users').delete().eq('id', userId);
+        // Use Firestore
+        final firestore = FirebaseFirestore.instance;
+        await firestore.collection('users').doc(userId).delete();
 
+        // Refetch users after delete
         await _fetchUsers();
+
+        // Catch FirebaseException
+      } on FirebaseException catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to delete user: ${e.message}')),
+          );
+          setState(() {
+            _isLoading = false;
+          });
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -99,7 +125,8 @@ class UserManagementScreenState extends State<UserManagementScreen> {
     if (_isLoading) {
       content = const Center(child: CircularProgressIndicator());
     } else if (_error != null) {
-      content = Center(child: Text(_error!, style: const TextStyle(color: Colors.red)));
+      content = Center(
+          child: Text(_error!, style: const TextStyle(color: Colors.red)));
     } else if (_users.isNotEmpty) {
       content = ListView.builder(
         itemCount: _users.length,

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "213342165039",
+    "project_id": "splitbase-7ec0f",
+    "storage_bucket": "splitbase-7ec0f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:213342165039:android:6caaed832566702b458eda",
+        "android_client_info": {
+          "package_name": "com.example.travel_expense_tracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVGuwcYI2oCHP3RCum0ayj-LUktArFBzY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

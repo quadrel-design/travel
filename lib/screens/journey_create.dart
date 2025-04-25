@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import services for formatter
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:intl/intl.dart';
+import 'package:travel/providers/repository_providers.dart';
 import 'package:uuid/uuid.dart'; // For generating IDs
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+// import 'package:travel/providers/logging_provider.dart'; // Import logger provider
 
 // Ensure Journey model is imported
 import '../models/journey.dart'; // Import Journey model
@@ -11,9 +13,11 @@ import '../models/journey.dart'; // Import Journey model
 // Import the new widget
 import 'package:flutter_form_builder/flutter_form_builder.dart';
 import 'package:form_builder_validators/form_builder_validators.dart';
+import 'package:go_router/go_router.dart';
+// import 'package:travel/utils/validators.dart'; // Remove this non-existent import
 
 // Import Supabase client
-import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:supabase_flutter/supabase_flutter.dart';
 // Import the footer bar
 
 // Remove imports for non-existent files
@@ -21,7 +25,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 // import '../providers/journey_provider.dart';
 
 // Add imports used by the logic (might have been missed)
-import '../providers/repository_providers.dart';
+// import '../providers/repository_providers.dart';
+// import 'package:travel/utils/validators.dart'; // Remove this non-existent import
+import 'package:travel/constants/app_routes.dart';
+import 'package:travel/providers/location_provider.dart'; // Fix import path
 
 class CreateJourneyScreen extends ConsumerStatefulWidget {
   const CreateJourneyScreen({super.key});
@@ -32,18 +39,17 @@ class CreateJourneyScreen extends ConsumerStatefulWidget {
 }
 
 class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
+  static const Duration _kAutocompleteDebounceDuration =
+      Duration(milliseconds: 300);
+
   // Constants for form field names
   static const _fieldName = 'name';
   static const _fieldDescription = 'description';
   static const _fieldLocation = 'location';
   static const _fieldBudget = 'budget';
 
-  // Constant for Autocomplete debounce
-  static const _kAutocompleteDebounceDuration = Duration(milliseconds: 300);
-
   // ScaffoldMessenger Key
-  final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey =
-      GlobalKey<ScaffoldMessengerState>();
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   // Form Key
   final _formKey = GlobalKey<FormBuilderState>();
@@ -150,42 +156,32 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   // Commented out for now - will be connected to UI when implementation is finalized
 
   Future<void> _saveJourney() async {
-    if (_formKey.currentState!.saveAndValidate()) {
-      final formData = _formKey.currentState!.value;
+    final formState = _formKey.currentState!;
+    if (formState.saveAndValidate()) {
+      final formData = formState.value;
       final l10n = AppLocalizations.of(context)!;
 
-      // Extract values, including description and location again
-      final String title = formData['title']?.toString().trim() ?? '';
-      final DateTime? startDate = formData['startDate'] as DateTime?;
-      final DateTime? endDate = formData['endDate'] as DateTime?;
-      // Re-extract description and location
+      // Extract values (Get dates from state variables, not formData)
+      final String title = formData['name']?.toString().trim() ?? '';
+      final DateTime? startDate = _startDate; // Use state variable
+      final DateTime? endDate = _endDate; // Use state variable
       final String description =
           formData['description']?.toString().trim() ?? '';
-      final String? location = formData['location']
-          ?.toString()
-          .trim(); // Location is optional from Autocomplete?
+      final String? location = formData['location']?.toString().trim();
       final double? budget = formData['budget'] as double?;
 
-      // Basic validation (beyond FormBuilder)
+      // Basic validation
       if (title.isEmpty || startDate == null || endDate == null) {
         if (mounted) {
-          // No await needed
           _showErrorSnackBar(
-            context,
-            l10n.missingInfoTitle,
-            l10n.journeySaveMissingInfoDesc,
-          );
+              context, l10n.missingInfoTitle, l10n.journeySaveMissingInfoDesc);
         }
         return;
       }
       if (endDate.isBefore(startDate)) {
         if (mounted) {
-          // No await needed
           _showErrorSnackBar(
-            context,
-            l10n.errorTitle,
-            l10n.journeySaveInvalidDateRange,
-          );
+              context, l10n.errorTitle, l10n.journeySaveInvalidDateRange);
         }
         return;
       }
@@ -195,15 +191,11 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       });
 
       final authRepository = ref.read(authRepositoryProvider);
-      final userId = authRepository.currentUser?.id;
+      final userId = authRepository.currentUser?.uid;
       if (userId == null) {
         if (mounted) {
-          // No await needed
           _showErrorSnackBar(
-            context,
-            l10n.errorTitle,
-            l10n.createJourneyErrorUserNotLoggedIn,
-          );
+              context, l10n.errorTitle, l10n.createJourneyErrorUserNotLoggedIn);
         }
         setState(() {
           _isLoading = false;
@@ -233,16 +225,14 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          Navigator.of(context).pop(); // Go back after successful save
+          // Consider navigating to the new journey's detail page
+          context.pushReplacement(
+              '${AppRoutes.home}/${AppRoutes.journeyDetail.split('/').last}/${newJourney.id}',
+              extra: newJourney);
         }
       } catch (e) {
         if (mounted) {
-          // No await needed
-          _showErrorSnackBar(
-            context,
-            l10n.journeySaveErrorTitle,
-            e.toString(), // Show actual error message
-          );
+          _showErrorSnackBar(context, l10n.journeySaveErrorTitle, e.toString());
         }
       } finally {
         if (mounted) {
@@ -254,7 +244,6 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     }
   }
 
-  // --- REWRITE _searchLocations to call Supabase Edge Function ---
   Future<List<String>> _searchLocations(String pattern) async {
     if (!mounted) return []; // Check mounted state
     if (pattern.isEmpty) {
@@ -266,47 +255,22 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     if (!mounted) return []; // Check again after delay
 
     try {
-      // Invoke Supabase function for location autocomplete
-      final response = await Supabase.instance.client.functions.invoke(
-        'location-autocomplete',
-        body: {'query': pattern},
-      );
+      final locationService = ref.read(locationServiceProvider);
+      final suggestions = await locationService.searchLocations(pattern);
 
       if (!mounted) return []; // Check again after await
-
-      if (response.status != 200) {
-        String errorMessage = 'Failed to fetch suggestions.';
-        if (response.data != null && response.data['error'] is String) {
-          errorMessage = response.data['error'];
-        }
-        if (mounted) {
-          // Check mounted before showing snackbar
-          _showErrorSnackBar(context, 'Search Error', errorMessage);
-        }
-        return [];
-      }
-
-      if (response.data != null && response.data['suggestions'] is List) {
-        final suggestions = List<String>.from(
-          response.data['suggestions'].where((item) => item is String),
-        );
-        return suggestions;
-      } else {
-        return [];
-      }
+      return suggestions;
     } catch (e) {
       if (mounted) {
-        // Check mounted before showing snackbar
         _showErrorSnackBar(
           context,
           'Search Error',
-          'Failed to connect to search service: $e',
+          'Failed to fetch location suggestions: $e',
         );
       }
       return [];
     }
   }
-  // --- End Supabase Edge Function Call ---
 
   @override
   Widget build(BuildContext context) {

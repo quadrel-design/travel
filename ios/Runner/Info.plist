@@ -78,11 +78,11 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>PROJECT_ID</key>
-	<string>travel-mouse-4d5dc</string>
+	<string>splitbase-7ec0f</string>
 	<key>REVERSED_CLIENT_ID</key>
 	<string>com.googleusercontent.apps.1089357878236-gviv1jdk4men21fm1u8if4705qq6h0go</string>
 	<key>STORAGE_BUCKET</key>
-	<string>travel-mouse-4d5dc.firebasestorage.app</string>
+	<string>splitbase-7ec0f.appspot.com</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

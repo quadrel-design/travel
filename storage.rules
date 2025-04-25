@@ -1,0 +1,11 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{userId}/journeys/{journeyId}/images/{fileName} {
+      // Allow public read access to images, but maintain secure write access
+      allow read: if true;  // Anyone can read images
+      allow write: if request.auth != null && request.auth.uid == userId;  // Only authenticated user can write
+    }
+  }
+} 

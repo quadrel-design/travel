@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 // Remove provider imports if they were added here
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:travel/providers/logging_provider.dart';
@@ -31,15 +32,14 @@ class JourneyImageInfo extends Equatable {
 
   factory JourneyImageInfo.fromJson(Map<String, dynamic> json) {
     try {
-      // Comment out debug print statements
-      // print('JourneyImageInfo.fromJson called with: $json');
-
       return JourneyImageInfo(
-        id: json['id'] as String,
-        url: json['url'] as String,
+        id: json['id'] as String? ?? '',
+        url: json['url'] as String? ?? '',
         imagePath: json['image_path'] as String? ?? '',
         lastProcessedAt: json['last_processed_at'] != null
-            ? DateTime.parse(json['last_processed_at'] as String)
+            ? (json['last_processed_at'] is Timestamp
+                ? (json['last_processed_at'] as Timestamp).toDate()
+                : DateTime.parse(json['last_processed_at'] as String))
             : null,
         detectedText: json['detected_text'] as String?,
         detectedTotalAmount: json['detected_total_amount'] != null
@@ -47,12 +47,13 @@ class JourneyImageInfo extends Equatable {
             : null,
         detectedCurrency: json['detected_currency'] as String?,
         hasPotentialText: json['has_potential_text'] as bool?,
+        isInvoiceGuess: json['is_invoice_guess'] as bool? ?? false,
       );
-    } catch (e) {
-      // Comment out error print statements
-      // print('Error in JourneyImageInfo.fromJson: $e');
-      // print('JSON that caused error: $json');
-      rethrow; // Still rethrow the error
+    } catch (e, stackTrace) {
+      print('Error in JourneyImageInfo.fromJson: $e');
+      print('JSON that caused error: $json');
+      print('Stack trace: $stackTrace');
+      rethrow;
     }
   }
 
@@ -61,7 +62,7 @@ class JourneyImageInfo extends Equatable {
     // print('JourneyImageInfo.fromMap: $map');
     return JourneyImageInfo(
       id: map['id'] as String? ?? '',
-      url: map['image_url'] as String? ?? '',
+      url: map['url'] as String? ?? '',
       imagePath: map['image_path'] as String? ?? '',
       lastProcessedAt: map['last_processed_at'] != null
           ? DateTime.tryParse(map['last_processed_at'] as String? ?? '')
@@ -73,6 +74,22 @@ class JourneyImageInfo extends Equatable {
       detectedCurrency: map['detected_currency'] as String?,
       hasPotentialText: map['has_potential_text'] as bool?,
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      // Use Firestore field names (e.g., snake_case)
+      'id': id,
+      'url': url,
+      'image_path': imagePath,
+      'has_potential_text': hasPotentialText,
+      'detected_text': detectedText,
+      'is_invoice_guess': isInvoiceGuess,
+      'detected_total_amount': detectedTotalAmount,
+      'detected_currency': detectedCurrency,
+      'last_processed_at': lastProcessedAt?.toIso8601String(),
+      // localPath is typically not saved to Firestore
+    };
   }
 
   JourneyImageInfo copyWith({
