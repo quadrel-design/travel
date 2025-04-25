@@ -43,11 +43,50 @@
     "rules": "storage.rules",
     "cors": [
       {
-        "origin": ["*"],
-        "method": ["GET", "HEAD", "PUT", "POST", "DELETE", "OPTIONS"],
-        "responseHeader": ["Content-Type", "Content-Length", "Content-Disposition", "Cache-Control", "Authorization", "X-Requested-With", "Accept", "Origin"],
+        "origin": [
+          "*"
+        ],
+        "method": [
+          "GET",
+          "HEAD",
+          "PUT",
+          "POST",
+          "DELETE",
+          "OPTIONS"
+        ],
+        "responseHeader": [
+          "Content-Type",
+          "Content-Length",
+          "Content-Disposition",
+          "Cache-Control",
+          "Authorization",
+          "X-Requested-With",
+          "Accept",
+          "Origin"
+        ],
         "maxAgeSeconds": 3600
       }
     ]
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true
+    },
+    "singleProjectMode": true
   }
-} 
+}

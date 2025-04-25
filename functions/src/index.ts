@@ -7,6 +7,10 @@
  * See a full list of supported triggers at https://firebase.google.com/docs/functions
  */
 
+// Load environment variables from .env file
+import * as dotenv from 'dotenv';
+dotenv.config();
+
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { initializeApp } from "firebase-admin/app";
 import { ImageAnnotatorClient } from "@google-cloud/vision";
@@ -37,61 +41,11 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 console.log("Initializing Cloud Function with config:");
 console.log("- Gemini API Key configured:", !!geminiApiKey);
 
-interface ScanRequest {
-  imageUrl: string;
-  journeyId: string;
-  imageId: string;
-  skipAnalysis?: boolean;
-}
-
-interface InvoiceAnalysis {
-  totalAmount?: number;
-  currency?: string;
-  date?: string;
-  merchantName?: string;
-  location?: string;
-  isInvoice: boolean;
-  error?: string;
-}
-
-interface ScanResult {
-  success: boolean;
-  hasText: boolean;
-  text?: string;
-  confidence?: number;
-  textBlocks?: Array<{
-    text: string;
-    confidence: number;
-    boundingBox?: {
-      left: number;
-      top: number;
-      right: number;
-      bottom: number;
-    };
-  }>;
-  invoiceAnalysis?: InvoiceAnalysis;
-  error?: string;
-}
-
-export const scanImage = onCall<ScanRequest, Promise<ScanResult>>({
-  enforceAppCheck: false,
-  timeoutSeconds: 300,
-  memory: "2GiB",
-  maxInstances: 10
-}, async (request) => {
-  // Check if the user is authenticated
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
-  }
-
-  // Validate the request data
-  if (!request.data.imageUrl) {
-    throw new HttpsError("invalid-argument", "No image URL provided");
-  }
-
+// Extract the core logic into a separate function that can be tested independently
+export async function processScanImage(imageUrl: string, skipAnalysis = false) {
   try {
     // Perform OCR on the image
-    const [result] = await vision.textDetection(request.data.imageUrl);
+    const [result] = await vision.textDetection(imageUrl);
     const detections = result.textAnnotations || [];
 
     if (!detections.length) {
@@ -116,14 +70,12 @@ export const scanImage = onCall<ScanRequest, Promise<ScanResult>>({
             left: Math.min(...block.boundingPoly.vertices.map((v) => v.x || 0)),
             top: Math.min(...block.boundingPoly.vertices.map((v) => v.y || 0)),
             right: Math.max(...block.boundingPoly.vertices.map((v) => v.x || 0)),
-            bottom: Math.max(
-              ...block.boundingPoly.vertices.map((v) => v.y || 0)
-            ),
+            bottom: Math.max(...block.boundingPoly.vertices.map((v) => v.y || 0)),
           }
         : undefined,
     }));
 
-    if (request.data.skipAnalysis) {
+    if (skipAnalysis) {
       return {
         success: true,
         hasText: true,
@@ -215,4 +167,25 @@ export const scanImage = onCall<ScanRequest, Promise<ScanResult>>({
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
   }
+}
+
+// Firebase cloud function that wraps the core logic
+export const scanImage = onCall({
+  enforceAppCheck: false,
+  timeoutSeconds: 300,
+  memory: "2GiB",
+  maxInstances: 10
+}, async (request) => {
+  // Check if the user is authenticated
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+  }
+
+  // Validate the request data
+  if (!request.data.imageUrl) {
+    throw new HttpsError("invalid-argument", "No image URL provided");
+  }
+
+  // Call the extracted function with the image URL
+  return processScanImage(request.data.imageUrl, request.data.skipAnalysis);
 });
