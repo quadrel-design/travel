@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
-import '../models/journey_image_info.dart';
+import '../models/invoice_capture_process.dart';
 import '../services/firebase_functions_service.dart';
 import '../services/location_service.dart';
 import '../repositories/invoice_repository.dart';
@@ -10,13 +10,13 @@ import '../repositories/invoice_repository.dart';
 class InvoiceScanService {
   final Logger _logger;
   final FirebaseFunctionsService _functionsService;
-  final JourneyRepository _repository;
+  final InvoiceRepository _repository;
   final LocationService _locationService;
 
   InvoiceScanService({
     required Logger logger,
     required FirebaseFunctionsService functionsService,
-    required JourneyRepository repository,
+    required InvoiceRepository repository,
     required LocationService locationService,
   })  : _logger = logger,
         _functionsService = functionsService,

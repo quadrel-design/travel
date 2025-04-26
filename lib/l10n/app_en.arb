@@ -41,7 +41,7 @@
         }
       }
   },
-  "journeyImageLoadErrorDesc": "Failed to load images",
+  "invoiceImageLoadErrorDesc": "Failed to load images",
 
   "editNotImplementedDesc": "Edit not yet implemented.",
 
@@ -488,8 +488,8 @@
     "description": "Message shown when a journey cannot be found"
   },
 
-  "journeyImages": "Journey Images",
-  "@journeyImages": {
+  "invoiceImages": "Journey Images",
+  "@invoiceImages": {
     "description": "Title for the journey images section"
   },
 

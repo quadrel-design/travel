@@ -13,16 +13,16 @@ import 'package:mocktail/mocktail.dart';
 
 class MockLogger extends Mock implements Logger {}
 
-class MockJourneyRepository extends Mock implements JourneyRepository {}
+class MockInvoiceRepository extends Mock implements InvoiceRepository {}
 
 void main() {
   late MockLogger mockLogger;
-  late MockJourneyRepository mockRepository;
+  late MockInvoiceRepository mockRepository;
   late ProviderContainer container;
 
   setUp(() {
     mockLogger = MockLogger();
-    mockRepository = MockJourneyRepository();
+    mockRepository = MockInvoiceRepository();
 
     container = ProviderContainer(
       overrides: [

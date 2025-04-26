@@ -14,8 +14,8 @@ import '../models/journey.dart';
 import '../models/invoice_capture_process.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
 
-/// Interface for journey-related operations
-abstract class JourneyRepository {
+/// Interface for invoice-related operations
+abstract class InvoiceRepository {
   /// Fetches a stream of all journeys for the current user
   Stream<List<Journey>> fetchUserJourneys();
 
@@ -23,7 +23,7 @@ abstract class JourneyRepository {
   Stream<Journey?> getJourneyStream(String journeyId);
 
   /// Gets a stream of images for a specific journey
-  Stream<List<InvoiceCaptureProcess>> getJourneyImagesStream(String journeyId);
+  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(String journeyId);
 
   /// Adds a new journey
   Future<Journey> addJourney(Journey journey);
@@ -47,17 +47,17 @@ abstract class JourneyRepository {
   });
 
   /// Deletes a journey image
-  Future<void> deleteJourneyImage(String journeyId, String imageId);
+  Future<void> deleteInvoiceImage(String journeyId, String imageId);
 
   /// Uploads a journey image
-  Future<InvoiceCaptureProcess> uploadJourneyImage(
+  Future<InvoiceCaptureProcess> uploadInvoiceImage(
     String journeyId,
     Uint8List fileBytes,
     String fileName,
   );
 }
 
-class JourneyRepositoryImpl implements JourneyRepository {
+class JourneyRepositoryImpl implements InvoiceRepository {
   // --- Dependency Injection ---
   // Replace SupabaseClient with Firestore and Storage
   final FirebaseFirestore _firestore;
@@ -199,7 +199,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
   }
 
   @override
-  Stream<List<InvoiceCaptureProcess>> getJourneyImagesStream(String journeyId) {
+  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(String journeyId) {
     _logger.d('[REPO STREAM] Creating image stream for journey $journeyId');
     try {
       // Use Firestore snapshots stream
@@ -318,7 +318,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
   }
 
   @override
-  Future<InvoiceCaptureProcess> uploadJourneyImage(
+  Future<InvoiceCaptureProcess> uploadInvoiceImage(
       String journeyId, Uint8List fileBytes, String fileName) async {
     final userId = _getCurrentUserId(); // Use helper
     _logger
@@ -379,7 +379,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
   }
 
   @override
-  Future<void> deleteJourneyImage(String journeyId, String imageId) async {
+  Future<void> deleteInvoiceImage(String journeyId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
       _logger.d('Deleting image $imageId from journey $journeyId');
@@ -479,8 +479,8 @@ class JourneyRepositoryImpl implements JourneyRepository {
     }
   }
 
-  // --- Add Method to Delete Single Journey Image ---
-  Future<void> deleteSingleJourneyImage(
+  // --- Add Method to Delete Single Invoice Image ---
+  Future<void> deleteSingleInvoiceImage(
       String imageId, String imagePath) async {
     // Get user ID for logging/potential rules
     final userId = _getCurrentUserId(); // Throws if not logged in
@@ -556,7 +556,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
     }
   }
 
-  // --- End Method to Delete Single Journey Image ---
+  // --- End Method to Delete Single Invoice Image ---
 
   // --- ADDED Implementation for fetchUserJourneys ---
   @override

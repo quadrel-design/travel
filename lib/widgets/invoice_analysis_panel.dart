@@ -10,11 +10,11 @@ class InvoiceAnalysisPanel extends StatelessWidget {
   final Logger logger;
 
   const InvoiceAnalysisPanel({
-    Key? key,
+    super.key,
     required this.imageInfo,
     required this.onClose,
     required this.logger,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -145,7 +145,7 @@ class InvoiceAnalysisPanel extends StatelessWidget {
         ),
         const SizedBox(height: UIConstants.kElementSpacing),
         Text(
-          '${imageInfo.lastProcessedAt!.toLocal().toString().split('.')[0]}',
+          imageInfo.lastProcessedAt!.toLocal().toString().split('.')[0],
           style: UIConstants.kPanelValueStyle.copyWith(fontSize: 14),
         ),
         const SizedBox(height: UIConstants.kSectionSpacing),

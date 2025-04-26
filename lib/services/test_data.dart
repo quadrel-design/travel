@@ -10,10 +10,6 @@ import '../repositories/repository_exceptions.dart';
 // Use flutter/foundation.dart for kDebugMode checks if needed for logging
 import 'package:flutter/foundation.dart';
 
-import '../repositories/journey_repository.dart'; // Import JourneyRepository
-// Import custom exceptions
-import '../repositories/repository_exceptions.dart';
-
 final random = Random();
 const uuid = Uuid();
 
@@ -111,7 +107,7 @@ void processTestData() {
 }
 
 Future<void> insertTestJourneys(
-    JourneyRepository journeyRepository, String userId) async {
+    InvoiceRepository repository, String userId) async {
   final journeys = [
     Journey(
       id: 'journey-1',
@@ -142,7 +138,7 @@ Future<void> insertTestJourneys(
 
   for (final journey in journeys) {
     try {
-      await journeyRepository.addJourney(journey);
+      await repository.addJourney(journey);
     } on FirebaseException catch (_) {
       // Handle potential duplicate key errors (less direct in Firestore, maybe check specific codes?)
       // Firestore doesn't have a direct 'unique_violation' code like Postgres.
@@ -159,14 +155,13 @@ Future<void> insertTestJourneys(
   }
 }
 
-Future<void> clearTestData(
-    JourneyRepository journeyRepository, String userId) async {
+Future<void> clearTestData(InvoiceRepository repository, String userId) async {
   // print('Clearing test journeys for user $userId...');
 
   // Fetch the first list emitted by the stream, then sort and iterate
   try {
     final List<Journey> journeysList =
-        await journeyRepository.fetchUserJourneys().first;
+        await repository.fetchUserJourneys().first;
     journeysList.sort((a, b) => b.startDate.compareTo(a.startDate));
 
     for (final journey in journeysList) {
@@ -174,7 +169,7 @@ Future<void> clearTestData(
       if (journey.title.contains('Adventure') ||
           journey.title.contains('Expedition')) {
         try {
-          await journeyRepository.deleteJourney(journey.id);
+          await repository.deleteJourney(journey.id);
         } catch (_) {
           // Error ignored for test data deletion
         }
@@ -182,7 +177,9 @@ Future<void> clearTestData(
     }
   } catch (e) {
     // Handle potential errors fetching the stream (e.g., user not logged in)
-    print('Error fetching journeys for clearing test data: $e');
+    if (kDebugMode) {
+      print('Error fetching journeys for clearing test data: $e');
+    }
   }
 }
 

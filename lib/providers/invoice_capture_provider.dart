@@ -112,7 +112,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
       final repository = _ref.read(journeyRepositoryProvider);
 
       _imageStreamSubscription =
-          repository.getJourneyImagesStream(_journeyId).listen(
+          repository.getInvoiceImagesStream(_journeyId).listen(
         (images) {
           _logger.d('Received ${images.length} images from stream');
           state = state.copyWith(images: images);

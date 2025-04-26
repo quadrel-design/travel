@@ -118,10 +118,9 @@ class InvoiceCaptureProcess extends Equatable {
       );
     } catch (e, stackTrace) {
       // Log error details - in production, use a proper logger
-      print('Error in InvoiceCaptureProcess.fromJson: $e');
-      print('JSON that caused error: $json');
-      print('Stack trace: $stackTrace');
-      rethrow;
+      // logger.error('Error in InvoiceCaptureProcess.fromJson', e, stackTrace);
+      // logger.debug('JSON that caused error: $json');
+      throw Exception('Error parsing InvoiceCaptureProcess from JSON: $e');
     }
   }
 
@@ -156,8 +155,10 @@ class InvoiceCaptureProcess extends Equatable {
         status: map['status'] as String?,
       );
     } catch (e) {
-      print('Error in InvoiceCaptureProcess.fromMap: $e');
-      print('Map that caused error: $map');
+      // Log error with proper logger in production
+      // logger.error('Error in InvoiceCaptureProcess.fromMap', e);
+      // logger.debug('Map that caused error: $map');
+
       // Return a minimal valid object rather than throwing
       return InvoiceCaptureProcess(
         id: map['id'] as String? ?? '',

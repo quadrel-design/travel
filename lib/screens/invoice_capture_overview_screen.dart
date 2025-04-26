@@ -77,7 +77,7 @@ class _InvoiceCaptureOverviewScreenState
     final l10n = AppLocalizations.of(context)!;
 
     final journeyImagesAsyncValue =
-        ref.watch(journeyImagesStreamProvider(widget.journey.id));
+        ref.watch(invoiceImagesStreamProvider(widget.journey.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -223,7 +223,7 @@ class _InvoiceCaptureOverviewScreenState
 
     try {
       _logger.d("🗑️ Starting invoice deletion...");
-      await repo.deleteJourneyImage(
+      await repo.deleteInvoiceImage(
         widget.journey.id,
         imageInfo.id,
       );
@@ -263,7 +263,7 @@ class _InvoiceCaptureOverviewScreenState
 
       _logger.d("📸 Starting repository upload...");
       final uploadResult =
-          await repo.uploadJourneyImage(widget.journey.id, fileBytes, fileName);
+          await repo.uploadInvoiceImage(widget.journey.id, fileBytes, fileName);
 
       _logger.i("📸 Repository upload completed successfully");
       _logger.d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");

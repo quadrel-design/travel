@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:travel/models/journey.dart';
 import '../models/invoice_capture_process.dart';
 import '../models/invoice_capture_status.dart';
 import 'package:image_picker/image_picker.dart';
@@ -10,14 +9,8 @@ import 'package:path/path.dart' as p;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/widgets/image_status_chip.dart';
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
-import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
-import 'package:http/http.dart' as http;
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:go_router/go_router.dart';
-import 'package:travel/constants/app_routes.dart';
-import 'package:travel/providers/invoice_capture_provider.dart';
 
 InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
   if (imageInfo.status != null) {
@@ -33,10 +26,8 @@ class InvoiceCaptureScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-
     final journeyImagesAsyncValue =
-        ref.watch(journeyImagesStreamProvider(journeyId));
+        ref.watch(invoiceImagesStreamProvider(journeyId));
 
     final journeyAsyncValue = ref.watch(journeyStreamProvider(journeyId));
 
@@ -90,7 +81,7 @@ class InvoiceCaptureScreen extends ConsumerWidget {
               const SizedBox(height: 4),
               ElevatedButton(
                 onPressed: () =>
-                    ref.invalidate(journeyImagesStreamProvider(journeyId)),
+                    ref.invalidate(invoiceImagesStreamProvider(journeyId)),
                 child: const Text('Retry', style: TextStyle(fontSize: 10)),
               ),
             ],
@@ -192,7 +183,7 @@ class InvoiceCaptureScreen extends ConsumerWidget {
 
     try {
       ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
-      await repo.deleteJourneyImage(
+      await repo.deleteInvoiceImage(
         journeyId,
         imageInfo.id,
       );
@@ -234,7 +225,7 @@ class InvoiceCaptureScreen extends ConsumerWidget {
 
       ref.read(loggerProvider).d("📸 Starting repository upload...");
       final uploadResult =
-          await repo.uploadJourneyImage(journeyId, fileBytes, fileName);
+          await repo.uploadInvoiceImage(journeyId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
       ref

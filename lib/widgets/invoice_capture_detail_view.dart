@@ -567,7 +567,7 @@ class _InvoiceCaptureDetailViewState
         'Attempting delete via repository for journey ${widget.journeyId}, image $imageIdToDelete, filename $fileName');
 
     try {
-      await repository.deleteJourneyImage(
+      await repository.deleteInvoiceImage(
         widget.journeyId,
         images[currentIndex].id,
       );

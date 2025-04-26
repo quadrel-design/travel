@@ -15,7 +15,7 @@ class ImageStatusChip extends StatelessWidget {
 
     // Get the appropriate label based on status
     String label;
-    Color? chipColor;
+    Color chipColor;
 
     switch (status) {
       case InvoiceCaptureStatus.ready:
@@ -46,9 +46,9 @@ class ImageStatusChip extends StatelessWidget {
 
     return Chip(
       label: Text(label),
-      backgroundColor: chipColor?.withOpacity(0.2),
+      backgroundColor: chipColor.withOpacity(0.2),
       labelStyle: TextStyle(color: chipColor),
-      side: BorderSide(color: chipColor ?? Colors.transparent),
+      side: BorderSide(color: chipColor),
     );
   }
 }

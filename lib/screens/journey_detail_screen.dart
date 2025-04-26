@@ -24,7 +24,7 @@ class JourneyDetailScreen extends ConsumerWidget {
     final journeyStream = ref.watch(journeyStreamProvider(journey.id));
 
     // Watch the journey images stream
-    final imagesStream = ref.watch(journeyImagesStreamProvider(journey.id));
+    final imagesStream = ref.watch(invoiceImagesStreamProvider(journey.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -92,7 +92,7 @@ class JourneyDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        l10n.journeyImages,
+                        l10n.invoiceImages,
                         style: theme.textTheme.titleLarge,
                       ),
                       const SizedBox(height: 16),
@@ -117,7 +117,7 @@ class JourneyDetailScreen extends ConsumerWidget {
                               final image = images[index];
                               return GestureDetector(
                                 onTap: () => context.push(
-                                  '${AppRoutes.journeyImageDetail}/${currentJourney.id}/${image.id}',
+                                  '${AppRoutes.invoiceImageDetail}/${currentJourney.id}/${image.id}',
                                   extra: image,
                                 ),
                                 child: Hero(
@@ -195,7 +195,7 @@ class JourneyDetailScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () =>
-            context.push('${AppRoutes.journeyCapture}/${journey.id}'),
+            context.push('${AppRoutes.invoiceCapture}/${journey.id}'),
         tooltip: l10n.addImage,
         child: const Icon(Icons.add_a_photo),
       ),

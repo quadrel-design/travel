@@ -22,6 +22,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../providers/logging_provider.dart';
 import 'package:travel/repositories/invoice_repository.dart';
+import 'package:travel/repositories/journey_repository.dart';
 import 'package:travel/models/journey.dart';
 import 'package:travel/repositories/firestore_invoice_repository.dart';
 import 'package:travel/repositories/firebase_auth_repository.dart';
@@ -62,7 +63,7 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 ///
 /// This provider creates and delivers an implementation of the JourneyRepository interface.
 /// It handles operations related to journeys, including journey CRUD operations and image management.
-final journeyRepositoryProvider = Provider<JourneyRepository>((ref) {
+final journeyRepositoryProvider = Provider<InvoiceRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
   final storage = ref.watch(firebaseStorageProvider);
   final auth = ref.watch(firebaseAuthProvider);
@@ -96,7 +97,7 @@ final detectedSumsProvider = StreamProvider.autoDispose
       .d('[PROVIDER] detectedSumsProvider executing for journeyId: $journeyId');
 
   // Get the stream from the repository
-  final imagesStream = repository.getJourneyImagesStream(journeyId);
+  final imagesStream = repository.getInvoiceImagesStream(journeyId);
 
   // Apply the filter to the stream
   return imagesStream.map((imageList) {
@@ -114,7 +115,7 @@ final detectedSumsProvider = StreamProvider.autoDispose
 ///
 /// Parameters:
 ///   - journeyId: The ID of the journey to fetch images for
-final journeyImagesStreamProvider = StreamProvider.autoDispose
+final invoiceImagesStreamProvider = StreamProvider.autoDispose
     .family<List<InvoiceCaptureProcess>, String>((ref, journeyId) {
   // Get the repository
   final repository = ref.watch(journeyRepositoryProvider);
@@ -122,9 +123,9 @@ final journeyImagesStreamProvider = StreamProvider.autoDispose
   final logger = ref.watch(loggerProvider);
   // *** Log Provider Execution ***
   logger.d(
-      '[PROVIDER] journeyImagesStreamProvider executing for journeyId: $journeyId');
+      '[PROVIDER] invoiceImagesStreamProvider executing for journeyId: $journeyId');
   // Return the stream from the repository method
-  return repository.getJourneyImagesStream(journeyId);
+  return repository.getInvoiceImagesStream(journeyId);
 });
 // --- End Provider ---
 
