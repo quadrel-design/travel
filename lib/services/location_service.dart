@@ -5,8 +5,7 @@ import 'package:logger/logger.dart';
 
 class LocationService {
   final Logger _logger;
-  static const String _baseUrl =
-      'https://maps.googleapis.com/maps/api/place/autocomplete/json';
+  static const String _baseUrl = 'https://maps.googleapis.com/maps/api/place';
   final String _apiKey;
 
   LocationService(this._logger)
@@ -31,7 +30,7 @@ class LocationService {
 
     try {
       final response = await http.get(
-        Uri.parse('$_baseUrl?input=$query&types=(cities)&key=$_apiKey'),
+        Uri.parse('$_baseUrl/autocomplete/json?input=$query&types=(cities)&key=$_apiKey'),
       );
 
       if (response.statusCode != 200) {
@@ -54,6 +53,73 @@ class LocationService {
       _logger.e('[LOCATION] Error fetching location suggestions',
           error: e, stackTrace: stackTrace);
       return [];
+    }
+  }
+
+  Future<Map<String, dynamic>?> getPlaceDetails(String placeId) async {
+    if (_apiKey.isEmpty) {
+      _logger.e('[LOCATION] Google Places API key is not configured');
+      return null;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/details/json?place_id=$placeId&fields=name,formatted_address,geometry,types&key=$_apiKey'),
+      );
+
+      if (response.statusCode != 200) {
+        _logger.e(
+            '[LOCATION] Failed to fetch place details: ${response.statusCode}');
+        return null;
+      }
+
+      final data = json.decode(response.body);
+      if (data['status'] != 'OK') {
+        _logger.e('[LOCATION] Google Places API error: ${data['status']}');
+        return null;
+      }
+
+      return data['result'] as Map<String, dynamic>;
+    } catch (e, stackTrace) {
+      _logger.e('[LOCATION] Error fetching place details',
+          error: e, stackTrace: stackTrace);
+      return null;
+    }
+  }
+
+  Future<String?> findPlaceId(String location) async {
+    if (_apiKey.isEmpty) {
+      _logger.e('[LOCATION] Google Places API key is not configured');
+      return null;
+    }
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/findplacefromtext/json?input=$location&inputtype=textquery&fields=place_id&key=$_apiKey'),
+      );
+
+      if (response.statusCode != 200) {
+        _logger.e(
+            '[LOCATION] Failed to find place: ${response.statusCode}');
+        return null;
+      }
+
+      final data = json.decode(response.body);
+      if (data['status'] != 'OK') {
+        _logger.e('[LOCATION] Google Places API error: ${data['status']}');
+        return null;
+      }
+
+      final candidates = data['candidates'] as List;
+      if (candidates.isEmpty) {
+        return null;
+      }
+
+      return candidates[0]['place_id'] as String;
+    } catch (e, stackTrace) {
+      _logger.e('[LOCATION] Error finding place',
+          error: e, stackTrace: stackTrace);
+      return null;
     }
   }
 }

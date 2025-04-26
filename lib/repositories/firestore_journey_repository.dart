@@ -2,9 +2,8 @@
 
 import 'dart:async';
 import 'dart:typed_data'; // Add this import for Uint8List
-import 'dart:io' hide Platform; // Hide dart:io Platform
+// Hide dart:io Platform
 import 'dart:math';
-import 'package:path/path.dart' as path;
 import 'package:uuid/uuid.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -76,9 +75,22 @@ class FirestoreJourneyRepository implements JourneyRepository {
           .map((snapshot) {
         _logger.d(
             'Received journey snapshot with ${snapshot.docs.length} documents.');
-        return snapshot.docs
-            .map((doc) => Journey.fromJson(doc.data()).copyWith(id: doc.id))
-            .toList();
+        return snapshot.docs.map((doc) {
+          try {
+            final data = doc.data();
+            // Add the ID to the data map before conversion
+            data['id'] = doc.id;
+            return Journey.fromMap(data);
+          } catch (e, stackTrace) {
+            _logger.e('Error converting document to Journey:',
+                error: e, stackTrace: stackTrace);
+            // Skip invalid documents
+            return null;
+          }
+        })
+        .where((journey) => journey != null)
+        .cast<Journey>()
+        .toList();
       }).handleError((error, stackTrace) {
         _logger.e('Error fetching user journeys stream',
             error: error, stackTrace: stackTrace);
@@ -108,8 +120,16 @@ class FirestoreJourneyRepository implements JourneyRepository {
           .snapshots()
           .map((snapshot) {
         if (snapshot.exists && snapshot.data() != null) {
-          _logger.d('Received snapshot for journey $journeyId');
-          return Journey.fromJson(snapshot.data()!).copyWith(id: snapshot.id);
+          try {
+            _logger.d('Received snapshot for journey $journeyId');
+            final data = snapshot.data()!;
+            data['id'] = snapshot.id;
+            return Journey.fromMap(data);
+          } catch (e, stackTrace) {
+            _logger.e('Error converting document to Journey:',
+                error: e, stackTrace: stackTrace);
+            return null;
+          }
         } else {
           _logger.w('Journey $journeyId does not exist or has no data.');
           return null;
@@ -429,7 +449,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
         minWidth: 1024,
       );
 
-      if (result == null || result.isEmpty) {
+      if (result.isEmpty) {
         throw FirestoreException(
           message: 'Failed to compress image',
           error: 'Compression returned null or empty result',
@@ -701,6 +721,74 @@ class FirestoreJourneyRepository implements JourneyRepository {
           'An unexpected error occurred while deleting the image.',
           e,
           stackTrace);
+    }
+  }
+
+  @override
+  Future<void> updateImageWithOcrResults(
+    String journeyId,
+    String imageId, {
+    required bool hasText,
+    String? detectedText,
+    double? totalAmount,
+    String? currency,
+    bool? isInvoice,
+    String? location,
+  }) async {
+    try {
+      final userId = _getCurrentUserId();
+      _logger.d('[REPOSITORY] Updating image $imageId with OCR results');
+
+      // Reference to the image document
+      final docRef = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .doc(imageId);
+
+      // Prepare update data
+      final now = DateTime.now();
+      final updateData = {
+        'hasPotentialText': hasText,
+        'lastProcessedAt': now.toIso8601String(),
+        'updatedAt': now.toIso8601String(),
+      };
+
+      // Add optional fields if they're provided
+      if (detectedText != null) {
+        updateData['detectedText'] = detectedText;
+      }
+
+      if (totalAmount != null) {
+        updateData['detectedTotalAmount'] = totalAmount;
+      }
+
+      if (currency != null) {
+        updateData['detectedCurrency'] = currency;
+      }
+
+      if (isInvoice != null) {
+        updateData['isInvoiceGuess'] = isInvoice;
+      }
+
+      if (location != null) {
+        updateData['location'] = location;
+      }
+
+      // Update the document
+      await docRef.update(updateData);
+      _logger.i(
+          '[REPOSITORY] Successfully updated image $imageId with OCR results');
+    } catch (e, stackTrace) {
+      _logger.e('[REPOSITORY] Error updating image with OCR results:',
+          error: e, stackTrace: stackTrace);
+      throw DatabaseOperationException(
+        'Failed to update image with OCR results: ${e.toString()}',
+        e,
+        stackTrace,
+      );
     }
   }
 }

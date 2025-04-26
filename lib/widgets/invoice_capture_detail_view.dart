@@ -11,12 +11,12 @@ import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
 import '../providers/repository_providers.dart';
-import '../repositories/journey_repository.dart';
-import 'package:intl/intl.dart';
+import '../providers/firebase_functions_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../providers/location_service_provider.dart';
 
 class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
   const InvoiceCaptureDetailView({
@@ -42,6 +42,7 @@ class _InvoiceCaptureDetailViewState
   late int currentIndex;
   bool _isDeleting = false;
   bool _showAppBar = true;
+  bool _showAnalysis = false;
   late Logger _logger;
 
   @override
@@ -104,12 +105,72 @@ class _InvoiceCaptureDetailViewState
       if (httpResponse.statusCode != 200) {
         throw Exception("Failed to download image: ${httpResponse.statusCode}");
       }
-      _logger.d("Image downloaded (but not used) for scan (ID: $imageId)");
+      _logger.d("Image downloaded successfully for scan (ID: $imageId)");
 
-      _logger.i(
-          'TODO: Implement Firebase Cloud Function call for scanning image ID: $imageId');
-      await Future.delayed(const Duration(seconds: 2));
-      _logger.i('Simulated scan success for $imageId');
+      // Call the Firebase Cloud Function to perform OCR and analysis
+      final functionsService = ref.read(firebaseFunctionsProvider);
+      _logger
+          .i('Calling Firebase Cloud Function for scanning image ID: $imageId');
+
+      final result = await functionsService.scanImage(
+        urlToDownload,
+        widget.journeyId,
+        imageId,
+      );
+
+      _logger.i('Scan completed for $imageId: ${result['success']}');
+
+      if (result['success'] == true) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Image scan completed successfully')),
+          );
+        }
+
+        // Store the OCR results using the repository
+        final repository = ref.read(journeyRepositoryProvider);
+        final hasText = result['hasText'] ?? false;
+        final detectedText = result['text'] as String?;
+
+        // Extract invoice analysis data if available
+        Map<String, dynamic>? invoiceAnalysis;
+        if (result.containsKey('invoiceAnalysis') &&
+            result['invoiceAnalysis'] != null) {
+          invoiceAnalysis = result['invoiceAnalysis'] as Map<String, dynamic>;
+        }
+
+        // Validate location using Places API if available
+        String? validatedLocation;
+        if (invoiceAnalysis?['location'] != null) {
+          final locationService = ref.read(locationServiceProvider);
+          final placeId = await locationService.findPlaceId(invoiceAnalysis!['location']);
+          if (placeId != null) {
+            final placeDetails = await locationService.getPlaceDetails(placeId);
+            if (placeDetails != null) {
+              validatedLocation = placeDetails['formatted_address'] as String;
+              _logger.i('Location validated: $validatedLocation');
+            }
+          }
+        }
+
+        // Update the document with OCR results
+        await repository.updateImageWithOcrResults(
+          widget.journeyId,
+          imageId,
+          hasText: hasText,
+          detectedText: detectedText,
+          totalAmount: invoiceAnalysis?['totalAmount'] != null
+              ? double.tryParse(invoiceAnalysis!['totalAmount'].toString())
+              : null,
+          currency: invoiceAnalysis?['currency'] as String?,
+          isInvoice: invoiceAnalysis?['isInvoice'] as bool?,
+          location: validatedLocation ?? invoiceAnalysis?['location'] as String?,
+        );
+
+        _logger.i('OCR results stored for image $imageId');
+      } else {
+        throw Exception(result['error'] ?? 'Unknown error during scan');
+      }
     } catch (e, stackTrace) {
       _logger.e('[INVOICE_CAPTURE] Error during scan process:',
           error: e, stackTrace: stackTrace);
@@ -139,11 +200,11 @@ class _InvoiceCaptureDetailViewState
     if (imageInfo.url.isEmpty) {
       _logger
           .w('[INVOICE_CAPTURE] ImageInfo ID ${imageInfo.id} has empty URL.');
-      return Center(
+      return const Center(
           child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        const Icon(Icons.broken_image, color: Colors.grey, size: 48),
-        const SizedBox(height: 16),
-        const Text('Image URL is missing',
+        Icon(Icons.broken_image, color: Colors.grey, size: 48),
+        SizedBox(height: 16),
+        Text('Image URL is missing',
             style: TextStyle(color: Colors.white)),
       ]));
     }
@@ -193,7 +254,7 @@ class _InvoiceCaptureDetailViewState
           return PhotoView(
             imageProvider: CachedNetworkImageProvider(
               finalUrl,
-              headers: {
+              headers: const {
                 'Accept': 'image/*',
                 'Cache-Control': 'no-cache',
               },
@@ -235,7 +296,7 @@ class _InvoiceCaptureDetailViewState
     return PhotoView(
       imageProvider: CachedNetworkImageProvider(
         imageInfo.url,
-        headers: {
+        headers: const {
           'Accept': 'image/*',
           'Cache-Control': 'no-cache',
         },
@@ -271,9 +332,100 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
+  Widget _buildAnalysisPanel(JourneyImageInfo imageInfo) {
+    if (!_showAnalysis) return const SizedBox.shrink();
+
+    return Container(
+      color: Colors.black87,
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Invoice Analysis',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed: () => setState(() => _showAnalysis = false),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (imageInfo.detectedText != null) ...[
+            const Text(
+              'Detected Text:',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              imageInfo.detectedText!,
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (imageInfo.detectedTotalAmount != null) ...[
+            const Text(
+              'Total Amount:',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${imageInfo.detectedTotalAmount} ${imageInfo.detectedCurrency ?? ''}',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (imageInfo.isInvoiceGuess != null) ...[
+            const Text(
+              'Invoice Status:',
+              style: TextStyle(
+                color: Colors.white70,
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              imageInfo.isInvoiceGuess! ? 'Confirmed Invoice' : 'Not an Invoice',
+              style: TextStyle(
+                color: imageInfo.isInvoiceGuess! ? Colors.green : Colors.orange,
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final images = widget.images;
+    final provider = invoiceCaptureProvider(widget.journeyId);
+    final state = ref.watch(provider);
+    final isScanning = state.scanningImageId != null;
 
     if (images.isNotEmpty) {
       if (currentIndex >= images.length) {
@@ -298,6 +450,29 @@ class _InvoiceCaptureDetailViewState
               actions: [
                 if (!_isDeleting)
                   IconButton(
+                    icon: isScanning 
+                      ? const SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.document_scanner),
+                    onPressed: isScanning 
+                      ? null 
+                      : () => _handleScan(images[currentIndex].id, images[currentIndex].url),
+                    tooltip: 'Scan Invoice',
+                  ),
+                if (!_isDeleting)
+                  IconButton(
+                    icon: const Icon(Icons.analytics),
+                    onPressed: () => setState(() => _showAnalysis = !_showAnalysis),
+                    tooltip: 'Show Analysis',
+                  ),
+                if (!_isDeleting)
+                  IconButton(
                     icon: const Icon(Icons.delete),
                     onPressed: _handleDelete,
                     tooltip: 'Delete Image',
@@ -307,33 +482,44 @@ class _InvoiceCaptureDetailViewState
           : null,
       body: images.isEmpty
           ? const Center(child: Text('No images available'))
-          : PhotoViewGallery.builder(
-              scrollPhysics: const BouncingScrollPhysics(),
-              builder: (BuildContext context, int index) {
-                final imageInfo = images[index];
-                _logger.d(
-                    '[INVOICE_CAPTURE] Loading image ${index + 1}/${images.length}: ${imageInfo.url}');
+          : Stack(
+              children: [
+                PhotoViewGallery.builder(
+                  scrollPhysics: const BouncingScrollPhysics(),
+                  builder: (BuildContext context, int index) {
+                    final imageInfo = images[index];
+                    _logger.d(
+                        '[INVOICE_CAPTURE] Loading image ${index + 1}/${images.length}: ${imageInfo.url}');
 
-                return PhotoViewGalleryPageOptions.customChild(
-                  child: _buildImageView(imageInfo),
-                  minScale: PhotoViewComputedScale.contained,
-                  maxScale: PhotoViewComputedScale.covered * 2,
-                  heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id),
-                  onTapUp: (_, __, ___) {
+                    return PhotoViewGalleryPageOptions.customChild(
+                      child: _buildImageView(imageInfo),
+                      minScale: PhotoViewComputedScale.contained,
+                      maxScale: PhotoViewComputedScale.covered * 2,
+                      heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id),
+                      onTapUp: (_, __, ___) {
+                        setState(() {
+                          _showAppBar = !_showAppBar;
+                        });
+                      },
+                    );
+                  },
+                  itemCount: images.length,
+                  backgroundDecoration: const BoxDecoration(color: Colors.black),
+                  pageController: pageController,
+                  onPageChanged: (index) {
                     setState(() {
-                      _showAppBar = !_showAppBar;
+                      currentIndex = index;
                     });
                   },
-                );
-              },
-              itemCount: images.length,
-              backgroundDecoration: const BoxDecoration(color: Colors.black),
-              pageController: pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  currentIndex = index;
-                });
-              },
+                ),
+                if (_showAnalysis)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: _buildAnalysisPanel(images[currentIndex]),
+                  ),
+              ],
             ),
     );
   }

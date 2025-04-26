@@ -47,6 +47,18 @@ abstract class JourneyRepository {
   Future<void> deleteJourneyImage(
       String journeyId, String imageId, String fileName);
 
+  /// Updates an image with OCR and analysis results
+  Future<void> updateImageWithOcrResults(
+    String journeyId,
+    String imageId, {
+    required bool hasText,
+    String? detectedText,
+    double? totalAmount,
+    String? currency,
+    bool? isInvoice,
+    String? location,
+  });
+
   // --- Potentially needed methods (Add if required by other parts of the app) ---
 
   // Future<void> updateJourneyImageMetadata(String journeyId, JourneyImageInfo imageInfo);
@@ -530,4 +542,18 @@ class JourneyRepositoryImpl implements JourneyRepository {
     });
   }
   // --- End fetchUserJourneys ---
+
+  @override
+  Future<void> updateImageWithOcrResults(
+    String journeyId,
+    String imageId, {
+    required bool hasText,
+    String? detectedText,
+    double? totalAmount,
+    String? currency,
+    bool? isInvoice,
+    String? location,
+  }) async {
+    // Implementation of updateImageWithOcrResults method
+  }
 }

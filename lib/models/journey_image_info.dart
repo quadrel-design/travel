@@ -14,6 +14,8 @@ class JourneyImageInfo extends Equatable {
   final double? detectedTotalAmount;
   final String? detectedCurrency;
   final DateTime? lastProcessedAt;
+  final DateTime? updatedAt;
+  final String? location;
 
   final String? localPath;
 
@@ -27,6 +29,8 @@ class JourneyImageInfo extends Equatable {
     this.detectedTotalAmount,
     this.detectedCurrency,
     this.lastProcessedAt,
+    this.updatedAt,
+    this.location,
     this.localPath,
   });
 
@@ -48,6 +52,7 @@ class JourneyImageInfo extends Equatable {
         detectedCurrency: json['detected_currency'] as String?,
         hasPotentialText: json['has_potential_text'] as bool?,
         isInvoiceGuess: json['is_invoice_guess'] as bool? ?? false,
+        location: json['location'] as String?,
       );
     } catch (e, stackTrace) {
       print('Error in JourneyImageInfo.fromJson: $e');
@@ -58,21 +63,22 @@ class JourneyImageInfo extends Equatable {
   }
 
   factory JourneyImageInfo.fromMap(Map<String, dynamic> map) {
-    // Comment out debug print
-    // print('JourneyImageInfo.fromMap: $map');
     return JourneyImageInfo(
-      id: map['id'] as String? ?? '',
-      url: map['url'] as String? ?? '',
-      imagePath: map['image_path'] as String? ?? '',
-      lastProcessedAt: map['last_processed_at'] != null
-          ? DateTime.tryParse(map['last_processed_at'] as String? ?? '')
-          : null,
-      detectedText: map['detected_text'] as String?,
-      detectedTotalAmount: map['detected_total_amount'] != null
-          ? double.tryParse(map['detected_total_amount'].toString())
-          : null,
-      detectedCurrency: map['detected_currency'] as String?,
+      id: map['id'] as String,
+      url: map['url'] as String,
+      imagePath: map['image_path'] as String,
       hasPotentialText: map['has_potential_text'] as bool?,
+      detectedText: map['detected_text'] as String?,
+      detectedTotalAmount: (map['detected_total_amount'] as num?)?.toDouble(),
+      detectedCurrency: map['detected_currency'] as String?,
+      isInvoiceGuess: map['is_invoice_guess'] as bool? ?? false,
+      location: map['location'] as String?,
+      lastProcessedAt: map['last_processed_at'] != null
+          ? DateTime.parse(map['last_processed_at'] as String)
+          : null,
+      updatedAt: map['updated_at'] != null
+          ? DateTime.parse(map['updated_at'] as String)
+          : null,
     );
   }
 
@@ -88,6 +94,7 @@ class JourneyImageInfo extends Equatable {
       'detected_total_amount': detectedTotalAmount,
       'detected_currency': detectedCurrency,
       'last_processed_at': lastProcessedAt?.toIso8601String(),
+      'location': location,
       // localPath is typically not saved to Firestore
     };
   }
@@ -102,12 +109,16 @@ class JourneyImageInfo extends Equatable {
     double? detectedTotalAmount,
     String? detectedCurrency,
     DateTime? lastProcessedAt,
+    DateTime? updatedAt,
+    String? location,
     String? localPath,
     bool setHasPotentialTextNull = false,
     bool setDetectedTextNull = false,
     bool setDetectedTotalAmountNull = false,
     bool setDetectedCurrencyNull = false,
     bool setLastProcessedAtNull = false,
+    bool setUpdatedAtNull = false,
+    bool setLocationNull = false,
   }) {
     return JourneyImageInfo(
       id: id ?? this.id,
@@ -128,6 +139,12 @@ class JourneyImageInfo extends Equatable {
       lastProcessedAt: setLastProcessedAtNull
           ? null
           : lastProcessedAt ?? this.lastProcessedAt,
+      updatedAt: setUpdatedAtNull
+          ? null
+          : updatedAt ?? this.updatedAt,
+      location: setLocationNull
+          ? null
+          : location ?? this.location,
       localPath: localPath ?? this.localPath,
     );
   }
@@ -143,6 +160,8 @@ class JourneyImageInfo extends Equatable {
         detectedTotalAmount,
         detectedCurrency,
         lastProcessedAt,
+        updatedAt,
+        location,
         localPath,
       ];
 }
