@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/models/journey.dart';
-import '../models/journey_image_info.dart';
-import '../models/image_status.dart';
+import '../models/invoice_capture_process.dart';
+import '../models/invoice_capture_status.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -14,91 +14,52 @@ import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
+import 'package:travel/constants/app_routes.dart';
+import 'package:travel/providers/invoice_capture_provider.dart';
 
-ImageStatus determineImageStatus(JourneyImageInfo imageInfo) {
-  if (imageInfo.lastProcessedAt != null) {
-    if (imageInfo.hasPotentialText == true) {
-      return ImageStatus.scanComplete;
-    } else {
-      return ImageStatus.noTextFound;
-    }
-  } else {
-    return ImageStatus.ready;
+InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
+  if (imageInfo.status != null) {
+    return InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
   }
+  return InvoiceCaptureStatus.ready;
 }
 
-class InvoiceCaptureScreen extends ConsumerStatefulWidget {
-  final Journey journey;
-  const InvoiceCaptureScreen({super.key, required this.journey});
+class InvoiceCaptureScreen extends ConsumerWidget {
+  final String journeyId;
+
+  const InvoiceCaptureScreen({super.key, required this.journeyId});
 
   @override
-  ConsumerState<InvoiceCaptureScreen> createState() =>
-      _InvoiceCaptureScreenState();
-}
-
-class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
-  late final Logger _logger;
-
-  @override
-  void initState() {
-    super.initState();
-    _logger = ref.read(loggerProvider);
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  Future<bool> _validateImageUrl(String url) async {
-    try {
-      final response = await http.head(Uri.parse(url));
-      _logger.d(
-          '[URL_VALIDATION] Status code: ${response.statusCode} for URL: $url');
-      _logger.d('[URL_VALIDATION] Headers: ${response.headers}');
-      return response.statusCode == 200 &&
-          response.headers['content-type']?.startsWith('image/') == true;
-    } catch (e) {
-      _logger.e('[URL_VALIDATION] Error validating URL:', error: e);
-      return false;
-    }
-  }
-
-  Future<Map<String, String>> _getAuthHeaders() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('User not authenticated');
-    }
-    final token = await user.getIdToken();
-    return {
-      'Authorization': 'Bearer $token',
-    };
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
 
     final journeyImagesAsyncValue =
-        ref.watch(journeyImagesStreamProvider(widget.journey.id));
+        ref.watch(journeyImagesStreamProvider(journeyId));
+
+    final journeyAsyncValue = ref.watch(journeyStreamProvider(journeyId));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Invoices: ${widget.journey.title}'),
+        title: journeyAsyncValue.when(
+          data: (journey) =>
+              Text('Invoices: ${journey?.title ?? "Loading..."}'),
+          loading: () => const Text('Invoices: Loading...'),
+          error: (_, __) => const Text('Invoices'),
+        ),
       ),
-      body: _buildBody(context, journeyImagesAsyncValue),
+      body: _buildBody(context, ref, journeyImagesAsyncValue),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickAndUploadImage(context),
+        onPressed: () => _pickAndUploadImage(context, ref),
         heroTag: 'upload',
         child: const Icon(Icons.add_a_photo),
       ),
     );
   }
 
-  Widget _buildImageTile(BuildContext context, JourneyImageInfo imageInfo) {
+  Widget _buildImageTile(
+      BuildContext context, WidgetRef ref, InvoiceCaptureProcess imageInfo) {
     if (imageInfo.url.isEmpty) {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
@@ -106,7 +67,7 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
     return CachedNetworkImage(
       imageUrl: imageInfo.url,
       fit: BoxFit.cover,
-      httpHeaders: {
+      httpHeaders: const {
         'Accept': 'image/*',
         'Cache-Control': 'no-cache',
       },
@@ -118,7 +79,9 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
         );
       },
       errorWidget: (context, url, error) {
-        _logger.e('[INVOICE_CAPTURE] Error loading image:', error: error);
+        ref
+            .read(loggerProvider)
+            .e('[INVOICE_CAPTURE] Error loading image:', error: error);
         return Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -126,7 +89,8 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
               const Icon(Icons.error_outline, color: Colors.redAccent),
               const SizedBox(height: 4),
               ElevatedButton(
-                onPressed: () => setState(() {}),
+                onPressed: () =>
+                    ref.invalidate(journeyImagesStreamProvider(journeyId)),
                 child: const Text('Retry', style: TextStyle(fontSize: 10)),
               ),
             ],
@@ -136,11 +100,11 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
     );
   }
 
-  Widget _buildBody(BuildContext context,
-      AsyncValue<List<JourneyImageInfo>> journeyImagesAsyncValue) {
+  Widget _buildBody(BuildContext context, WidgetRef ref,
+      AsyncValue<List<InvoiceCaptureProcess>> journeyImagesAsyncValue) {
     return journeyImagesAsyncValue.when(
       data: (images) {
-        _logger.d(
+        ref.read(loggerProvider).d(
             '[INVOICE_CAPTURE] Received ${images.length} images from stream');
 
         if (images.isEmpty) {
@@ -163,7 +127,7 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
                 title: ImageStatusChip(imageInfo: imageInfo),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete, color: Colors.white),
-                  onPressed: () => _deleteImage(context, imageInfo),
+                  onPressed: () => _deleteImage(context, ref, imageInfo),
                   tooltip: 'Delete Invoice',
                 ),
               ),
@@ -173,25 +137,25 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
-                        journeyId: widget.journey.id,
+                        journeyId: journeyId,
                         initialIndex: index,
                         images: images,
                       ),
                     ),
                   );
                 },
-                child: _buildImageTile(context, imageInfo),
+                child: _buildImageTile(context, ref, imageInfo),
               ),
             );
           },
         );
       },
       loading: () {
-        _logger.d('[INVOICE_CAPTURE] Loading images...');
+        ref.read(loggerProvider).d('[INVOICE_CAPTURE] Loading images...');
         return const Center(child: CircularProgressIndicator());
       },
       error: (error, stack) {
-        _logger.e('[INVOICE_CAPTURE] Error loading images',
+        ref.read(loggerProvider).e('[INVOICE_CAPTURE] Error loading images',
             error: error, stackTrace: stack);
         return Center(
           child: Text('Error: $error'),
@@ -200,8 +164,8 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
     );
   }
 
-  Future<void> _deleteImage(
-      BuildContext context, JourneyImageInfo imageInfo) async {
+  Future<void> _deleteImage(BuildContext context, WidgetRef ref,
+      InvoiceCaptureProcess imageInfo) async {
     final repo = ref.read(journeyRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
@@ -227,10 +191,12 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
     if (confirmed != true) return;
 
     try {
-      _logger.d("🗑️ Starting invoice deletion...");
+      ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
       await repo.deleteJourneyImage(
-          widget.journey.id, imageInfo.id, p.basename(imageInfo.imagePath));
-      _logger.i("🗑️ Invoice deleted successfully");
+        journeyId,
+        imageInfo.id,
+      );
+      ref.read(loggerProvider).i("🗑️ Invoice deleted successfully");
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -238,7 +204,7 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
         );
       }
     } catch (e) {
-      _logger.e("🗑️ Error deleting invoice", error: e);
+      ref.read(loggerProvider).e("🗑️ Error deleting invoice", error: e);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error deleting invoice: $e')),
@@ -247,38 +213,42 @@ class _InvoiceCaptureScreenState extends ConsumerState<InvoiceCaptureScreen> {
     }
   }
 
-  Future<void> _pickAndUploadImage(BuildContext context) async {
+  Future<void> _pickAndUploadImage(BuildContext context, WidgetRef ref) async {
     final repo = ref.read(journeyRepositoryProvider);
     final picker = ImagePicker();
 
     try {
-      _logger.d("📸 Starting image picker...");
+      ref.read(loggerProvider).d("📸 Starting image picker...");
       final pickedFile = await picker.pickImage(source: ImageSource.gallery);
       if (pickedFile == null) {
-        _logger.d("📸 User canceled picking image");
+        ref.read(loggerProvider).d("📸 User canceled picking image");
         return;
       }
 
-      _logger.d("📸 Reading file bytes");
+      ref.read(loggerProvider).d("📸 Reading file bytes");
       final fileBytes = await pickedFile.readAsBytes();
       final fileName = p.basename(pickedFile.path);
-      _logger.d("📸 File: $fileName, size: ${fileBytes.length} bytes");
+      ref
+          .read(loggerProvider)
+          .d("📸 File: $fileName, size: ${fileBytes.length} bytes");
 
-      _logger.d("📸 Starting repository upload...");
+      ref.read(loggerProvider).d("📸 Starting repository upload...");
       final uploadResult =
-          await repo.uploadJourneyImage(widget.journey.id, fileBytes, fileName);
+          await repo.uploadJourneyImage(journeyId, fileBytes, fileName);
 
-      _logger.i("📸 Repository upload completed successfully");
-      _logger.d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
+      ref.read(loggerProvider).i("📸 Repository upload completed successfully");
+      ref
+          .read(loggerProvider)
+          .d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
 
       if (context.mounted) {
-        _logger.d("📸 Showing success message");
+        ref.read(loggerProvider).d("📸 Showing success message");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invoice uploaded successfully!')),
         );
       }
     } catch (e) {
-      _logger.e("📸 ERROR DURING UPLOAD: $e", error: e);
+      ref.read(loggerProvider).e("📸 ERROR DURING UPLOAD: $e", error: e);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

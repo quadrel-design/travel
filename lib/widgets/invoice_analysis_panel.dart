@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'dart:math';
-import '../models/journey_image_info.dart';
+import '../models/invoice_capture_process.dart';
 import '../constants/ui_constants.dart';
 import 'package:logger/logger.dart';
 
 class InvoiceAnalysisPanel extends StatelessWidget {
-  final JourneyImageInfo imageInfo;
+  final InvoiceCaptureProcess imageInfo;
   final VoidCallback onClose;
   final Logger logger;
 

@@ -1,19 +1,41 @@
+/*
+ * Logging Provider
+ * 
+ * This file defines a provider for centralized logging throughout the application.
+ * It establishes a consistent logging approach that can be used across all components,
+ * ensuring uniform log formatting, filtering, and output.
+ */
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logger/logger.dart';
 
-// Global Provider for the Logger instance
+/// Provides a centralized logger instance for the entire application.
+///
+/// This provider creates a singleton Logger instance that can be used
+/// throughout the app to maintain consistent logging behavior.
+/// All log messages are filtered based on the PrettyPrinter settings.
+///
+/// The logger is configured with:
+/// - Minimal method count for regular logs but expanded for errors
+/// - Colorized output when supported
+/// - Timestamps for all logs
+/// - Emoji support for better visual distinction
+///
+/// In production builds, the log level can be adjusted to reduce verbosity.
+///
+/// Usage: `final logger = ref.read(loggerProvider);`
 final loggerProvider = Provider<Logger>((ref) {
   // Configure the logger here (e.g., printer, output, level)
   return Logger(
     printer: PrettyPrinter(
-      methodCount: 1, // number of method calls to be displayed
-      errorMethodCount: 8, // number of method calls if stacktrace is provided
-      lineLength: 120, // width of the output
-      colors: true, // Colorful log messages
-      printEmojis: true, // Print an emoji for each log message
-      dateTimeFormat: DateTimeFormat.none // Use proper parameter instead of deprecated printTime
+      methodCount: 0,
+      errorMethodCount: 8,
+      lineLength: 120,
+      colors: true,
+      printEmojis: true,
+      printTime: true,
     ),
-    // You can also set the minimum level, e.g., Level.debug for development
-    // level: Level.debug, 
+    // In production, you might want to change this to Level.warning or higher
+    level: Level.debug,
   );
-}); 
+});

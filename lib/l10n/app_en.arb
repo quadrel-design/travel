@@ -167,14 +167,21 @@
 
   "imageStatusNotScanned": "Not Scanned",
   "@imageStatusNotScanned": { "description": "Status label for an image that hasn't been scanned for text yet" },
-  "imageStatusNoText": "No Text",
+  
+  "imageStatusProcessing": "Processing",
+  "@imageStatusProcessing": { "description": "Status label for an image that is currently being processed" },
+  
+  "imageStatusNoText": "No Text Found",
   "@imageStatusNoText": { "description": "Status label for an image processed but no text was found" },
-  "imageStatusScanned": "Scanned",
-  "@imageStatusScanned": { "description": "Status label for an image successfully scanned (may or may not be invoice)" },
-  "imageStatusNoInvoice": "Not Invoice",
-  "@imageStatusNoInvoice": { "description": "Status label for an image scanned, text found, but deemed not an invoice" },
-  "imageStatusError": "Scan Error",
-  "@imageStatusError": { "description": "Status label for an image where the scanning process resulted in an error" },
+  
+  "imageStatusText": "Text Found",
+  "@imageStatusText": { "description": "Status label for an image where text was found but not identified as an invoice" },
+  
+  "imageStatusInvoice": "Invoice Found",
+  "@imageStatusInvoice": { "description": "Status label for an image that was identified as an invoice" },
+  
+  "imageStatusError": "Error",
+  "@imageStatusError": { "description": "Status label for an image where processing resulted in an error" },
 
   "groupedButtonInfoTooltip": "View Info",
   "@groupedButtonInfoTooltip": { "description": "Tooltip for the info button in the grouped actions" },
@@ -474,5 +481,35 @@
   "@downloadingInvoice": { "description": "Message shown while downloading an invoice image" },
 
   "addInvoiceFromGalleryTooltip": "Add invoice from gallery",
-  "@addInvoiceFromGalleryTooltip": { "description": "Tooltip for the FAB to add an invoice from the device gallery" }
+  "@addInvoiceFromGalleryTooltip": { "description": "Tooltip for the FAB to add an invoice from the device gallery" },
+
+  "journeyNotFound": "Journey not found",
+  "@journeyNotFound": {
+    "description": "Message shown when a journey cannot be found"
+  },
+
+  "journeyImages": "Journey Images",
+  "@journeyImages": {
+    "description": "Title for the journey images section"
+  },
+
+  "noImagesYet": "No images yet",
+  "@noImagesYet": {
+    "description": "Message shown when there are no images in a journey"
+  },
+
+  "addImage": "Add Image",
+  "@addImage": {
+    "description": "Label for the add image button"
+  },
+
+  "journeySaveSuccess": "Journey saved successfully",
+  "@journeySaveSuccess": {
+    "description": "Message shown when a journey is saved successfully"
+  },
+
+  "save": "Save",
+  "@save": {
+    "description": "Label for save buttons"
+  }
 }

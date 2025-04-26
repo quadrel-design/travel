@@ -18,8 +18,8 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
 
 import '../models/journey.dart';
-import '../models/journey_image_info.dart';
-import 'journey_repository.dart';
+import '../models/invoice_capture_process.dart';
+import 'invoice_repository.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
 
 class FirestoreException implements Exception {
@@ -36,8 +36,8 @@ class FirestoreException implements Exception {
 }
 
 // Implementation of JourneyRepository for Firebase/Firestore
-class FirestoreJourneyRepository implements JourneyRepository {
-  FirestoreJourneyRepository(
+class FirestoreInvoiceRepository implements JourneyRepository {
+  FirestoreInvoiceRepository(
     this._firestore,
     this._storage,
     this._auth,
@@ -75,22 +75,23 @@ class FirestoreJourneyRepository implements JourneyRepository {
           .map((snapshot) {
         _logger.d(
             'Received journey snapshot with ${snapshot.docs.length} documents.');
-        return snapshot.docs.map((doc) {
-          try {
-            final data = doc.data();
-            // Add the ID to the data map before conversion
-            data['id'] = doc.id;
-            return Journey.fromMap(data);
-          } catch (e, stackTrace) {
-            _logger.e('Error converting document to Journey:',
-                error: e, stackTrace: stackTrace);
-            // Skip invalid documents
-            return null;
-          }
-        })
-        .where((journey) => journey != null)
-        .cast<Journey>()
-        .toList();
+        return snapshot.docs
+            .map((doc) {
+              try {
+                final data = doc.data();
+                // Add the ID to the data map before conversion
+                data['id'] = doc.id;
+                return Journey.fromMap(data);
+              } catch (e, stackTrace) {
+                _logger.e('Error converting document to Journey:',
+                    error: e, stackTrace: stackTrace);
+                // Skip invalid documents
+                return null;
+              }
+            })
+            .where((journey) => journey != null)
+            .cast<Journey>()
+            .toList();
       }).handleError((error, stackTrace) {
         _logger.e('Error fetching user journeys stream',
             error: error, stackTrace: stackTrace);
@@ -290,7 +291,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
 
   // --- Journey Image Methods ---
   @override
-  Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId) {
+  Stream<List<InvoiceCaptureProcess>> getJourneyImagesStream(String journeyId) {
     try {
       final userId = _getCurrentUserId();
       final user = _auth.currentUser;
@@ -306,7 +307,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
         _logger.e('[REPO STREAM] Invalid path components:');
         _logger.e('  - User ID: ${userId.isEmpty ? 'EMPTY' : userId}');
         _logger.e('  - Journey ID: ${journeyId.isEmpty ? 'EMPTY' : journeyId}');
-        return Stream.value(<JourneyImageInfo>[]);
+        return Stream.value(<InvoiceCaptureProcess>[]);
       }
 
       // Get references to all the required paths
@@ -324,7 +325,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
         if (!journeySnapshot.exists) {
           _logger.e('[REPO STREAM] Journey document not found:');
           _logger.e('  - Path: ${journeyDoc.path}');
-          return Stream.value(<JourneyImageInfo>[]);
+          return Stream.value(<InvoiceCaptureProcess>[]);
         }
 
         _logger.d('[REPO STREAM] Journey document exists:');
@@ -343,7 +344,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
           if (querySnapshot.docs.isEmpty) {
             _logger.w('[REPO STREAM] No images found in collection:');
             _logger.w('  - Collection path: ${imagesCollection.path}');
-            return <JourneyImageInfo>[];
+            return <InvoiceCaptureProcess>[];
           }
 
           final images = querySnapshot.docs
@@ -365,12 +366,13 @@ class FirestoreJourneyRepository implements JourneyRepository {
                     return null;
                   }
 
-                  // Create JourneyImageInfo object
-                  final info = JourneyImageInfo.fromJson(data);
+                  // Create InvoiceCaptureProcess object
+                  final info = InvoiceCaptureProcess.fromJson(data);
 
                   // Validate the object
                   if (info.url.isEmpty || info.imagePath.isEmpty) {
-                    _logger.e('[REPO STREAM] Invalid JourneyImageInfo object:');
+                    _logger.e(
+                        '[REPO STREAM] Invalid InvoiceCaptureProcess object:');
                     _logger.e('  - ID: ${info.id}');
                     _logger.e('  - URL: ${info.url}');
                     _logger.e('  - Path: ${info.imagePath}');
@@ -388,7 +390,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
                 }
               })
               .where((info) => info != null)
-              .cast<JourneyImageInfo>()
+              .cast<InvoiceCaptureProcess>()
               .toList();
 
           _logger.i('[REPO STREAM] Stream update:');
@@ -550,9 +552,9 @@ class FirestoreJourneyRepository implements JourneyRepository {
   }
 
   @override
-  Future<JourneyImageInfo> uploadJourneyImage(
+  Future<InvoiceCaptureProcess> uploadJourneyImage(
     String journeyId,
-    List<int> imageBytes,
+    Uint8List imageBytes,
     String fileName,
   ) async {
     final userId = _getCurrentUserId();
@@ -575,8 +577,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
     try {
       // Compress image data
       _logger.d('[REPOSITORY] Starting image compression...');
-      final finalImageData =
-          await _compressImage(Uint8List.fromList(imageBytes));
+      final finalImageData = await _compressImage(imageBytes);
       _logger.d(
           '[REPOSITORY] Compression complete. Final size: ${finalImageData.length} bytes');
 
@@ -620,7 +621,7 @@ class FirestoreJourneyRepository implements JourneyRepository {
 
       // 3. Create Firestore document
       final now = DateTime.now();
-      final imageInfo = JourneyImageInfo(
+      final imageInfo = InvoiceCaptureProcess(
         id: imageId,
         url: downloadUrl,
         imagePath: storagePath, // Use the same path for consistency
@@ -673,54 +674,54 @@ class FirestoreJourneyRepository implements JourneyRepository {
   }
 
   @override
-  Future<void> deleteJourneyImage(
-      String journeyId, String imageId, String fileName) async {
+  Future<void> deleteJourneyImage(String journeyId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
-      _logger.i(
-          'Deleting image $fileName (ID: $imageId) from journey $journeyId for user $userId');
+      _logger.d('Deleting image $imageId from journey $journeyId');
 
-      // Construct the storage path
-      final imagePath = 'users/$userId/journeys/$journeyId/images/$fileName';
-      final imageRef = _storage.ref().child(imagePath);
-      final docRef = _firestore
+      // Get the image info to get the file name
+      final imageDoc = await _firestore
           .collection('users')
           .doc(userId)
           .collection('journeys')
           .doc(journeyId)
           .collection('images')
-          .doc(imageId);
+          .doc(imageId)
+          .get();
 
-      // Start with Firestore document deletion
-      await docRef.delete();
-      _logger.i('Firestore document for image $imageId deleted.');
-
-      // Then attempt storage file deletion
-      try {
-        await imageRef.delete();
-        _logger.i('Storage file $fileName deleted.');
-      } on FirebaseException catch (storageError, storageStackTrace) {
-        // Log storage deletion error but don't throw if Firestore deletion succeeded
-        _logger.e(
-            'FirebaseException deleting storage file $fileName: ${storageError.message}',
-            error: storageError,
-            stackTrace: storageStackTrace);
-      } catch (storageError, storageStackTrace) {
-        _logger.e('Unknown error deleting storage file $fileName',
-            error: storageError, stackTrace: storageStackTrace);
+      if (!imageDoc.exists) {
+        throw DatabaseOperationException(
+          'Image not found',
+          null,
+          StackTrace.current,
+        );
       }
-    } on FirebaseException catch (e, stackTrace) {
-      _logger.e('FirebaseException deleting image metadata: ${e.message}',
-          error: e, stackTrace: stackTrace);
-      throw DatabaseOperationException(
-          'Failed to delete image metadata: ${e.code}', e, stackTrace);
+
+      final imageInfo = InvoiceCaptureProcess.fromJson(imageDoc.data()!);
+
+      // Delete from storage first
+      final storageRef = _storage.ref().child(imageInfo.imagePath);
+      await storageRef.delete();
+
+      // Then delete from Firestore
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .doc(imageId)
+          .delete();
+
+      _logger.i('Successfully deleted image $imageId from journey $journeyId');
     } catch (e, stackTrace) {
-      _logger.e('Unknown error deleting image',
+      _logger.e('Error deleting journey image',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred while deleting the image.',
-          e,
-          stackTrace);
+        'Failed to delete journey image: ${e.toString()}',
+        e,
+        stackTrace,
+      );
     }
   }
 
@@ -733,59 +734,40 @@ class FirestoreJourneyRepository implements JourneyRepository {
     double? totalAmount,
     String? currency,
     bool? isInvoice,
-    String? location,
+    String? status,
   }) async {
     try {
       final userId = _getCurrentUserId();
-      _logger.d('[REPOSITORY] Updating image $imageId with OCR results');
+      _logger
+          .d('Updating image $imageId in journey $journeyId with OCR results');
 
-      // Reference to the image document
-      final docRef = _firestore
+      final data = <String, dynamic>{
+        'hasText': hasText,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (detectedText != null) data['detectedText'] = detectedText;
+      if (totalAmount != null) data['detectedTotalAmount'] = totalAmount;
+      if (currency != null) data['detectedCurrency'] = currency;
+      if (isInvoice != null) data['isInvoice'] = isInvoice;
+      if (status != null) data['status'] = status;
+
+      await _firestore
           .collection('users')
           .doc(userId)
           .collection('journeys')
           .doc(journeyId)
           .collection('images')
-          .doc(imageId);
+          .doc(imageId)
+          .update(data);
 
-      // Prepare update data
-      final now = DateTime.now();
-      final updateData = {
-        'hasPotentialText': hasText,
-        'lastProcessedAt': now.toIso8601String(),
-        'updatedAt': now.toIso8601String(),
-      };
-
-      // Add optional fields if they're provided
-      if (detectedText != null) {
-        updateData['detectedText'] = detectedText;
-      }
-
-      if (totalAmount != null) {
-        updateData['detectedTotalAmount'] = totalAmount;
-      }
-
-      if (currency != null) {
-        updateData['detectedCurrency'] = currency;
-      }
-
-      if (isInvoice != null) {
-        updateData['isInvoiceGuess'] = isInvoice;
-      }
-
-      if (location != null) {
-        updateData['location'] = location;
-      }
-
-      // Update the document
-      await docRef.update(updateData);
       _logger.i(
-          '[REPOSITORY] Successfully updated image $imageId with OCR results');
+          'Successfully updated OCR results for image $imageId in journey $journeyId');
     } catch (e, stackTrace) {
-      _logger.e('[REPOSITORY] Error updating image with OCR results:',
+      _logger.e('Error updating image OCR results',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-        'Failed to update image with OCR results: ${e.toString()}',
+        'Failed to update image OCR results: ${e.toString()}',
         e,
         stackTrace,
       );

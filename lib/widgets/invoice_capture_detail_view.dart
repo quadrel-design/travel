@@ -6,7 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:logger/logger.dart';
-import '../models/journey_image_info.dart';
+import '../models/invoice_capture_process.dart';
 import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
@@ -30,7 +30,7 @@ class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
 
   final int initialIndex;
   final String journeyId;
-  final List<JourneyImageInfo> images;
+  final List<InvoiceCaptureProcess> images;
 
   @override
   ConsumerState<InvoiceCaptureDetailView> createState() {
@@ -287,7 +287,7 @@ class _InvoiceCaptureDetailViewState
   }
 
   /// Build the image view component
-  Widget _buildImageView(JourneyImageInfo imageInfo) {
+  Widget _buildImageView(InvoiceCaptureProcess imageInfo) {
     if (imageInfo.url.isEmpty) {
       _logger
           .w('[INVOICE_CAPTURE] ImageInfo ID ${imageInfo.id} has empty URL.');
@@ -306,7 +306,7 @@ class _InvoiceCaptureDetailViewState
     return _buildMobileImageView(imageInfo);
   }
 
-  Widget _buildWebImageView(JourneyImageInfo imageInfo) {
+  Widget _buildWebImageView(InvoiceCaptureProcess imageInfo) {
     return FutureBuilder<String>(
       future: _getValidImageUrl(imageInfo),
       builder: (context, snapshot) {
@@ -322,11 +322,11 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildMobileImageView(JourneyImageInfo imageInfo) {
+  Widget _buildMobileImageView(InvoiceCaptureProcess imageInfo) {
     return _buildPhotoView(imageInfo.url, false);
   }
 
-  Future<String> _getValidImageUrl(JourneyImageInfo imageInfo) async {
+  Future<String> _getValidImageUrl(InvoiceCaptureProcess imageInfo) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final token = await user?.getIdToken(true);
@@ -410,7 +410,7 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildAnalysisPanel(JourneyImageInfo imageInfo) {
+  Widget _buildAnalysisPanel(InvoiceCaptureProcess imageInfo) {
     if (!_showAnalysis) return const SizedBox.shrink();
 
     return InvoiceAnalysisPanel(
@@ -449,7 +449,7 @@ class _InvoiceCaptureDetailViewState
   }
 
   PreferredSizeWidget? _buildAppBar(
-      List<JourneyImageInfo> images, bool isScanning) {
+      List<InvoiceCaptureProcess> images, bool isScanning) {
     if (!_showAppBar) return null;
 
     return AppBar(
@@ -489,7 +489,7 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildBody(List<JourneyImageInfo> images) {
+  Widget _buildBody(List<InvoiceCaptureProcess> images) {
     if (images.isEmpty) {
       return const Center(child: Text('No images available'));
     }

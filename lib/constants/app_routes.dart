@@ -16,5 +16,7 @@ class AppRoutes {
   static const String journeyExpenses = '/journey-expenses';
   static const String expenseList = '/expense-list';
   static const String journeyCreate = '/journey-create';
+  static const String journeyImageDetail = '/journey-detail/image';
+  static const String journeyCapture = '/journey-detail/capture';
   // Add other routes here as needed
 }

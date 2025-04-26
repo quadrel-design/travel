@@ -53,8 +53,8 @@ console.log(`- FUNCTIONS_CONFIG: ${process.env.FUNCTIONS_CONFIG ? "Set" : "Not s
 // Check .runtimeconfig.json if present
 try {
   const fs = require('fs');
-  if (fs.existsSync('./.runtimeconfig.json')) {
-    const config = JSON.parse(fs.readFileSync('./.runtimeconfig.json', 'utf8'));
+  if (fs.existsSync('../../.runtimeconfig.json')) {
+    const config = JSON.parse(fs.readFileSync('../../.runtimeconfig.json', 'utf8'));
     console.log("Found .runtimeconfig.json with Gemini configuration:");
     console.log(`- gemini.api_key: ${config.gemini?.api_key ? "Present" : "Not present"}`);
   } else {

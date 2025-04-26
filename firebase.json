@@ -2,6 +2,12 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "functions": {
+    "source": "functions",
+    "predeploy": [
+      "cd functions && npm run build"
+    ]
+  },
   "hosting": {
     "public": "build/web",
     "ignore": [

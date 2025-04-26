@@ -28,7 +28,8 @@ import 'package:go_router/go_router.dart';
 // import '../providers/repository_providers.dart';
 // import 'package:travel/utils/validators.dart'; // Remove this non-existent import
 import 'package:travel/constants/app_routes.dart';
-import 'package:travel/providers/location_provider.dart'; // Fix import path
+import 'package:travel/providers/location_service_provider.dart'; // Fix import path
+import 'package:travel/providers/journey_form_provider.dart';
 
 class CreateJourneyScreen extends ConsumerStatefulWidget {
   const CreateJourneyScreen({super.key});
@@ -276,11 +277,48 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
+    // Watch the form state
+    final formState = ref.watch(journeyFormProvider);
+
+    // Handle form state changes
+    ref.listen<JourneyFormState>(
+      journeyFormProvider,
+      (_, state) {
+        if (state.error != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(state.error!),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+
+        if (state.isSuccess) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.journeySaveSuccess),
+              backgroundColor: Theme.of(context).colorScheme.primary,
+            ),
+          );
+          context.pop();
+        }
+      },
+    );
+
     return Scaffold(
       key: _scaffoldMessengerKey,
       appBar: AppBar(
         title: Text(l10n.createJourneyTitle),
-        actions: const [], // Keep actions empty
+        leading: IconButton(
+          icon: const Icon(Icons.close),
+          onPressed: () => context.pop(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: formState.isLoading ? null : _saveJourney,
+            child: Text(l10n.save),
+          ),
+        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -304,24 +342,6 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: _isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : ElevatedButton(
-                onPressed: _saveJourney, // Use the actual save function
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    vertical: 16,
-                  ), // Increased padding
-                  minimumSize: const Size(
-                    double.infinity,
-                    50,
-                  ), // Make button wider
-                ),
-                child: Text(l10n.saveButton),
-              ),
       ),
     );
   }

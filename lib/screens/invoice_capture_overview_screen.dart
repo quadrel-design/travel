@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/models/journey.dart';
-import '../models/journey_image_info.dart';
-import '../models/image_status.dart';
+import '../models/invoice_capture_process.dart';
+import '../models/invoice_capture_status.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -14,20 +14,13 @@ import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:flutter/foundation.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-ImageStatus determineImageStatus(JourneyImageInfo imageInfo) {
-  if (imageInfo.lastProcessedAt != null) {
-    if (imageInfo.hasPotentialText == true) {
-      return ImageStatus.scanComplete;
-    } else {
-      return ImageStatus.noTextFound;
-    }
-  } else {
-    return ImageStatus.ready;
+InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
+  if (imageInfo.status != null) {
+    return InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
   }
+  return InvoiceCaptureStatus.ready;
 }
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
@@ -99,7 +92,8 @@ class _InvoiceCaptureOverviewScreenState
     );
   }
 
-  Widget _buildImageTile(BuildContext context, JourneyImageInfo imageInfo) {
+  Widget _buildImageTile(
+      BuildContext context, InvoiceCaptureProcess imageInfo) {
     if (imageInfo.url.isEmpty) {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
@@ -107,7 +101,7 @@ class _InvoiceCaptureOverviewScreenState
     return CachedNetworkImage(
       imageUrl: imageInfo.url,
       fit: BoxFit.cover,
-      httpHeaders: {
+      httpHeaders: const {
         'Accept': 'image/*',
         'Cache-Control': 'no-cache',
       },
@@ -138,7 +132,7 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Widget _buildBody(BuildContext context,
-      AsyncValue<List<JourneyImageInfo>> journeyImagesAsyncValue) {
+      AsyncValue<List<InvoiceCaptureProcess>> journeyImagesAsyncValue) {
     return journeyImagesAsyncValue.when(
       data: (images) {
         _logger.d(
@@ -202,7 +196,7 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Future<void> _deleteImage(
-      BuildContext context, JourneyImageInfo imageInfo) async {
+      BuildContext context, InvoiceCaptureProcess imageInfo) async {
     final repo = ref.read(journeyRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
@@ -230,7 +224,9 @@ class _InvoiceCaptureOverviewScreenState
     try {
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteJourneyImage(
-          widget.journey.id, imageInfo.id, p.basename(imageInfo.imagePath));
+        widget.journey.id,
+        imageInfo.id,
+      );
       _logger.i("🗑️ Invoice deleted successfully");
 
       if (context.mounted) {

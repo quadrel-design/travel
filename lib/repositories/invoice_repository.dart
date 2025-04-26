@@ -1,4 +1,5 @@
 import 'dart:typed_data'; // For Uint8List
+import 'dart:async';
 
 // Firebase Imports
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -10,44 +11,30 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import 'package:logger/logger.dart'; // Import Logger
 import '../models/journey.dart';
-import '../models/journey_image_info.dart';
+import '../models/invoice_capture_process.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
 
-// Abstract class defining the contract for Journey data operations
+/// Interface for journey-related operations
 abstract class JourneyRepository {
-  // --- Journey Methods ---
-
-  /// Fetches all journeys for the currently logged-in user as a stream.
+  /// Fetches a stream of all journeys for the current user
   Stream<List<Journey>> fetchUserJourneys();
 
-  /// Fetches a single journey by its ID as a stream.
+  /// Gets a stream for a specific journey
   Stream<Journey?> getJourneyStream(String journeyId);
 
-  /// Adds a new journey to the data store.
-  /// Returns the newly created Journey object with its generated ID.
+  /// Gets a stream of images for a specific journey
+  Stream<List<InvoiceCaptureProcess>> getJourneyImagesStream(String journeyId);
+
+  /// Adds a new journey
   Future<Journey> addJourney(Journey journey);
 
-  /// Updates an existing journey.
+  /// Updates an existing journey
   Future<void> updateJourney(Journey journey);
 
-  /// Deletes a journey and its associated data (like images).
+  /// Deletes a journey
   Future<void> deleteJourney(String journeyId);
 
-  // --- Journey Image Methods ---
-
-  /// Fetches all image metadata for a specific journey as a stream.
-  Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId);
-
-  /// Uploads an image file for a specific journey.
-  /// Returns the JourneyImageInfo object containing metadata and the download URL.
-  Future<JourneyImageInfo> uploadJourneyImage(
-      String journeyId, List<int> imageBytes, String fileName);
-
-  /// Deletes a specific image associated with a journey, including its storage file.
-  Future<void> deleteJourneyImage(
-      String journeyId, String imageId, String fileName);
-
-  /// Updates an image with OCR and analysis results
+  /// Updates image info with OCR results
   Future<void> updateImageWithOcrResults(
     String journeyId,
     String imageId, {
@@ -56,16 +43,18 @@ abstract class JourneyRepository {
     double? totalAmount,
     String? currency,
     bool? isInvoice,
-    String? location,
+    String? status,
   });
 
-  // --- Potentially needed methods (Add if required by other parts of the app) ---
+  /// Deletes a journey image
+  Future<void> deleteJourneyImage(String journeyId, String imageId);
 
-  // Future<void> updateJourneyImageMetadata(String journeyId, JourneyImageInfo imageInfo);
-
-  // Note: Removed getJourneys (use fetchUserJourneys stream), createJourney (use addJourney),
-  // deleteSingleJourneyImage (use deleteJourneyImage), addImageReference (Firestore handles this)
-  // compared to the original interface deduced from the error messages.
+  /// Uploads a journey image
+  Future<InvoiceCaptureProcess> uploadJourneyImage(
+    String journeyId,
+    Uint8List fileBytes,
+    String fileName,
+  );
 }
 
 class JourneyRepositoryImpl implements JourneyRepository {
@@ -210,7 +199,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
   }
 
   @override
-  Stream<List<JourneyImageInfo>> getJourneyImagesStream(String journeyId) {
+  Stream<List<InvoiceCaptureProcess>> getJourneyImagesStream(String journeyId) {
     _logger.d('[REPO STREAM] Creating image stream for journey $journeyId');
     try {
       // Use Firestore snapshots stream
@@ -232,11 +221,10 @@ class JourneyRepositoryImpl implements JourneyRepository {
         return querySnapshot.docs
             .map((doc) {
               try {
-                // Map Firestore document to JourneyImageInfo, adding document ID
+                // Map Firestore document to InvoiceCaptureProcess, adding document ID
                 final data = doc.data();
-                // ID is implicitly the document ID
                 final info =
-                    JourneyImageInfo.fromJson(data).copyWith(id: doc.id);
+                    InvoiceCaptureProcess.fromJson(data).copyWith(id: doc.id);
                 _logger.d(
                     '[REPO STREAM MAP INNER] Mapped doc ${doc.id} to: ${info.id}, ${info.url}, ${info.lastProcessedAt}');
                 return info;
@@ -249,7 +237,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
               }
             })
             .where((item) => item != null) // Filter out failed mappings
-            .cast<JourneyImageInfo>()
+            .cast<InvoiceCaptureProcess>()
             .toList();
       }).handleError((error, stackTrace) {
         // Add error handling to the stream
@@ -330,8 +318,8 @@ class JourneyRepositoryImpl implements JourneyRepository {
   }
 
   @override
-  Future<JourneyImageInfo> uploadJourneyImage(
-      String journeyId, List<int> imageBytes, String fileName) async {
+  Future<InvoiceCaptureProcess> uploadJourneyImage(
+      String journeyId, Uint8List fileBytes, String fileName) async {
     final userId = _getCurrentUserId(); // Use helper
     _logger
         .i('Uploading image $fileName to journey $journeyId for user $userId');
@@ -342,12 +330,12 @@ class JourneyRepositoryImpl implements JourneyRepository {
 
     try {
       // Use Uint8List here as required by putData
-      final uploadTask = await imageRef.putData(Uint8List.fromList(imageBytes));
+      final uploadTask = await imageRef.putData(fileBytes);
       final downloadUrl = await uploadTask.ref.getDownloadURL();
       _logger.i('Image uploaded successfully: $downloadUrl');
 
-      // Use correct constructor parameters for JourneyImageInfo
-      final imageInfo = JourneyImageInfo(
+      // Use correct constructor parameters for InvoiceCaptureProcess
+      final imageInfo = InvoiceCaptureProcess(
         id: '', // Firestore will generate ID
         url: downloadUrl,
         imagePath: imagePath, // Use the storage path
@@ -369,7 +357,7 @@ class JourneyRepositoryImpl implements JourneyRepository {
           .add(imageInfo.toJson()); // Use the toJson method
 
       _logger.i('Image metadata added to Firestore with ID: ${docRef.id}');
-      // Return the JourneyImageInfo object with the new ID
+      // Return the InvoiceCaptureProcess object with the new ID
       return imageInfo.copyWith(id: docRef.id);
     } on FirebaseException catch (e, s) {
       _logger.e('FirebaseException uploading image: ${e.message}',
@@ -391,50 +379,103 @@ class JourneyRepositoryImpl implements JourneyRepository {
   }
 
   @override
-  Future<void> deleteJourneyImage(
-      String journeyId, String imageId, String fileName) async {
-    final userId = _getCurrentUserId(); // Use helper
-    _logger.i(
-        'Deleting image $fileName (ID: $imageId) from journey $journeyId for user $userId');
-
-    // Construct the storage path using user ID
-    final imagePath = 'users/$userId/journeys/$journeyId/images/$fileName';
-    final imageRef = _storage.ref().child(imagePath);
-    final docRef = _firestore
-        .collection('users')
-        .doc(userId) // Use obtained userId
-        .collection('journeys')
-        .doc(journeyId)
-        .collection('images')
-        .doc(imageId);
-
+  Future<void> deleteJourneyImage(String journeyId, String imageId) async {
     try {
-      // Start both deletions, prioritize Firestore doc deletion
-      await docRef.delete();
-      _logger.i('Firestore document for image $imageId deleted.');
+      final userId = _getCurrentUserId();
+      _logger.d('Deleting image $imageId from journey $journeyId');
 
-      try {
-        await imageRef.delete();
-        _logger.i('Storage file $fileName deleted.');
-      } on FirebaseException catch (storageError, storageStackTrace) {
-        // Log storage deletion error but don't throw if Firestore deletion succeeded
-        _logger.e(
-            'FirebaseException deleting storage file $fileName: ${storageError.message}',
-            error: storageError,
-            stackTrace: storageStackTrace);
-      } catch (storageError, storageStackTrace) {
-        _logger.e('Unknown error deleting storage file $fileName',
-            error: storageError, stackTrace: storageStackTrace);
+      // Get the image info to get the file name
+      final imageDoc = await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .doc(imageId)
+          .get();
+
+      if (!imageDoc.exists) {
+        throw DatabaseOperationException(
+          'Image not found',
+          null,
+          StackTrace.current,
+        );
       }
-    } on FirebaseException catch (e, s) {
-      _logger.e('FirebaseException deleting image metadata: ${e.message}',
-          error: e, stackTrace: s);
+
+      final imageInfo = InvoiceCaptureProcess.fromJson(imageDoc.data()!);
+
+      // Delete from storage first
+      final storageRef = _storage.ref().child(imageInfo.imagePath);
+      await storageRef.delete();
+
+      // Then delete from Firestore
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .doc(imageId)
+          .delete();
+
+      _logger.i('Successfully deleted image $imageId from journey $journeyId');
+    } catch (e, stackTrace) {
+      _logger.e('Error deleting journey image',
+          error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'Failed to delete image metadata: ${e.code}', e, s);
-    } catch (e, s) {
-      _logger.e('Unknown error deleting image', error: e, stackTrace: s);
+        'Failed to delete journey image: ${e.toString()}',
+        e,
+        stackTrace,
+      );
+    }
+  }
+
+  @override
+  Future<void> updateImageWithOcrResults(
+    String journeyId,
+    String imageId, {
+    required bool hasText,
+    String? detectedText,
+    double? totalAmount,
+    String? currency,
+    bool? isInvoice,
+    String? status,
+  }) async {
+    try {
+      final userId = _getCurrentUserId();
+      _logger
+          .d('Updating image $imageId in journey $journeyId with OCR results');
+
+      final data = <String, dynamic>{
+        'hasText': hasText,
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (detectedText != null) data['detectedText'] = detectedText;
+      if (totalAmount != null) data['detectedTotalAmount'] = totalAmount;
+      if (currency != null) data['detectedCurrency'] = currency;
+      if (isInvoice != null) data['isInvoice'] = isInvoice;
+      if (status != null) data['status'] = status;
+
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('journeys')
+          .doc(journeyId)
+          .collection('images')
+          .doc(imageId)
+          .update(data);
+
+      _logger.i(
+          'Successfully updated OCR results for image $imageId in journey $journeyId');
+    } catch (e, stackTrace) {
+      _logger.e('Error updating image OCR results',
+          error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred while deleting the image.', e, s);
+        'Failed to update image OCR results: ${e.toString()}',
+        e,
+        stackTrace,
+      );
     }
   }
 
@@ -542,18 +583,4 @@ class JourneyRepositoryImpl implements JourneyRepository {
     });
   }
   // --- End fetchUserJourneys ---
-
-  @override
-  Future<void> updateImageWithOcrResults(
-    String journeyId,
-    String imageId, {
-    required bool hasText,
-    String? detectedText,
-    double? totalAmount,
-    String? currency,
-    bool? isInvoice,
-    String? location,
-  }) async {
-    // Implementation of updateImageWithOcrResults method
-  }
 }

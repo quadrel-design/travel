@@ -20,14 +20,13 @@ import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
 import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
 import 'providers/logging_provider.dart'; // Add import for logger
 import 'package:travel/screens/auth_wait_screen.dart'; // Add import for wait screen
-import 'package:travel/screens/invoice_capture_screen.dart';
-import 'package:travel/screens/journey_settings_screen.dart';
 import 'package:travel/screens/journey_expenses_screen.dart';
 import 'package:travel/screens/user_management_screen.dart';
 
 // Add Firebase imports
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; // Import generated options
+import 'package:cloud_functions/cloud_functions.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,6 +38,17 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+
+  // Connect to Firebase Emulators in debug mode
+  if (kDebugMode) {
+    try {
+      // Use Firebase Functions Emulator
+      FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
+      print('🔥 Using Firebase Functions Emulator at localhost:5001');
+    } catch (e) {
+      print('⚠️ Error connecting to Firebase Functions Emulator: $e');
+    }
+  }
 
   // Wrap MyApp with ProviderScope
   runApp(const ProviderScope(child: MyApp()));

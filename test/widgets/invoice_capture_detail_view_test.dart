@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:travel/widgets/invoice_capture_detail_view.dart';
-import 'package:travel/models/journey_image_info.dart';
+import 'package:travel/models/journey.dart';
+import 'package:travel/models/invoice_capture_process.dart';
 import 'package:travel/providers/invoice_capture_provider.dart';
-import 'package:travel/providers/logging_provider.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:travel/repositories/journey_repository.dart';
+import 'package:travel/repositories/invoice_repository.dart';
+import 'package:travel/widgets/invoice_capture_detail_view.dart';
+import 'package:travel/providers/logging_provider.dart';
 import 'package:logger/logger.dart';
 import 'package:mocktail/mocktail.dart';
 
@@ -38,12 +39,12 @@ void main() {
   testWidgets('InvoiceCaptureDetailView shows correct number of images',
       (WidgetTester tester) async {
     final testImages = [
-      JourneyImageInfo(
+      const InvoiceCaptureProcess(
         id: '1',
         url: 'https://example.com/image1.jpg',
         imagePath: 'path/to/image1.jpg',
       ),
-      JourneyImageInfo(
+      const InvoiceCaptureProcess(
         id: '2',
         url: 'https://example.com/image2.jpg',
         imagePath: 'path/to/image2.jpg',
@@ -72,7 +73,7 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: MaterialApp(
+        child: const MaterialApp(
           home: InvoiceCaptureDetailView(
             journeyId: 'test-journey',
             images: [],
@@ -88,7 +89,7 @@ void main() {
   testWidgets('InvoiceCaptureDetailView handles image loading error',
       (WidgetTester tester) async {
     final testImages = [
-      JourneyImageInfo(
+      const InvoiceCaptureProcess(
         id: '1',
         url: 'invalid-url',
         imagePath: 'path/to/image1.jpg',

@@ -3,6 +3,9 @@ import '../models/expense.dart';
 import '../models/journey.dart';
 import '../models/user.dart' as local_user;
 import 'package:uuid/uuid.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../repositories/invoice_repository.dart';
+import '../repositories/repository_exceptions.dart';
 
 // Use flutter/foundation.dart for kDebugMode checks if needed for logging
 import 'package:flutter/foundation.dart';
@@ -10,9 +13,6 @@ import 'package:flutter/foundation.dart';
 import '../repositories/journey_repository.dart'; // Import JourneyRepository
 // Import custom exceptions
 import '../repositories/repository_exceptions.dart';
-
-// Import Firestore
-import 'package:cloud_firestore/cloud_firestore.dart';
 
 final random = Random();
 const uuid = Uuid();
