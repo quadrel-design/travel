@@ -1,3 +1,10 @@
+/**
+ * Journey Creation Screen
+ *
+ * Provides a form using flutter_form_builder for users to input details
+ * (title, dates, description, location, budget) and create a new journey/invoice.
+ * Uses [journeyFormProvider] for state management and handling the save operation.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import services for formatter
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
@@ -28,9 +35,11 @@ import 'package:go_router/go_router.dart';
 // import '../providers/repository_providers.dart';
 // import 'package:travel/utils/validators.dart'; // Remove this non-existent import
 import 'package:travel/constants/app_routes.dart';
-import 'package:travel/providers/location_service_provider.dart'; // Fix import path
+import 'package:travel/providers/location_service_provider.dart'; // Fix import path - Uncommented
 import 'package:travel/providers/journey_form_provider.dart';
+// import 'package:travel/providers/auth_repository_provider.dart';
 
+/// A screen widget for creating new journeys/invoices.
 class CreateJourneyScreen extends ConsumerStatefulWidget {
   const CreateJourneyScreen({super.key});
 
@@ -39,31 +48,48 @@ class CreateJourneyScreen extends ConsumerStatefulWidget {
       _CreateJourneyScreenState();
 }
 
+/// State class for the [CreateJourneyScreen].
 class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   static const Duration _kAutocompleteDebounceDuration =
       Duration(milliseconds: 300);
 
   // Constants for form field names
+  /// Form field name for the journey title.
   static const _fieldName = 'name';
+
+  /// Form field name for the journey description.
   static const _fieldDescription = 'description';
+
+  /// Form field name for the journey location.
   static const _fieldLocation = 'location';
+
+  /// Form field name for the journey budget.
   static const _fieldBudget = 'budget';
 
   // ScaffoldMessenger Key
   final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 
   // Form Key
+  /// Global key for the [FormBuilder] instance.
   final _formKey = GlobalKey<FormBuilderState>();
 
   // Date Controllers & Format
+  /// Controller for displaying the selected start date.
   final _startDateDisplayController = TextEditingController();
+
+  /// Controller for displaying the selected end date.
   final _endDateDisplayController = TextEditingController();
+
+  /// Date format used for display controllers.
   final DateFormat _dateFormat = DateFormat('dd/MM/yyyy');
 
   // State variables
+  /// The selected start date.
   DateTime? _startDate;
+
+  /// The selected end date.
   DateTime? _endDate;
-  bool _isLoading = false; // Made non-final to allow modification
+  // Removed local _isLoading state - now managed by journeyFormProvider
 
   @override
   void dispose() {
@@ -77,6 +103,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   }
 
   // Helper function to show error SnackBar
+  /// Displays a floating SnackBar with an error message.
   void _showErrorSnackBar(BuildContext context, String title, String message) {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
@@ -113,6 +140,10 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
    }
    */
 
+  /// Shows a date picker dialog and updates the corresponding state variable
+  /// and display controller.
+  ///
+  /// Ensures the end date cannot be before the start date.
   Future<void> _pickDate(bool isStartDate) async {
     final now = DateTime.now();
     final initial =
@@ -156,11 +187,14 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
 
   // Commented out for now - will be connected to UI when implementation is finalized
 
+  /// Validates the form, creates a [Journey] object, and triggers the creation
+  /// process via the [journeyFormProvider].
   Future<void> _saveJourney() async {
     final formState = _formKey.currentState!;
     if (formState.saveAndValidate()) {
       final formData = formState.value;
-      final l10n = AppLocalizations.of(context)!;
+      // Localization can be fetched here if needed for validation messages, though not currently used.
+      // final l10n = AppLocalizations.of(context)!;
 
       // Extract values (Get dates from state variables, not formData)
       final String title = formData['name']?.toString().trim() ?? '';
@@ -168,83 +202,58 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       final DateTime? endDate = _endDate; // Use state variable
       final String description =
           formData['description']?.toString().trim() ?? '';
-      final String? location = formData['location']?.toString().trim();
+      // Get location value (might be null if field is commented out)
+      final String? location = formData[_fieldLocation]?.toString().trim();
       final double? budget = formData['budget'] as double?;
 
-      // Basic validation
+      // Basic validation (redundant if form validators are robust, but safe)
       if (title.isEmpty || startDate == null || endDate == null) {
         if (mounted) {
-          _showErrorSnackBar(
-              context, l10n.missingInfoTitle, l10n.journeySaveMissingInfoDesc);
+          _showErrorSnackBar(context, "Missing Information",
+              "Please fill in title and select both dates.");
         }
         return;
       }
       if (endDate.isBefore(startDate)) {
         if (mounted) {
-          _showErrorSnackBar(
-              context, l10n.errorTitle, l10n.journeySaveInvalidDateRange);
+          _showErrorSnackBar(context, "Invalid Dates",
+              "End date cannot be before start date.");
         }
         return;
       }
 
-      setState(() {
-        _isLoading = true;
-      });
-
-      final authRepository = ref.read(authRepositoryProvider);
-      final userId = authRepository.currentUser?.uid;
-      if (userId == null) {
+      // Get user ID *again* right before use and perform null check
+      final String? currentUserId =
+          ref.read(authRepositoryProvider).currentUser?.uid;
+      if (currentUserId == null) {
         if (mounted) {
           _showErrorSnackBar(
-              context, l10n.errorTitle, l10n.createJourneyErrorUserNotLoggedIn);
+              context, "Error", "User session lost. Cannot save journey.");
         }
-        setState(() {
-          _isLoading = false;
-        });
-        return;
+        return; // Cannot proceed without user ID
       }
 
-      try {
-        final journeyRepository = ref.read(journeyRepositoryProvider);
-        final newJourney = Journey(
-          id: const Uuid().v4(),
-          userId: userId,
-          title: title,
-          startDate: startDate,
-          endDate: endDate,
-          description: description,
-          location: location ?? '',
-          budget: budget ?? 0.0,
-          isCompleted: false,
-        );
-        await journeyRepository.addJourney(newJourney);
+      // Create the Journey object
+      final newJourney = Journey(
+        id: const Uuid().v4(), // Generate new ID
+        userId: currentUserId, // Now guaranteed non-null
+        title: title,
+        startDate: startDate,
+        endDate: endDate,
+        description: description,
+        location: location ?? '', // Use extracted location or default
+        budget: budget ?? 0.0,
+        isCompleted: false,
+      );
 
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.journeySaveSuccessDesc),
-              backgroundColor: Colors.green,
-            ),
-          );
-          // Consider navigating to the new journey's detail page
-          context.pushReplacement(
-              '${AppRoutes.home}/${AppRoutes.journeyDetail.split('/').last}/${newJourney.id}',
-              extra: newJourney);
-        }
-      } catch (e) {
-        if (mounted) {
-          _showErrorSnackBar(context, l10n.journeySaveErrorTitle, e.toString());
-        }
-      } finally {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      }
+      // Call the notifier to create the journey
+      // The listen callback will handle success/error feedback and navigation
+      await ref.read(journeyFormProvider.notifier).createJourney(newJourney);
     }
   }
 
+  /// Fetches location suggestions based on user input.
+  /// Used by the (currently commented out) location typeahead field.
   Future<List<String>> _searchLocations(String pattern) async {
     if (!mounted) return []; // Check mounted state
     if (pattern.isEmpty) {
@@ -273,40 +282,59 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     }
   }
 
+  /// Builds the UI for the Create Journey screen.
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
 
-    // Watch the form state
+    // Watch the form state provider
     final formState = ref.watch(journeyFormProvider);
+    final isLoading = formState.isLoading; // Get loading state from provider
 
-    // Handle form state changes
-    ref.listen<JourneyFormState>(
-      journeyFormProvider,
-      (_, state) {
-        if (state.error != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(state.error!),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-          );
-        }
-
-        if (state.isSuccess) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(l10n.journeySaveSuccess),
-              backgroundColor: Theme.of(context).colorScheme.primary,
-            ),
-          );
+    // Listen to the form provider for side effects (navigation, snackbars)
+    ref.listen<JourneyFormState>(journeyFormProvider, (previous, next) {
+      // Handle errors shown via SnackBar
+      if (next.error != null && next.error != previous?.error) {
+        _showErrorSnackBar(context, l10n.journeySaveErrorTitle, next.error!);
+        // Optionally reset the error in the provider after showing it
+        // This prevents the snackbar from reappearing on rebuild
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            // Check mounted before interacting with ref post-frame
+            ref.read(journeyFormProvider.notifier).state =
+                next.copyWith(clearError: true);
+          }
+        });
+      }
+      // Handle navigation on success
+      if (next.isSuccess && previous?.isSuccess == false) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.journeySaveSuccessDesc),
+            backgroundColor: Colors.green,
+          ),
+        );
+        // Navigate on success, passing the created journey if available
+        if (next.journey != null) {
+          context.pushReplacement(
+              '${AppRoutes.home}/${AppRoutes.journeyDetail.split('/').last}/${next.journey!.id}',
+              extra: next.journey);
+        } else {
+          // Fallback navigation if journey data isn't in state
           context.pop();
         }
-      },
-    );
+        // Reset provider state after navigation completes (optional, depends on desired behavior)
+        // WidgetsBinding.instance.addPostFrameCallback((_) {
+        //   if (mounted) {
+        //      ref.read(journeyFormProvider.notifier).resetState();
+        //   }
+        // });
+      }
+    });
 
     return Scaffold(
-      key: _scaffoldMessengerKey,
+      key: _scaffoldMessengerKey, // Use the key here
       appBar: AppBar(
         title: Text(l10n.createJourneyTitle),
         leading: IconButton(
@@ -315,7 +343,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: formState.isLoading ? null : _saveJourney,
+            onPressed: isLoading ? null : _saveJourney,
             child: Text(l10n.save),
           ),
         ],

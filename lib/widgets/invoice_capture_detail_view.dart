@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:math';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,7 +16,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/location_service_provider.dart';
-import '../constants/ui_constants.dart';
 import './invoice_analysis_panel.dart';
 
 class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
@@ -171,8 +169,6 @@ class _InvoiceCaptureDetailViewState
       Map<String, dynamic> result, String imageId) async {
     // Store the OCR results using the repository
     final repository = ref.read(journeyRepositoryProvider);
-    final hasText = result['hasText'] ?? false;
-    final detectedText = result['detectedText'] as String?;
     final status = result['status'] as String? ?? 'Text';
 
     // Extract invoice analysis data if available
@@ -198,15 +194,6 @@ class _InvoiceCaptureDetailViewState
       }
     }
 
-    // Parse amount and currency
-    double? totalAmount;
-    String? currency;
-
-    if (status == 'Invoice' && invoiceAnalysis != null) {
-      totalAmount = _parseTotalAmount(invoiceAnalysis);
-      currency = _getCurrency(invoiceAnalysis);
-    }
-
     // Determine if it's an invoice
     bool isInvoice = status == 'Invoice';
     if (invoiceAnalysis != null && invoiceAnalysis['isInvoice'] is bool) {
@@ -219,10 +206,6 @@ class _InvoiceCaptureDetailViewState
     await repository.updateImageWithOcrResults(
       widget.journeyId,
       imageId,
-      hasText: true,
-      detectedText: detectedText,
-      totalAmount: totalAmount,
-      currency: currency,
       isInvoice: isInvoice,
       status: status,
     );
@@ -234,41 +217,6 @@ class _InvoiceCaptureDetailViewState
     }
 
     _logger.i('OCR results stored for image $imageId with status: $status');
-  }
-
-  double? _parseTotalAmount(Map<String, dynamic> invoiceAnalysis) {
-    if (invoiceAnalysis['totalAmount'] != null) {
-      var amountValue = invoiceAnalysis['totalAmount'];
-      if (amountValue is num) {
-        final amount = amountValue.toDouble();
-        _logger.d('Total amount is already a number: $amount');
-        return amount;
-      } else {
-        final amountStr = amountValue.toString();
-        final amount = double.tryParse(amountStr);
-        _logger.d('Parsed total amount from string: $amountStr -> $amount');
-
-        if (amount == null) {
-          _logger.w('Could not parse totalAmount: $amountStr');
-        }
-
-        return amount;
-      }
-    } else {
-      _logger.w('totalAmount is missing from invoice analysis');
-      return null;
-    }
-  }
-
-  String? _getCurrency(Map<String, dynamic> invoiceAnalysis) {
-    if (invoiceAnalysis['currency'] != null) {
-      final currency = invoiceAnalysis['currency'].toString();
-      _logger.d('Currency: $currency');
-      return currency;
-    } else {
-      _logger.w('currency is missing from invoice analysis');
-      return null;
-    }
   }
 
   /// Validate if an image URL is valid and accessible
@@ -412,6 +360,20 @@ class _InvoiceCaptureDetailViewState
 
   Widget _buildAnalysisPanel(InvoiceCaptureProcess imageInfo) {
     if (!_showAnalysis) return const SizedBox.shrink();
+
+    // Check if there's any data to show
+    final bool hasData = imageInfo.status != null ||
+        imageInfo.location != null ||
+        imageInfo.lastProcessedAt != null;
+
+    if (!hasData) {
+      return const Center(
+        child: Text(
+          'No analysis data available for this image',
+          style: TextStyle(color: Colors.white),
+        ),
+      );
+    }
 
     return InvoiceAnalysisPanel(
       imageInfo: imageInfo,

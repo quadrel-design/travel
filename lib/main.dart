@@ -1,3 +1,8 @@
+/**
+ * Main entry point for the Flutter application.
+ * Handles initialization (Firebase, Env Vars), sets up Riverpod providers,
+ * configures GoRouter for navigation, and defines the root `MyApp` widget.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
@@ -15,6 +20,7 @@ import 'repositories/auth_repository.dart'; // Import AuthRepository
 // Import generated localizations delegate
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/providers/repository_providers.dart'; // Import providers
+// Import service providers
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
 import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
@@ -23,18 +29,21 @@ import 'package:travel/screens/auth_wait_screen.dart'; // Add import for wait sc
 import 'package:travel/screens/journey_expenses_screen.dart';
 import 'package:travel/screens/user_management_screen.dart';
 
-// Add Firebase imports
+// Firebase imports
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart'; // Import generated options
 import 'package:cloud_functions/cloud_functions.dart';
 
+/// Main application entry point.
+/// Initializes essential services and runs the Flutter app.
 void main() async {
+  // Ensure Flutter bindings are initialized.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Load environment variables
+  // Load environment variables from .env file.
   await dotenv.load();
 
-  // Initialize Firebase
+  // Initialize Firebase using platform-specific options.
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -42,16 +51,24 @@ void main() async {
   // Connect to Firebase Emulators in debug mode
   if (kDebugMode) {
     try {
-      // Use Firebase Functions Emulator
+      // Use Firebase Functions Emulator.
       FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
       print('🔥 Using Firebase Functions Emulator at localhost:5001');
     } catch (e) {
       print('⚠️ Error connecting to Firebase Functions Emulator: $e');
     }
+    // TODO: Add connections for Firestore, Auth, Storage emulators if used.
   }
 
-  // Wrap MyApp with ProviderScope
-  runApp(const ProviderScope(child: MyApp()));
+  // Initialize Supabase (if used)
+  // await Supabase.initialize(...);
+
+  // Initialize Logger (assuming setup is within providers or elsewhere)
+
+  // Run the app within a ProviderScope for Riverpod state management.
+  runApp(ProviderScope(
+    child: const MyApp(),
+  ));
 }
 
 // Update redirect function to accept repository
@@ -87,7 +104,8 @@ final routerProvider = Provider<GoRouter>((ref) {
     // Updated Redirect Logic
     redirect: (BuildContext context, GoRouterState state) {
       final loggedIn = authRepository.currentUser != null;
-      final emailVerified = authRepository.currentUser?.emailVerified ?? false;
+      final emailVerified =
+          loggedIn && (authRepository.currentUser?.emailVerified ?? false);
       final location = state.matchedLocation; // Use matchedLocation
 
       logger.d(
@@ -129,7 +147,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.auth,
         builder: (context, state) =>
-            // Wrap AuthScreen with a standard light theme
+            // Wrap AuthScreen with a standard light theme, overriding the main app theme.
+            // This might be desired for a standard authentication look & feel.
             Theme(
           data: ThemeData.light(), // Apply standard light theme
           child: const AuthScreen(),
@@ -235,7 +254,9 @@ class GoRouterRefreshStream extends ChangeNotifier {
 }
 // --- End GoRouter Configuration ---
 
-// Update MyApp to consume the router provider
+/// The root widget of the application.
+/// Consumes the [routerProvider] and sets up [MaterialApp.router]
+/// with the application theme and localization delegates.
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 

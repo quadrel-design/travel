@@ -38,10 +38,6 @@ abstract class InvoiceRepository {
   Future<void> updateImageWithOcrResults(
     String journeyId,
     String imageId, {
-    required bool hasText,
-    String? detectedText,
-    double? totalAmount,
-    String? currency,
     bool? isInvoice,
     String? status,
   });
@@ -100,7 +96,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
       await _firestore
           .collection('users')
           .doc(userId)
-          .collection('journeys')
+          .collection('invoices')
           .doc(journey.id)
           .update(journeyData);
 
@@ -170,7 +166,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
       await _firestore
           .collection('users')
           .doc(userId)
-          .collection('journeys')
+          .collection('invoices')
           .doc(journeyId)
           .delete();
       // Note: Firestore rules should prevent unauthorized deletion
@@ -207,7 +203,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
       final query = _firestore
           .collection('users')
           .doc(_getCurrentUserId()) // Use helper to ensure user ID
-          .collection('journeys')
+          .collection('invoices')
           .doc(journeyId)
           .collection('images')
           .orderBy('uploadedAt', descending: true); // Order by upload time
@@ -271,7 +267,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
       final docRef = await _firestore
           .collection('users')
           .doc(userId) // Use obtained userId
-          .collection('journeys')
+          .collection('invoices')
           .add(journeyWithMeta.toJson());
       _logger.i('Journey added with ID: ${docRef.id}');
       // Return the Journey object with the new ID
@@ -296,7 +292,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
     return _firestore
         .collection('users')
         .doc(userId)
-        .collection('journeys')
+        .collection('invoices')
         .doc(journeyId)
         .snapshots()
         .map((snapshot) {
@@ -325,7 +321,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
         .i('Uploading image $fileName to journey $journeyId for user $userId');
 
     // Construct the storage path using user ID
-    final imagePath = 'users/$userId/journeys/$journeyId/images/$fileName';
+    final imagePath = 'users/$userId/invoices/$journeyId/images/$fileName';
     final imageRef = _storage.ref().child(imagePath);
 
     try {
@@ -339,19 +335,13 @@ class JourneyRepositoryImpl implements InvoiceRepository {
         id: '', // Firestore will generate ID
         url: downloadUrl,
         imagePath: imagePath, // Use the storage path
-        // Initialize other fields as needed
-        hasPotentialText: null,
-        lastProcessedAt: null,
-        detectedText: null,
-        detectedTotalAmount: null,
-        detectedCurrency: null,
         isInvoiceGuess: false,
       );
 
       final docRef = await _firestore
           .collection('users')
           .doc(userId) // Use obtained userId
-          .collection('journeys')
+          .collection('invoices')
           .doc(journeyId)
           .collection('images')
           .add(imageInfo.toJson()); // Use the toJson method
@@ -388,7 +378,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
       final imageDoc = await _firestore
           .collection('users')
           .doc(userId)
-          .collection('journeys')
+          .collection('invoices')
           .doc(journeyId)
           .collection('images')
           .doc(imageId)
@@ -412,7 +402,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
       await _firestore
           .collection('users')
           .doc(userId)
-          .collection('journeys')
+          .collection('invoices')
           .doc(journeyId)
           .collection('images')
           .doc(imageId)
@@ -434,10 +424,6 @@ class JourneyRepositoryImpl implements InvoiceRepository {
   Future<void> updateImageWithOcrResults(
     String journeyId,
     String imageId, {
-    required bool hasText,
-    String? detectedText,
-    double? totalAmount,
-    String? currency,
     bool? isInvoice,
     String? status,
   }) async {
@@ -447,20 +433,16 @@ class JourneyRepositoryImpl implements InvoiceRepository {
           .d('Updating image $imageId in journey $journeyId with OCR results');
 
       final data = <String, dynamic>{
-        'hasText': hasText,
-        'updatedAt': FieldValue.serverTimestamp(),
+        'updated_at': FieldValue.serverTimestamp(),
       };
 
-      if (detectedText != null) data['detectedText'] = detectedText;
-      if (totalAmount != null) data['detectedTotalAmount'] = totalAmount;
-      if (currency != null) data['detectedCurrency'] = currency;
-      if (isInvoice != null) data['isInvoice'] = isInvoice;
+      if (isInvoice != null) data['is_invoice_guess'] = isInvoice;
       if (status != null) data['status'] = status;
 
       await _firestore
           .collection('users')
           .doc(userId)
-          .collection('journeys')
+          .collection('invoices')
           .doc(journeyId)
           .collection('images')
           .doc(imageId)
@@ -481,7 +463,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
 
   // --- Add Method to Delete Single Invoice Image ---
   Future<void> deleteSingleInvoiceImage(
-      String imageId, String imagePath) async {
+      String journeyId, String imageId, String imagePath) async {
     // Get user ID for logging/potential rules
     final userId = _getCurrentUserId(); // Throws if not logged in
     _logger.d(
@@ -531,7 +513,14 @@ class JourneyRepositoryImpl implements InvoiceRepository {
     // 2. Delete from Database (only if storage deletion wasn't explicitly blocked by error)
     try {
       _logger.d('Deleting image record from DB: $imageId');
-      await _firestore.collection('journey_images').doc(imageId).delete();
+      await _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('invoices')
+          .doc(journeyId)
+          .collection('images')
+          .doc(imageId)
+          .delete();
       _logger.i('Successfully deleted image record from DB: $imageId');
       // Catch FirebaseException for database
     } on FirebaseException catch (e, stackTrace) {
@@ -566,7 +555,7 @@ class JourneyRepositoryImpl implements InvoiceRepository {
     return _firestore
         .collection('users')
         .doc(userId)
-        .collection('journeys')
+        .collection('invoices')
         // .orderBy('startDate', descending: true) // Optional: Order journeys
         .snapshots()
         .map((snapshot) {

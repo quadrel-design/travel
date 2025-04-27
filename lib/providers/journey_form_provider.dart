@@ -11,7 +11,6 @@ import 'package:travel/models/journey.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
 import 'package:travel/repositories/invoice_repository.dart';
-import 'package:travel/repositories/journey_repository.dart'; // Import for backward compatibility
 
 /// State class representing the current state of journey form operations.
 ///
@@ -60,6 +59,7 @@ class JourneyFormState {
 /// StateNotifier that manages the journey form state and operations.
 ///
 /// Provides methods for creating journeys and handling the related state transitions.
+/// Consider adding `updateJourney` method if form is used for editing.
 class JourneyFormNotifier extends StateNotifier<JourneyFormState> {
   final InvoiceRepository _repository;
 
@@ -85,7 +85,7 @@ class JourneyFormNotifier extends StateNotifier<JourneyFormState> {
         isSuccess: true,
         journey: createdJourney,
       );
-    } on NotAuthenticatedException catch (e) {
+    } on NotAuthenticatedException {
       state = state.copyWith(
         isLoading: false,
         error: 'You must be logged in to create a journey',

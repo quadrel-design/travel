@@ -5,13 +5,23 @@ import './auth_repository.dart'; // Import the abstract class
 import '../providers/logging_provider.dart'; // Import logger provider if used
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Ref for logger
 
+/**
+ * Firebase Authentication Repository Implementation
+ *
+ * Provides a concrete implementation of the AuthRepository interface using
+ * Firebase Authentication and Google Sign-In services.
+ */
+
 // Concrete implementation using Firebase Authentication
+/// Implements the [AuthRepository] interface using Firebase services.
 class FirebaseAuthRepository implements AuthRepository {
   final firebase_auth.FirebaseAuth _firebaseAuth;
   final GoogleSignIn _googleSignIn;
   final Logger _logger;
 
   // Constructor takes FirebaseAuth instance and Logger
+  /// Creates an instance of [FirebaseAuthRepository].
+  /// Requires instances of [FirebaseAuth] and [Logger].
   FirebaseAuthRepository(this._firebaseAuth, this._logger)
       : _googleSignIn = GoogleSignIn();
 
@@ -138,6 +148,7 @@ class FirebaseAuthRepository implements AuthRepository {
     } catch (e, stackTrace) {
       _logger.e('Unexpected error sending password reset to $email',
           error: e, stackTrace: stackTrace);
+      // Consider wrapping in a custom exception if needed by UI
       rethrow;
     }
   }
@@ -160,11 +171,17 @@ class FirebaseAuthRepository implements AuthRepository {
         code: 'no-user',
         message: 'No user is currently signed in.',
       );
+    } else if (user.emailVerified) {
+      _logger.i(
+          'Attempted to send verification email, but user ${user.email} is already verified.');
     }
   }
 }
 
 // Provider definition (adjust if logger is injected differently)
+/// Riverpod provider for the [FirebaseAuthRepository].
+/// Creates a singleton instance using the default Firebase Auth instance
+/// and the shared logger provider.
 final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {
   // If using a shared logger provider:
   final logger = ref.watch(loggerProvider);

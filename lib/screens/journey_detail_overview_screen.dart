@@ -13,10 +13,12 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
     required this.journey,
   });
 
-  // Restore the helper function
-  // /*
+  // Helper function to build styled link cards
   Widget _buildOverviewLinkCard(BuildContext context,
       {required String label, required VoidCallback onTap}) {
+    // L10n instance
+    final l10n = AppLocalizations.of(context)!;
+
     return Card(
       clipBehavior: Clip.antiAlias, // Keep clipBehavior
       // No explicit styling - uses theme
@@ -38,7 +40,6 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
       ),
     );
   }
-  // */
 
   void _navigateToInvoiceCapture(BuildContext context) {
     final fullPath =
@@ -68,7 +69,6 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
       //   child: Text('Overview Content Placeholder'),
       // ),
       // Restore GridView body
-      // /*
       body: Padding(
         // Use 1.0 padding to match spacing
         padding: const EdgeInsets.all(1.0),
@@ -108,7 +108,6 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
           ],
         ),
       ),
-      // */
     );
   }
 }

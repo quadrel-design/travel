@@ -17,7 +17,6 @@ import 'package:logger/logger.dart';
 import 'package:travel/models/invoice_capture_process.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:travel/repositories/invoice_repository.dart';
 
 /// State class for the invoice capture feature.
 ///
@@ -96,6 +95,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   /// Parameters:
   ///   - _journeyId: The ID of the journey to load images from
   ///   - _logger: Logger instance for tracking operations
+  ///   - _ref: Riverpod Ref for reading other providers
   ///   - _ref: Reference to the Riverpod provider context
   InvoiceCaptureNotifier(this._journeyId, this._logger, this._ref)
       : super(const InvoiceCaptureState()) {
@@ -109,7 +109,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   Future<void> _loadInitialImages() async {
     try {
       _logger.d('Loading initial images for journey $_journeyId');
-      final repository = _ref.read(journeyRepositoryProvider);
+      final repository = _ref.read(invoiceRepositoryProvider);
 
       _imageStreamSubscription =
           repository.getInvoiceImagesStream(_journeyId).listen(

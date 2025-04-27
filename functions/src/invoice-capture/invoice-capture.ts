@@ -1,18 +1,40 @@
 /**
- * Invoice Capture Function
- * 
- * Cloud function for capturing invoice details from images
+ * Provides the main callable Cloud Function `scanImage` for the invoice capture process.
+ * It orchestrates text detection and subsequent text analysis for an input image,
+ * updating Firestore with the results.
  */
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getFirestore } from "firebase-admin/firestore";
-import { app } from './init';
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { app } from '../init';
 import { detectTextInImage } from './image-detection';
 import { analyzeDetectedText } from './text-analysis';
 
 // Initialize Firestore
 const db = getFirestore(app);
 
-// Function for invoice capture
+/**
+ * Callable Cloud Function that orchestrates the entire invoice scanning process.
+ * - Authenticates the user.
+ * - Validates input (image URL/data, invoiceId, imageId).
+ * - Handles base64 image data conversion.
+ * - Calls `detectTextInImage` for OCR.
+ * - Calls `analyzeDetectedText` for analysis (unless skipped).
+ * - Combines detection and analysis results.
+ * - Updates the corresponding invoice image document in Firestore.
+ * 
+ * @param {CallableRequest} request The request object.
+ * @param {object} request.data The data passed to the function:
+ * @param {string} [request.data.imageUrl] URL of the image to process.
+ * @param {string} [request.data.imageData] Base64 encoded image data.
+ * @param {boolean} [request.data.skipAnalysis] Optional flag to skip text analysis.
+ * @param {string} request.data.invoiceId The ID of the parent invoice document.
+ * @param {string} request.data.imageId The ID of the image document to update.
+ * @param {object} request.auth Authentication information for the calling user.
+ * @param {string} request.auth.uid The UID of the authenticated user.
+ * 
+ * @returns {Promise<object>} A promise resolving to the combined result object (detection + analysis).
+ * @throws {HttpsError} Throws HttpsError on authentication, validation, or processing errors.
+ */
 export const scanImage = onCall({
   enforceAppCheck: false,
   timeoutSeconds: 300,
@@ -23,7 +45,7 @@ export const scanImage = onCall({
     hasImageUrl: !!request.data.imageUrl,
     hasImageData: !!request.data.imageData,
     skipAnalysis: !!request.data.skipAnalysis,
-    journeyId: request.data.journeyId,
+    invoiceId: request.data.invoiceId,
     imageId: request.data.imageId
   });
 
@@ -77,7 +99,17 @@ export const scanImage = onCall({
       return detectResult;
     }
     
-    // Step 2: Analyze the detected text
+    // Step 2: Analyze the detected text if not skipped
+    if (!detectResult.detectedText) {
+      // Handle case where detectResult succeeded but text is empty (shouldn't happen if hasText is true, but safeguard)
+      console.warn("Detected text is empty despite hasText being true. Skipping analysis.");
+      return {
+        ...detectResult,
+        status: "Text", // Set status to Text if analysis is skipped due to no text
+        invoiceAnalysis: null,
+        isInvoice: false
+      };
+    }
     const analysisResult = await analyzeDetectedText(detectResult.detectedText);
     
     // Combine the results
@@ -88,28 +120,32 @@ export const scanImage = onCall({
       isInvoice: analysisResult.isInvoice
     };
     
-    // Update Firestore if journeyId and imageId are provided
-    if (request.data.journeyId && request.data.imageId) {
+    // Update Firestore if invoiceId and imageId are provided
+    if (request.data.invoiceId && request.data.imageId) {
       try {
-        const docRef = db.collection('journeys')
-          .doc(request.data.journeyId)
+        const docRef = db.collection('users')
+          .doc(request.auth.uid)
+          .collection('invoices')
+          .doc(request.data.invoiceId)
           .collection('images')
           .doc(request.data.imageId);
         
+        // Keep both detectedText (for API response) and detected_text (for Firestore)
+        // for backward compatibility, but don't set redundant fields
         const updateData: any = {
           hasText: detectResult.hasText,
-          detectedText: detectResult.detectedText || "",
+          detected_text: detectResult.detectedText || "",
+          detectedText: detectResult.detectedText || "", // For API compatibility
           confidence: detectResult.confidence || 0,
           textBlocks: detectResult.textBlocks || [],
           status: combinedResult.status,
           isInvoice: combinedResult.isInvoice,
-          lastProcessedAt: new Date().toISOString()
+          lastProcessedAt: FieldValue.serverTimestamp()
         };
         
         // Add invoice analysis data if available
         if (analysisResult.invoiceAnalysis) {
-          updateData.totalAmount = analysisResult.invoiceAnalysis.totalAmount;
-          updateData.currency = analysisResult.invoiceAnalysis.currency;
+          // Include location and merchant name which are still useful
           updateData.merchantName = analysisResult.invoiceAnalysis.merchantName;
           updateData.merchantLocation = analysisResult.invoiceAnalysis.location;
           updateData.invoiceDate = analysisResult.invoiceAnalysis.date;
@@ -118,7 +154,7 @@ export const scanImage = onCall({
         
         await docRef.update(updateData);
         
-        console.log(`Updated journey image document with combined results. Status: ${combinedResult.status}`);
+        console.log(`Updated invoice image document with combined results. Status: ${combinedResult.status}`);
       } catch (dbError) {
         console.error("Error updating Firestore in scanImage function:", dbError);
         // Proceed with returning results even if the database update fails

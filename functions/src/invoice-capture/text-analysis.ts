@@ -1,16 +1,22 @@
+/**
+ * Analyzes text using the Google Gemini API to identify potential invoices and
+ * extract structured data like total amount, currency, date, merchant name, etc.
+ * Provides a helper `analyzeDetectedText` and a callable `analyzeImage` function.
+ */
 // Load environment variables from .env file
 import * as dotenv from 'dotenv';
 dotenv.config();
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { app } from './init';
+import { app } from '../init';
 
-// Initialize Firestore
+// Firestore database reference
 const db = getFirestore(app);
 
 // Initialize Gemini with config
+// Retrieve API key from Runtime Config or Environment Variables
 const geminiApiKey = process.env.FUNCTIONS_CONFIG ? 
   JSON.parse(process.env.FUNCTIONS_CONFIG).gemini?.api_key || 
   JSON.parse(process.env.FUNCTIONS_CONFIG).gemini?.key : 
@@ -18,9 +24,22 @@ const geminiApiKey = process.env.FUNCTIONS_CONFIG ?
 
 console.log("Gemini API Key configured:", !!geminiApiKey);
 
+// Gemini Generative AI client instance
 const genAI = new GoogleGenerativeAI(geminiApiKey);
 
-// Function to analyze detected text for invoice information
+/**
+ * Analyzes detected text using the Gemini API to extract invoice information.
+ * Attempts to parse the response as JSON, cleans it if necessary, and determines
+ * if the text represents an invoice based on extracted fields.
+ * 
+ * @param {string} detectedText The raw text detected from an image.
+ * @returns {Promise<object>} A promise resolving to an object containing:
+ *  - success: boolean
+ *  - status: string ("Invoice", "Text", "Error")
+ *  - isInvoice: boolean
+ *  - invoiceAnalysis?: object (Extracted invoice data if successful)
+ *  - error?: string (If an error occurred)
+ */
 export async function analyzeDetectedText(detectedText: string) {
   try {
     // Check if Gemini API key is available
@@ -145,18 +164,30 @@ export async function analyzeDetectedText(detectedText: string) {
   }
 }
 
-// Firebase cloud function for text analysis
+/**
+ * Callable Cloud Function to analyze detected text and optionally update Firestore.
+ * - Authenticates the user.
+ * - Validates input `detectedText`.
+ * - Calls `analyzeDetectedText` to perform the analysis.
+ * - If `invoiceId` and `imageId` are provided, updates the corresponding Firestore
+ *   document with the analysis results (status, isInvoice, extracted fields).
+ * 
+ * @param {CallableRequest} request The request object.
+ * @param {object} request.data The data passed to the function:
+ * @param {string} request.data.detectedText The text to analyze.
+ * @param {string} [request.data.invoiceId] Optional: The ID of the parent invoice document.
+ * @param {string} [request.data.imageId] Optional: The ID of the image document to update.
+ * @param {object} request.auth Authentication information for the calling user.
+ * @param {string} request.auth.uid The UID of the authenticated user.
+ * 
+ * @returns {Promise<object>} A promise resolving to the result object from `analyzeDetectedText`.
+ * @throws {HttpsError} Throws HttpsError on authentication, validation, or processing errors.
+ */
 export const analyzeImage = onCall({
-  enforceAppCheck: false,
-  timeoutSeconds: 300,
-  memory: "2GiB", 
-  maxInstances: 10
+  enforceAppCheck: false, // Consider enabling App Check for production
+  timeoutSeconds: 120,
 }, async (request) => {
-  console.log("analyzeImage function called with data:", {
-    hasText: !!request.data.detectedText,
-    journeyId: request.data.journeyId,
-    imageId: request.data.imageId
-  });
+  console.log("analyzeImage function called");
 
   // Check if the user is authenticated
   if (!request.auth) {
@@ -164,36 +195,32 @@ export const analyzeImage = onCall({
     throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
 
-  // Validate the request data
-  if (!request.data.detectedText) {
+  // Validate input
+  const { detectedText, invoiceId, imageId } = request.data;
+  if (!detectedText) {
     console.error("Invalid request: No detected text provided");
-    throw new HttpsError("invalid-argument", "Detected text is required for analysis");
+    throw new HttpsError("invalid-argument", "Must provide detected text for analysis");
   }
 
-  if (!request.data.journeyId || !request.data.imageId) {
-    console.error("Invalid request: Missing journeyId or imageId");
-    throw new HttpsError("invalid-argument", "journeyId and imageId are required");
-  }
-
-  // Log that we're starting text analysis
-  console.log("Starting text analysis");
-  
   try {
-    // Analyze the detected text
-    const analysisResult = await analyzeDetectedText(request.data.detectedText);
-    
-    // Update Firestore with the analysis results
-    if (analysisResult.success) {
+    // Analyze the text
+    const analysisResult = await analyzeDetectedText(detectedText);
+    console.log("Text analysis result:", analysisResult);
+
+    // Update Firestore if invoiceId and imageId are provided
+    if (invoiceId && imageId) {
       try {
-        const docRef = db.collection('journeys')
-          .doc(request.data.journeyId)
+        const docRef = db.collection('users')
+          .doc(request.auth.uid)
+          .collection('invoices')
+          .doc(invoiceId)
           .collection('images')
-          .doc(request.data.imageId);
+          .doc(imageId);
         
         const updateData: any = {
           status: analysisResult.status,
           isInvoice: analysisResult.isInvoice,
-          lastAnalyzedAt: new Date().toISOString()
+          lastProcessedAt: FieldValue.serverTimestamp() // Use server timestamp
         };
         
         // Add invoice analysis data if available
@@ -207,24 +234,16 @@ export const analyzeImage = onCall({
         }
         
         await docRef.update(updateData);
-        
-        console.log(`Updated journey image document with analysis results. Status: ${analysisResult.status}`);
+        console.log(`Updated invoice analysis in Firestore. Status: ${analysisResult.status}`);
       } catch (dbError) {
-        console.error("Error updating Firestore:", dbError);
-        // Proceed with returning results even if the database update fails
+        console.error("Error updating Firestore in analyzeImage function:", dbError);
+        // Continue and return results even if DB update fails
       }
     }
-    
-    // Log processing result
-    console.log("Text analysis completed:", {
-      success: analysisResult.success,
-      status: analysisResult.status,
-      isInvoice: analysisResult.isInvoice
-    });
     
     return analysisResult;
   } catch (error) {
     console.error("Error in analyzeImage function:", error);
-    throw new HttpsError("internal", "Error analyzing image text: " + (error instanceof Error ? error.message : "Unknown error"));
+    throw new HttpsError("internal", "Error analyzing text: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 }); 

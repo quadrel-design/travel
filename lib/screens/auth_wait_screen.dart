@@ -1,3 +1,11 @@
+/**
+ * Auth Wait Screen
+ *
+ * Displays a screen while waiting for the user to verify their email address.
+ * Provides options to resend the verification email or sign out.
+ * Relies on the global authentication state listener (e.g., in GoRouter)
+ * to navigate away once the email is verified.
+ */
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,56 +14,17 @@ import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // For localized text
 
-class AuthWaitScreen extends ConsumerStatefulWidget {
+/// A screen shown to the user after registration, prompting them to verify their email.
+///
+/// This screen does not actively check for verification itself but relies on the
+/// global auth state listener (in GoRouter redirect) to navigate away once the
+/// user's `emailVerified` status becomes true.
+class AuthWaitScreen extends ConsumerWidget {
   const AuthWaitScreen({super.key});
 
-  @override
-  ConsumerState<AuthWaitScreen> createState() => _AuthWaitScreenState();
-}
-
-class _AuthWaitScreenState extends ConsumerState<AuthWaitScreen> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _startVerificationCheck();
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel(); // Important: Cancel timer to avoid memory leaks
-    super.dispose();
-  }
-
-  void _startVerificationCheck() {
-    _timer = Timer.periodic(const Duration(seconds: 3), (_) async {
-      final authRepo = ref.read(authRepositoryProvider);
-      final user = authRepo.currentUser;
-
-      if (user == null) {
-        _timer?.cancel();
-        // Should not happen ideally, but handle gracefully
-        if (mounted) context.go(AppRoutes.auth);
-        return;
-      }
-
-      await user.reload(); // Refresh user data from Firebase
-      final refreshedUser =
-          authRepo.currentUser; // Get the refreshed user object
-
-      if (refreshedUser != null && refreshedUser.emailVerified) {
-        _timer?.cancel();
-        if (mounted) {
-          // Navigate to home or dashboard upon successful verification
-          context.go(AppRoutes.home);
-        }
-      }
-      // Otherwise, the timer continues...
-    });
-  }
-
-  Future<void> _resendVerificationEmail() async {
+  /// Handles the action to resend the verification email.
+  Future<void> _resendVerificationEmail(
+      BuildContext context, WidgetRef ref) async {
     final authRepo = ref.read(authRepositoryProvider);
     final user = authRepo.currentUser;
     final l10n = AppLocalizations.of(context)!;
@@ -63,41 +32,35 @@ class _AuthWaitScreenState extends ConsumerState<AuthWaitScreen> {
     if (user != null && !user.emailVerified) {
       try {
         await authRepo.sendVerificationEmail();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(l10n.verificationEmailResent)), // Use l10n
-          );
-        }
-      } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text('${l10n.errorResendingVerification}: $e')), // Use l10n
-          );
-        }
-      }
-    }
-  }
-
-  Future<void> _signOut() async {
-    final authRepo = ref.read(authRepositoryProvider);
-    try {
-      await authRepo.signOut();
-      if (mounted) {
-        context.go(AppRoutes.auth); // Go back to auth screen
-      }
-    } catch (e) {
-      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Sign out failed: $e')), // Placeholder
+          SnackBar(content: Text(l10n.verificationEmailResent)), // Use l10n
+        );
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('${l10n.errorResendingVerification}: $e')), // Use l10n
         );
       }
     }
   }
 
+  /// Handles the sign out action.
+  Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+    final authRepo = ref.read(authRepositoryProvider);
+    try {
+      await authRepo.signOut();
+      context.go(AppRoutes.auth); // Go back to auth screen
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign out failed: $e')), // Placeholder
+      );
+    }
+  }
+
+  /// Builds the UI for the Auth Wait screen.
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
@@ -126,12 +89,13 @@ class _AuthWaitScreenState extends ConsumerState<AuthWaitScreen> {
               ),
               const SizedBox(height: 32),
               TextButton(
-                onPressed: _resendVerificationEmail,
+                onPressed: () => _resendVerificationEmail(context, ref),
                 child: Text(l10n.resendEmailButton), // Use l10n
               ),
               const SizedBox(height: 16),
               TextButton(
-                onPressed: _signOut, // Allow user to go back
+                onPressed: () =>
+                    _signOut(context, ref), // Allow user to go back
                 child: Text(l10n.cancelButton), // Use l10n
               ),
             ],

@@ -1,3 +1,10 @@
+/**
+ * Home Screen
+ *
+ * Displays the main home screen after login, showing a list of the user's
+ * journeys/invoices fetched via a stream provider. Allows navigation to
+ * journey details, settings, and creating new journeys.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -6,78 +13,18 @@ import 'package:travel/models/journey.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
-import 'package:travel/repositories/auth_repository.dart'; // Add import
-
-// --- State Management using StateNotifierProvider ---
-
-// Define the state for the HomeScreen
-@immutable
-class HomeScreenState {
-  final List<Journey> journeys;
-  final bool isLoading;
-  final String? error;
-
-  const HomeScreenState({
-    this.journeys = const [],
-    this.isLoading = true,
-    this.error,
-  });
-
-  HomeScreenState copyWith({
-    List<Journey>? journeys,
-    bool? isLoading,
-    String? error,
-    bool clearError = false, // Helper to clear error
-  }) {
-    return HomeScreenState(
-      journeys: journeys ?? this.journeys,
-      isLoading: isLoading ?? this.isLoading,
-      error: clearError ? null : error ?? this.error,
-    );
-  }
-}
-
-// Create the StateNotifier
-class HomeScreenNotifier extends StateNotifier<HomeScreenState> {
-  final AuthRepository _authRepository;
-
-  HomeScreenNotifier(this._authRepository) : super(const HomeScreenState()) {
-    loadJourneys(); // Load journeys on initialization
-  }
-
-  Future<void> loadJourneys() async {
-    state = state.copyWith(isLoading: true, clearError: true);
-    try {
-      final userId = _authRepository.currentUser?.uid;
-      if (userId == null) {
-        throw Exception('User not logged in');
-      }
-      final loadedJourneys = <Journey>[];
-      if (!mounted) return;
-      state = state.copyWith(journeys: loadedJourneys, isLoading: false);
-    } catch (e) {
-      state = state.copyWith(
-          error: 'Failed to load journeys: $e', isLoading: false);
-    }
-  }
-}
-
-// Create the Provider
-final homeScreenProvider =
-    StateNotifierProvider<HomeScreenNotifier, HomeScreenState>((ref) {
-  final authRepo = ref.watch(authRepositoryProvider);
-  return HomeScreenNotifier(authRepo);
-});
-
-// --- End State Management Setup ---
 
 // Change to ConsumerWidget (or ConsumerStatefulWidget if other state needed later)
+/// The main screen displayed after successful login.
+/// Shows a list of the user's journeys/invoices fetched from Firestore
+/// using the [userJourneysStreamProvider].
 class HomeScreen extends ConsumerWidget {
   // Changed to ConsumerWidget
   const HomeScreen({super.key});
 
   // Removed dateFormat from here, move to build if needed locally
 
+  /// Builds the UI for the Home Screen.
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the new stream provider

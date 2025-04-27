@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
 import '../models/invoice_capture_process.dart';
 import '../constants/ui_constants.dart';
 import 'package:logger/logger.dart';
@@ -22,14 +21,9 @@ class InvoiceAnalysisPanel extends StatelessWidget {
     logger.d('INVOICE DATA DEBUG:');
     logger.d('- id: ${imageInfo.id}');
     logger.d('- status: ${imageInfo.status}');
-    logger.d('- detectedTotalAmount: ${imageInfo.detectedTotalAmount}');
-    logger.d('- detectedCurrency: ${imageInfo.detectedCurrency}');
     logger.d('- location: ${imageInfo.location}');
     logger.d('- lastProcessedAt: ${imageInfo.lastProcessedAt}');
-    logger.d(
-        '- detectedText: ${imageInfo.detectedText?.substring(0, min(50, imageInfo.detectedText?.length ?? 0))}...');
     logger.d('- isInvoiceGuess: ${imageInfo.isInvoiceGuess}');
-    logger.d('- hasPotentialText: ${imageInfo.hasPotentialText}');
 
     return Container(
       color: UIConstants.kPanelBackgroundColor,
@@ -44,13 +38,9 @@ class InvoiceAnalysisPanel extends StatelessWidget {
               _buildHeader(),
               const SizedBox(height: UIConstants.kSectionSpacing),
               _buildInvoiceStatus(),
-              if (imageInfo.detectedTotalAmount != null) _buildTotalAmount(),
               if (imageInfo.location != null && imageInfo.location!.isNotEmpty)
                 _buildLocation(),
               if (imageInfo.lastProcessedAt != null) _buildProcessedDate(),
-              if (imageInfo.detectedText != null &&
-                  imageInfo.detectedText!.isNotEmpty)
-                _buildDetectedText(),
             ],
           ),
         ),
@@ -99,24 +89,6 @@ class InvoiceAnalysisPanel extends StatelessWidget {
     );
   }
 
-  Widget _buildTotalAmount() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Total Amount:',
-          style: UIConstants.kPanelLabelStyle,
-        ),
-        const SizedBox(height: UIConstants.kElementSpacing),
-        Text(
-          '${imageInfo.detectedTotalAmount} ${imageInfo.detectedCurrency ?? ''}',
-          style: UIConstants.kPanelHighlightedValueStyle,
-        ),
-        const SizedBox(height: UIConstants.kSectionSpacing),
-      ],
-    );
-  }
-
   Widget _buildLocation() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -149,34 +121,6 @@ class InvoiceAnalysisPanel extends StatelessWidget {
           style: UIConstants.kPanelValueStyle.copyWith(fontSize: 14),
         ),
         const SizedBox(height: UIConstants.kSectionSpacing),
-      ],
-    );
-  }
-
-  Widget _buildDetectedText() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Detected Text:',
-          style: UIConstants.kPanelLabelStyle,
-        ),
-        const SizedBox(height: UIConstants.kElementSpacing),
-        Container(
-          height: 150,
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.black54,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          padding: const EdgeInsets.all(8),
-          child: SingleChildScrollView(
-            child: Text(
-              imageInfo.detectedText!,
-              style: const TextStyle(color: UIConstants.kPanelForegroundColor),
-            ),
-          ),
-        ),
       ],
     );
   }

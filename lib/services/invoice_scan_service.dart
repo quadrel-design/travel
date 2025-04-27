@@ -1,10 +1,15 @@
+/**
+ * Invoice Scan Service
+ *
+ * Provides a service to manage the end-to-end invoice scanning process,
+ * including triggering the backend scan function and processing/validating the results.
+ */
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
-import '../models/invoice_capture_process.dart';
 import '../services/firebase_functions_service.dart';
 import '../services/location_service.dart';
 import '../repositories/invoice_repository.dart';
+import '../repositories/repository_exceptions.dart'; // For FunctionCallException
 
 /// Service for handling invoice scanning and processing
 class InvoiceScanService {
@@ -13,6 +18,10 @@ class InvoiceScanService {
   final InvoiceRepository _repository;
   final LocationService _locationService;
 
+  /// Creates an instance of [InvoiceScanService].
+  ///
+  /// Requires instances of [Logger], [FirebaseFunctionsService],
+  /// [InvoiceRepository], and [LocationService].
   InvoiceScanService({
     required Logger logger,
     required FirebaseFunctionsService functionsService,
@@ -23,7 +32,16 @@ class InvoiceScanService {
         _repository = repository,
         _locationService = locationService;
 
-  /// Scans an image and updates the repository with the results
+  /// Scans an image by calling the backend Cloud Function and processes the results.
+  ///
+  /// Parameters:
+  ///  - [imageId]: The unique ID of the image document in Firestore.
+  ///  - [imageUrl]: The URL of the image to be scanned.
+  ///  - [journeyId]: The ID of the parent invoice/journey document.
+  ///  - [onScanComplete]: A callback function executed after processing (success or failure).
+  ///
+  /// Returns: A [Map<String, dynamic>] containing the result from the Cloud Function
+  ///          if successful, or an error map (`{'success': false, 'error': ...}`) if an error occurs.
   Future<Map<String, dynamic>> scanImage({
     required String imageId,
     required String imageUrl,
@@ -33,20 +51,8 @@ class InvoiceScanService {
     Map<String, dynamic> result = {'success': false};
 
     try {
-      // Validate URL
-      if (imageUrl.isEmpty) {
-        throw Exception('Image URL is empty. Cannot proceed with scan.');
-      }
-
-      _logger.d("Attempting to download from: $imageUrl");
-      final httpResponse = await http.get(Uri.parse(imageUrl));
-      _logger.d("Image download status: ${httpResponse.statusCode}");
-
-      if (httpResponse.statusCode != 200) {
-        throw Exception("Failed to download image: ${httpResponse.statusCode}");
-      }
-
-      _logger.d("Image downloaded successfully for scan (ID: $imageId)");
+      // The function service might handle empty URLs, but basic check here is okay.
+      // if (imageUrl.isEmpty) { ... }
 
       // Call Firebase function to perform scan
       _logger
@@ -54,39 +60,44 @@ class InvoiceScanService {
       result = await _functionsService.scanImage(
         imageUrl,
         journeyId,
-        imageId,
+        imageId, // Pass necessary parameters
       );
 
       _logger.i('Scan completed for $imageId: ${result['success']}');
-      _logger.d('Full result from scan: $result');
-
-      if (result['success'] == true) {
-        await _processSuccessfulScan(journeyId, imageId, result);
-      } else {
-        throw Exception(result['error'] ?? 'Unknown error during scan');
-      }
+      // Since the functions service now throws on failure, this point means success.
+      await _processSuccessfulScan(journeyId, imageId, result);
 
       onScanComplete();
       return result;
-    } catch (e, stackTrace) {
+    } on FunctionCallException catch (e, stackTrace) {
       _logger.e('[INVOICE_SCAN] Error during scan process:',
           error: e, stackTrace: stackTrace);
 
       result = {
         'success': false,
-        'error': e.toString(),
-        'errorDetails': stackTrace.toString(),
+        'error': e.message, // Use the message from the custom exception
+        'code': e.code, // Include the code if available
       };
-
+      onScanComplete(); // Ensure callback is called even on error
+      return result;
+    } catch (e, stackTrace) {
+      // Catch any other unexpected errors
+      _logger.e('[INVOICE_SCAN] Unexpected error during scan process:',
+          error: e, stackTrace: stackTrace);
+      result = {
+        'success': false,
+        'error': 'An unexpected error occurred during the scan process.',
+      };
+      onScanComplete(); // Ensure callback is called even on error
       return result;
     }
   }
 
+  /// Processes the results from a successful Cloud Function scan call.
+  /// Extracts relevant data, validates location, and updates the repository.
   Future<void> _processSuccessfulScan(
       String journeyId, String imageId, Map<String, dynamic> result) async {
     // Extract basic data
-    final hasText = result['hasText'] ?? false;
-    final detectedText = result['detectedText'] as String?;
     final status = result['status'] as String? ?? 'Text';
 
     // Extract invoice analysis data if available
@@ -103,15 +114,6 @@ class InvoiceScanService {
       validatedLocation = await _validateLocation(invoiceAnalysis!['location']);
     }
 
-    // Parse amount and currency
-    double? totalAmount;
-    String? currency;
-
-    if (status == 'Invoice' && invoiceAnalysis != null) {
-      totalAmount = _parseTotalAmount(invoiceAnalysis);
-      currency = _getCurrency(invoiceAnalysis);
-    }
-
     // Determine if it's an invoice
     bool isInvoice = status == 'Invoice';
     if (invoiceAnalysis != null && invoiceAnalysis['isInvoice'] is bool) {
@@ -124,10 +126,6 @@ class InvoiceScanService {
     await _repository.updateImageWithOcrResults(
       journeyId,
       imageId,
-      hasText: true,
-      detectedText: detectedText,
-      totalAmount: totalAmount,
-      currency: currency,
       isInvoice: isInvoice,
       status: status,
     );
@@ -140,41 +138,9 @@ class InvoiceScanService {
     _logger.i('OCR results stored for image $imageId with status: $status');
   }
 
-  double? _parseTotalAmount(Map<String, dynamic> invoiceAnalysis) {
-    if (invoiceAnalysis['totalAmount'] != null) {
-      var amountValue = invoiceAnalysis['totalAmount'];
-      if (amountValue is num) {
-        final amount = amountValue.toDouble();
-        _logger.d('Total amount is already a number: $amount');
-        return amount;
-      } else {
-        final amountStr = amountValue.toString();
-        final amount = double.tryParse(amountStr);
-        _logger.d('Parsed total amount from string: $amountStr -> $amount');
-
-        if (amount == null) {
-          _logger.w('Could not parse totalAmount: $amountStr');
-        }
-
-        return amount;
-      }
-    } else {
-      _logger.w('totalAmount is missing from invoice analysis');
-      return null;
-    }
-  }
-
-  String? _getCurrency(Map<String, dynamic> invoiceAnalysis) {
-    if (invoiceAnalysis['currency'] != null) {
-      final currency = invoiceAnalysis['currency'].toString();
-      _logger.d('Currency: $currency');
-      return currency;
-    } else {
-      _logger.w('currency is missing from invoice analysis');
-      return null;
-    }
-  }
-
+  /// Validates a location string using the LocationService.
+  /// Tries to find a Place ID and get details to return a formatted address.
+  /// Returns the original location string if validation fails or an error occurs.
   Future<String?> _validateLocation(String location) async {
     try {
       final placeId = await _locationService.findPlaceId(location);

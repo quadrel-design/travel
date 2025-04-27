@@ -1,3 +1,9 @@
+/**
+ * Authentication Screen
+ *
+ * Provides the UI for user authentication, handling login, registration,
+ * password reset, and email verification flows using Riverpod for state management.
+ */
 import 'dart:async'; // Added for Timer
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +19,7 @@ import 'package:travel/providers/logging_provider.dart'; // Import logger provid
 import 'package:firebase_auth/firebase_auth.dart'; // Needed for FirebaseAuthException
 
 // Change to ConsumerStatefulWidget
+/// The main screen widget for handling user authentication.
 class AuthScreen extends ConsumerStatefulWidget {
   const AuthScreen({super.key});
 
@@ -22,10 +29,15 @@ class AuthScreen extends ConsumerStatefulWidget {
 }
 
 // Change to ConsumerState
+/// State class for the [AuthScreen] widget.
 class _AuthScreenState extends ConsumerState<AuthScreen> {
+  // Key for the login/signup form
   final _formKey = GlobalKey<FormState>();
+  // Controller for the email input field
   final _emailController = TextEditingController();
+  // Controller for the password input field
   final _passwordController = TextEditingController();
+  // Logger instance obtained from provider
   late Logger _logger; // Initialize in initState
 
   // Local state for password visibility
@@ -59,6 +71,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     super.dispose();
   }
 
+  /// Starts a periodic timer to check the user's email verification status.
   void _startVerificationTimer(WidgetRef ref) {
     _verificationTimer?.cancel(); // Cancel any existing timer
     _logger.d('Starting email verification check timer.');
@@ -70,7 +83,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
   }
 
-  // Corrected _checkEmailVerificationStatus
+  /// Checks the email verification status of the current user.
+  /// Reloads the user and cancels the timer if verified.
   void _checkEmailVerificationStatus(WidgetRef ref) async {
     final currentUser = ref.read(authRepositoryProvider).currentUser;
     if (currentUser != null &&
@@ -117,6 +131,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  /// Handles the sign-in process using email and password.
+  /// Validates the form, calls the auth repository, and updates state providers.
   void _signInWithEmailAndPassword(BuildContext context, WidgetRef ref) async {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
@@ -161,6 +177,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  /// Handles the registration process using email and password.
+  /// Validates the form, calls the auth repository to create user and send verification,
+  /// and updates state providers, including navigating to the verification wait state.
   void _registerWithEmailAndPassword(
       BuildContext context, WidgetRef ref) async {
     if (_formKey.currentState!.validate()) {
@@ -206,6 +225,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  /// Handles the password reset process for the entered email.
+  /// Validates the email, calls the auth repository, and shows feedback via SnackBar.
   void _resetPassword(BuildContext context, WidgetRef ref) async {
     // Use email from controller
     final email = _emailController.text.trim();
@@ -280,6 +301,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     });
   }
 
+  /// Builds the main UI based on the current [AuthNavigationState].
   @override
   Widget build(BuildContext context) {
     // final l10n = AppLocalizations.of(context)!; // L10N_COMMENT_OUT
@@ -334,7 +356,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     );
   }
 
-  // Extracted Auth Form Widget
+  /// Builds the UI for the Login form.
   Widget _buildAuthForm(BuildContext context, WidgetRef ref, bool isLogin,
       bool isLoading, String? errorMessage) {
     return Form(
@@ -501,7 +523,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     );
   }
 
-  // Extracted Wait for Verification Widget
+  /// Builds the UI shown while waiting for email verification.
   Widget _buildWaitForVerification(BuildContext context, WidgetRef ref,
       String? errorMessage, bool isLoading) {
     return Column(

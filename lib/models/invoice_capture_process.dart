@@ -26,20 +26,8 @@ class InvoiceCaptureProcess extends Equatable {
   /// Storage path of the image in Firebase Storage
   final String imagePath;
 
-  /// Whether the image potentially contains text (from initial assessment)
-  final bool? hasPotentialText;
-
-  /// Text extracted from the image via OCR
-  final String? detectedText;
-
   /// Whether the image is suspected to be an invoice based on content
   final bool isInvoiceGuess;
-
-  /// Total amount detected if the image is an invoice
-  final double? detectedTotalAmount;
-
-  /// Currency of the detected amount
-  final String? detectedCurrency;
 
   /// When the image was last processed for OCR
   final DateTime? lastProcessedAt;
@@ -61,11 +49,7 @@ class InvoiceCaptureProcess extends Equatable {
     required this.id,
     required this.url,
     required this.imagePath,
-    this.hasPotentialText,
-    this.detectedText,
     this.isInvoiceGuess = false,
-    this.detectedTotalAmount,
-    this.detectedCurrency,
     this.lastProcessedAt,
     this.updatedAt,
     this.location,
@@ -92,26 +76,11 @@ class InvoiceCaptureProcess extends Equatable {
         return null;
       }
 
-      // Safely parse numeric values
-      double? parseAmount() {
-        if (json['detected_total_amount'] == null) return null;
-
-        try {
-          return double.parse(json['detected_total_amount'].toString());
-        } catch (e) {
-          return null;
-        }
-      }
-
       return InvoiceCaptureProcess(
         id: json['id'] as String? ?? '',
         url: json['url'] as String? ?? '',
         imagePath: json['image_path'] as String? ?? '',
         lastProcessedAt: processLastProcessedAt(),
-        detectedText: json['detected_text'] as String?,
-        detectedTotalAmount: parseAmount(),
-        detectedCurrency: json['detected_currency'] as String?,
-        hasPotentialText: json['has_potential_text'] as bool?,
         isInvoiceGuess: json['is_invoice_guess'] as bool? ?? false,
         location: json['location'] as String?,
         status: json['status'] as String?,
@@ -144,10 +113,6 @@ class InvoiceCaptureProcess extends Equatable {
         id: map['id'] as String? ?? '',
         url: map['url'] as String? ?? '',
         imagePath: map['image_path'] as String? ?? '',
-        hasPotentialText: map['has_potential_text'] as bool?,
-        detectedText: map['detected_text'] as String?,
-        detectedTotalAmount: (map['detected_total_amount'] as num?)?.toDouble(),
-        detectedCurrency: map['detected_currency'] as String?,
         isInvoiceGuess: map['is_invoice_guess'] as bool? ?? false,
         location: map['location'] as String?,
         lastProcessedAt: parseDate(map['last_processed_at'] as String?),
@@ -178,11 +143,7 @@ class InvoiceCaptureProcess extends Equatable {
       'id': id,
       'url': url,
       'image_path': imagePath,
-      'has_potential_text': hasPotentialText,
-      'detected_text': detectedText,
       'is_invoice_guess': isInvoiceGuess,
-      'detected_total_amount': detectedTotalAmount,
-      'detected_currency': detectedCurrency,
       'last_processed_at': lastProcessedAt?.toIso8601String(),
       'location': location,
       'status': status,
@@ -198,20 +159,12 @@ class InvoiceCaptureProcess extends Equatable {
     String? id,
     String? url,
     String? imagePath,
-    bool? hasPotentialText,
-    String? detectedText,
     bool? isInvoiceGuess,
-    double? detectedTotalAmount,
-    String? detectedCurrency,
     DateTime? lastProcessedAt,
     DateTime? updatedAt,
     String? location,
     String? localPath,
     String? status,
-    bool setHasPotentialTextNull = false,
-    bool setDetectedTextNull = false,
-    bool setDetectedTotalAmountNull = false,
-    bool setDetectedCurrencyNull = false,
     bool setLastProcessedAtNull = false,
     bool setUpdatedAtNull = false,
     bool setLocationNull = false,
@@ -221,18 +174,7 @@ class InvoiceCaptureProcess extends Equatable {
       id: id ?? this.id,
       url: url ?? this.url,
       imagePath: imagePath ?? this.imagePath,
-      hasPotentialText: setHasPotentialTextNull
-          ? null
-          : hasPotentialText ?? this.hasPotentialText,
-      detectedText:
-          setDetectedTextNull ? null : detectedText ?? this.detectedText,
       isInvoiceGuess: isInvoiceGuess ?? this.isInvoiceGuess,
-      detectedTotalAmount: setDetectedTotalAmountNull
-          ? null
-          : detectedTotalAmount ?? this.detectedTotalAmount,
-      detectedCurrency: setDetectedCurrencyNull
-          ? null
-          : detectedCurrency ?? this.detectedCurrency,
       lastProcessedAt: setLastProcessedAtNull
           ? null
           : lastProcessedAt ?? this.lastProcessedAt,
@@ -248,11 +190,7 @@ class InvoiceCaptureProcess extends Equatable {
         id,
         url,
         imagePath,
-        hasPotentialText,
-        detectedText,
         isInvoiceGuess,
-        detectedTotalAmount,
-        detectedCurrency,
         lastProcessedAt,
         updatedAt,
         location,
@@ -267,8 +205,6 @@ class InvoiceCaptureProcess extends Equatable {
   String toString() {
     return 'InvoiceCaptureProcess(id: $id, status: $status, '
         'isInvoiceGuess: $isInvoiceGuess, '
-        'hasAmount: ${detectedTotalAmount != null}, '
-        'hasCurrency: ${detectedCurrency != null}, '
-        'hasText: ${detectedText != null && detectedText!.isNotEmpty})';
+        'location: ${location != null})';
   }
 }

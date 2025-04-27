@@ -1,3 +1,9 @@
+/**
+ * Location Service Provider
+ *
+ * Provides access to the application's location service for geocoding
+ * and place lookups, primarily used within the invoice capture workflow.
+ */
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/location_service.dart';
 import 'logging_provider.dart';

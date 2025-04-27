@@ -1,118 +1,65 @@
-import 'package:firebase_auth/firebase_auth.dart'; // Keep this for type definitions
-// import 'package:firebase_auth/firebase_auth.dart' as firebase_auth; // Remove prefixed import
+/**
+ * Abstract Interface for Authentication Repository
+ *
+ * Defines the contract for authentication operations (sign-in, sign-up, sign-out,
+ * state changes, password reset, email verification) used within the application.
+ * Concrete implementations (e.g., FirebaseAuthRepository) will provide the
+ * specific logic for interacting with an authentication backend.
+ */
+import 'package:firebase_auth/firebase_auth.dart'
+    show User, UserCredential; // Only import needed types
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:logger/logger.dart';
 
-// Abstract base class or concrete class for Auth Repository
+/// Abstract base class defining the required authentication methods.
 abstract class AuthRepository {
-  // Replace Supabase client with FirebaseAuth instance
-  final FirebaseAuth _auth;
-  final GoogleSignIn _googleSignIn;
-  final Logger _logger;
+  /// Stream providing real-time changes to the user's authentication state.
+  /// Emits the current [User] if authenticated, or null otherwise.
+  Stream<User?> get authStateChanges;
 
-  AuthRepository({
-    FirebaseAuth? auth,
-    GoogleSignIn? googleSignIn,
-    Logger? logger,
-  })  : _auth = auth ?? FirebaseAuth.instance,
-        _googleSignIn = googleSignIn ?? GoogleSignIn(),
-        _logger = logger ?? Logger();
+  /// Gets the currently authenticated Firebase [User], or null if none.
+  User? get currentUser;
 
-  // Stream emits User? (Firebase User) instead of AuthState
-  Stream<User?> get authStateChanges => _auth.authStateChanges();
-
-  // Returns Firebase User?
-  User? get currentUser => _auth.currentUser;
-
-  // Remove Supabase Session - rely on currentUser != null
-  // Session? get currentSession => _client.auth.currentSession;
-
+  /// Signs in a user with the provided email and password.
+  ///
+  /// Returns a [UserCredential] upon successful authentication.
+  /// Throws exceptions (e.g., implementation-specific like FirebaseAuthException)
+  /// on failure (invalid credentials, user not found, etc.).
   Future<UserCredential> signInWithEmailAndPassword({
     required String email,
     required String password,
-  }) async {
-    try {
-      final credential = await _auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return credential;
-    } catch (e) {
-      _logger.e('[AUTH] Error signing in:', error: e);
-      rethrow;
-    }
-  }
+  });
 
-  Future<UserCredential> signInWithGoogle() async {
-    try {
-      // Trigger the authentication flow
-      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+  /// Initiates the Google Sign-In flow.
+  ///
+  /// Returns a [UserCredential] upon successful authentication with Firebase.
+  /// Throws exceptions if the flow is cancelled or fails.
+  Future<UserCredential> signInWithGoogle();
 
-      if (googleUser == null) {
-        throw FirebaseAuthException(
-          code: 'ERROR_ABORTED_BY_USER',
-          message: 'Sign in aborted by user',
-        );
-      }
-
-      // Obtain the auth details from the request
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      // Create a new credential
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-
-      // Sign in to Firebase with the Google credential
-      return await _auth.signInWithCredential(credential);
-    } catch (e) {
-      _logger.e('[AUTH] Error signing in with Google:', error: e);
-      rethrow;
-    }
-  }
-
+  /// Creates a new user account with the provided email and password.
+  ///
+  /// Returns a [UserCredential] upon successful account creation.
+  /// Throws exceptions on failure (email already in use, weak password, etc.).
   Future<UserCredential> createUserWithEmailAndPassword({
     required String email,
     required String password,
-  }) async {
-    try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      return credential;
-    } catch (e) {
-      _logger.e('[AUTH] Error creating user with email and password:',
-          error: e);
-      rethrow;
-    }
-  }
+  });
 
-  Future<void> signOut() async {
-    try {
-      await Future.wait([
-        _auth.signOut(),
-        _googleSignIn.signOut(),
-      ]);
-    } catch (e) {
-      _logger.e('[AUTH] Error signing out:', error: e);
-      rethrow;
-    }
-  }
+  /// Signs out the current user from all providers (Firebase, Google Sign-In).
+  ///
+  /// Throws exceptions if sign-out fails.
+  Future<void> signOut();
 
-  Future<void> resetPasswordForEmail(String email) async {
-    // Removed redirectTo for simplicity
-    // Use Firebase password reset
-    await _auth.sendPasswordResetEmail(email: email);
-    // Add ActionCodeSettings later if custom redirect/handling is needed
-  }
+  /// Sends a password reset email to the specified email address.
+  ///
+  /// Throws exceptions if the email is not found or another error occurs.
+  Future<void> resetPasswordForEmail(String email);
 
-  // Method to send verification email
-  Future<void> sendVerificationEmail() async {
-    await _auth.currentUser?.sendEmailVerification();
-  }
+  /// Sends an email verification link to the currently signed-in user.
+  /// Should typically be called after registration or if `currentUser.emailVerified` is false.
+  ///
+  /// Throws exceptions if no user is signed in or the email sending fails.
+  Future<void> sendVerificationEmail();
 
-  // Add other auth methods as needed (e.g., signInWithOtp, updatePassword)
+  // Add other abstract auth methods as needed
 }

@@ -1,3 +1,9 @@
+/**
+ * Firestore Invoice Repository Implementation
+ *
+ * Provides a concrete implementation of the InvoiceRepository interface using
+ * Firebase Firestore for database operations and Firebase Storage for image handling.
+ */
 // ignore_for_file: unused_field
 
 import 'dart:async';
@@ -41,6 +47,7 @@ class FirestoreException implements Exception {
 }
 
 // Implementation of InvoiceRepository for Firebase/Firestore
+/// Implements the [InvoiceRepository] interface using Firebase services.
 class FirestoreInvoiceRepository implements InvoiceRepository {
   FirestoreInvoiceRepository(
     this._firestore,
@@ -57,7 +64,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   // Cache collection references to avoid recreating them
   CollectionReference<Map<String, dynamic>> _getUserJourneysCollection(
           String userId) =>
-      _firestore.collection('users').doc(userId).collection('journeys');
+      _firestore.collection('users').doc(userId).collection('invoices');
 
   CollectionReference<Map<String, dynamic>> _getImagesCollection(
           String userId, String journeyId) =>
@@ -232,7 +239,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           .d('Attempting to delete journey ID: $journeyId for user: $userId');
 
       // --- 1. Delete associated images from Firebase Storage ---
-      final storagePath = 'users/$userId/journeys/$journeyId';
+      final storagePath = 'users/$userId/invoices/$journeyId';
       _logger.d('Listing files in storage path: $storagePath for deletion.');
 
       try {
@@ -380,7 +387,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
 
   Future<String> _getImageDownloadUrl(
       String userId, String journeyId, String fileName) async {
-    final storagePath = 'users/$userId/journeys/$journeyId/images/$fileName';
+    final storagePath = 'users/$userId/invoices/$journeyId/images/$fileName';
     final ref = _storage.ref().child(storagePath);
 
     try {
@@ -420,7 +427,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final storageFileName = '${timestamp}_$fileName';
     final storagePath =
-        'users/$userId/journeys/$journeyId/images/$storageFileName';
+        'users/$userId/invoices/$journeyId/images/$storageFileName';
 
     try {
       // Compress image
@@ -457,11 +464,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         id: imageId,
         url: downloadUrl,
         imagePath: storagePath,
-        hasPotentialText: null,
-        lastProcessedAt: null,
-        detectedText: null,
-        detectedTotalAmount: null,
-        detectedCurrency: null,
         isInvoiceGuess: false,
       );
 
@@ -512,10 +514,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   Future<void> updateImageWithOcrResults(
     String journeyId,
     String imageId, {
-    required bool hasText,
-    String? detectedText,
-    double? totalAmount,
-    String? currency,
     bool? isInvoice,
     String? status,
   }) async {
@@ -523,11 +521,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       final userId = _getCurrentUserId();
 
       final data = <String, dynamic>{
-        'has_potential_text': hasText,
         'updated_at': FieldValue.serverTimestamp(),
-        if (detectedText != null) 'detected_text': detectedText,
-        if (totalAmount != null) 'detected_total_amount': totalAmount,
-        if (currency != null) 'detected_currency': currency,
         if (isInvoice != null) 'is_invoice_guess': isInvoice,
         if (status != null) 'status': status,
       };

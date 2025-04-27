@@ -83,6 +83,7 @@ class AppSettingsScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 16.0),
         children: [
+          // Account Settings Section
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
             child: Text(
@@ -118,6 +119,8 @@ class AppSettingsScreen extends ConsumerWidget {
             title: l10n.settingsItemTimeManagement,
             onTap: () {/* print('Time Management tapped'); */},
           ),
+
+          // Logout Section
           Padding(
             padding:
                 const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),

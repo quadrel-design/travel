@@ -59,11 +59,11 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
       firebaseAuth, logger); // Use concrete implementation
 });
 
-/// Provider for the journey repository.
+/// Provider for the invoice repository.
 ///
-/// This provider creates and delivers an implementation of the JourneyRepository interface.
-/// It handles operations related to journeys, including journey CRUD operations and image management.
-final journeyRepositoryProvider = Provider<InvoiceRepository>((ref) {
+/// This provider creates and delivers an implementation of the InvoiceRepository interface.
+/// It handles operations related to invoices, including invoice CRUD operations and image management.
+final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
   final storage = ref.watch(firebaseStorageProvider);
   final auth = ref.watch(firebaseAuthProvider);
@@ -72,64 +72,63 @@ final journeyRepositoryProvider = Provider<InvoiceRepository>((ref) {
   return FirestoreInvoiceRepository(firestore, storage, auth, logger);
 });
 
-/// Stream provider for accessing the current user's journeys.
+/// Stream provider for accessing the current user's invoices.
 ///
-/// This provider delivers a real-time stream of the authenticated user's journeys.
-/// The stream automatically updates when journeys are added, modified, or removed.
-final userJourneysStreamProvider =
+/// This provider delivers a real-time stream of the authenticated user's invoices.
+/// The stream automatically updates when invoices are added, modified, or removed.
+final userInvoicesStreamProvider =
     StreamProvider.autoDispose<List<Journey>>((ref) {
   // Get the repository
-  final repository = ref.watch(journeyRepositoryProvider);
+  final repository = ref.watch(invoiceRepositoryProvider);
   // Return the stream from the repository method
   // Error handling should be done within the stream or by the UI watching this provider
   return repository.fetchUserJourneys();
 });
 
-// UNCOMMENTED block for providers depending on JourneyRepository
-
-// Update detectedSumsProvider to use JourneyRepository stream
-final detectedSumsProvider = StreamProvider.autoDispose
-    .family<List<InvoiceCaptureProcess>, String>((ref, journeyId) {
-  // Get the repository
-  final repository = ref.watch(journeyRepositoryProvider);
-  final logger = ref.watch(loggerProvider);
-  logger
-      .d('[PROVIDER] detectedSumsProvider executing for journeyId: $journeyId');
-
-  // Get the stream from the repository
-  final imagesStream = repository.getInvoiceImagesStream(journeyId);
-
-  // Apply the filter to the stream
-  return imagesStream.map((imageList) {
-    return imageList
-        .where((imageInfo) => imageInfo.detectedTotalAmount != null)
-        .toList();
-  });
-});
-// --- End Provider ---
-
-/// Stream provider for all images associated with a journey.
+/// Stream provider for all images associated with an invoice.
 ///
-/// This provider delivers a real-time stream of all images for a specific journey.
+/// This provider delivers a real-time stream of all images for a specific invoice.
 /// The stream automatically updates when images are added, modified, or removed.
 ///
 /// Parameters:
-///   - journeyId: The ID of the journey to fetch images for
+///   - invoiceId: The ID of the invoice to fetch images for
 final invoiceImagesStreamProvider = StreamProvider.autoDispose
-    .family<List<InvoiceCaptureProcess>, String>((ref, journeyId) {
+    .family<List<InvoiceCaptureProcess>, String>((ref, invoiceId) {
   // Get the repository
-  final repository = ref.watch(journeyRepositoryProvider);
+  final repository = ref.watch(invoiceRepositoryProvider);
   // Get logger
   final logger = ref.watch(loggerProvider);
   // *** Log Provider Execution ***
   logger.d(
-      '[PROVIDER] invoiceImagesStreamProvider executing for journeyId: $journeyId');
+      '[PROVIDER] invoiceImagesStreamProvider executing for invoiceId: $invoiceId');
   // Return the stream from the repository method
-  return repository.getInvoiceImagesStream(journeyId);
+  return repository.getInvoiceImagesStream(invoiceId);
 });
-// --- End Provider ---
 
-// End temporary comment block for JourneyRepository dependents
+/// Stream provider for a single invoice by ID.
+///
+/// This provider delivers a real-time stream of a specific invoice's data.
+/// The stream automatically updates when the invoice is modified.
+///
+/// Parameters:
+///   - invoiceId: The ID of the invoice to stream
+final invoiceStreamProvider =
+    StreamProvider.family<Journey?, String>((ref, invoiceId) {
+  final repository = ref.watch(invoiceRepositoryProvider);
+  final logger = ref.watch(loggerProvider);
+  logger.d(
+      '[PROVIDER] invoiceStreamProvider executing for invoiceId: $invoiceId');
+  return repository.getJourneyStream(invoiceId);
+});
+
+// TODO: Refactor codebase to use `invoice*Provider` names directly and remove these legacy aliases.
+// Legacy providers for backwards compatibility
+final journeyRepositoryProvider =
+    Provider<InvoiceRepository>((ref) => ref.watch(invoiceRepositoryProvider));
+final userJourneysStreamProvider = Provider<AsyncValue<List<Journey>>>(
+    (ref) => ref.watch(userInvoicesStreamProvider));
+final journeyStreamProvider = Provider.family<AsyncValue<Journey?>, String>(
+    (ref, id) => ref.watch(invoiceStreamProvider(id)));
 
 /// Provider for tracking the gallery upload state.
 ///
@@ -137,19 +136,3 @@ final invoiceImagesStreamProvider = StreamProvider.autoDispose
 /// operation is currently in progress. UI components can observe this state
 /// to show appropriate loading indicators.
 final galleryUploadStateProvider = StateProvider<bool>((ref) => false);
-
-/// Stream provider for a single journey by ID.
-///
-/// This provider delivers a real-time stream of a specific journey's data.
-/// The stream automatically updates when the journey is modified.
-///
-/// Parameters:
-///   - journeyId: The ID of the journey to stream
-final journeyStreamProvider =
-    StreamProvider.family<Journey?, String>((ref, journeyId) {
-  final repository = ref.watch(journeyRepositoryProvider);
-  final logger = ref.watch(loggerProvider);
-  logger.d(
-      '[PROVIDER] journeyStreamProvider executing for journeyId: $journeyId');
-  return repository.getJourneyStream(journeyId);
-});
