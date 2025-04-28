@@ -24,6 +24,8 @@ class InvoiceAnalysisPanel extends StatelessWidget {
     logger.d('- location: ${imageInfo.location}');
     logger.d('- lastProcessedAt: ${imageInfo.lastProcessedAt}');
     logger.d('- isInvoiceGuess: ${imageInfo.isInvoiceGuess}');
+    logger.d(
+        '- extractedText: ${imageInfo.extractedText != null ? 'Available (${imageInfo.extractedText!.length} chars)' : 'Not available'}');
 
     return Container(
       color: UIConstants.kPanelBackgroundColor,
@@ -38,6 +40,9 @@ class InvoiceAnalysisPanel extends StatelessWidget {
               _buildHeader(),
               const SizedBox(height: UIConstants.kSectionSpacing),
               _buildInvoiceStatus(),
+              if (imageInfo.extractedText != null &&
+                  imageInfo.extractedText!.isNotEmpty)
+                _buildExtractedText(),
               if (imageInfo.location != null && imageInfo.location!.isNotEmpty)
                 _buildLocation(),
               if (imageInfo.lastProcessedAt != null) _buildProcessedDate(),
@@ -75,13 +80,43 @@ class InvoiceAnalysisPanel extends StatelessWidget {
         ),
         const SizedBox(height: UIConstants.kElementSpacing),
         Text(
-          imageInfo.status == 'Invoice' ? 'Invoice' : 'Not an Invoice',
+          imageInfo.status == 'invoice'
+              ? 'Invoice'
+              : (imageInfo.status ?? 'Unknown'),
           style: TextStyle(
-            color: imageInfo.status == 'Invoice'
+            color: imageInfo.status == 'invoice'
                 ? UIConstants.kPanelHighlightColor
                 : UIConstants.kPanelWarningColor,
             fontSize: 16,
             fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: UIConstants.kSectionSpacing),
+      ],
+    );
+  }
+
+  Widget _buildExtractedText() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Extracted Text:',
+          style: UIConstants.kPanelLabelStyle,
+        ),
+        const SizedBox(height: UIConstants.kElementSpacing),
+        Container(
+          constraints: const BoxConstraints(maxHeight: 200),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.2),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: SingleChildScrollView(
+            child: Text(
+              imageInfo.extractedText!,
+              style: UIConstants.kPanelValueStyle,
+            ),
           ),
         ),
         const SizedBox(height: UIConstants.kSectionSpacing),

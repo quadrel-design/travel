@@ -41,7 +41,7 @@ const VISION_API_PRICE_PER_UNIT_FALLBACK = 0.00025;
  * @returns {Promise<object>} A promise resolving to an object containing detection results:
  *  - success: boolean
  *  - hasText: boolean
- *  - detectedText: string (full text)
+ *  - extractedText: string (full text)
  *  - confidence: number (confidence of full text)
  *  - textBlocks: Array<object> (individual blocks with text, confidence, boundingBox)
  *  - status: string ("NoText", "PendingAnalysis", "Error")
@@ -57,9 +57,9 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
       return {
         success: true,
         hasText: false,
-        detectedText: "",
+        extractedText: "",
         confidence: 0,
-        status: "NoText"
+        status: "no invoice"
       };
     }
 
@@ -84,10 +84,10 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
     return {
       success: true,
       hasText: true,
-      detectedText: fullText,
+      extractedText: fullText,
       confidence,
       textBlocks,
-      status: "PendingAnalysis"  // Set status as pending for analysis
+      status: "invoice"
     };
 
   } catch (error) {
@@ -95,7 +95,7 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
     return {
       success: false,
       hasText: false,
-      detectedText: "",
+      extractedText: "",
       confidence: 0,
       status: "Error",
       error: error instanceof Error ? error.message : "Unknown error occurred",
@@ -129,6 +129,7 @@ export const detectImage = onCall({
   memory: "1GiB",
   maxInstances: 20
 }, async (request) => {
+  console.log("====== DETECT IMAGE CALLED ======");
   console.log("detectImage function called with data:", {
     hasImageUrl: !!request.data.imageUrl,
     hasImageData: !!request.data.imageData,
@@ -141,6 +142,7 @@ export const detectImage = onCall({
     console.error("Authentication error: User not authenticated");
     throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
+  console.log("User authenticated:", userId);
 
   // Validate the request data
   if (!request.data.imageUrl && !request.data.imageData) {
@@ -153,113 +155,95 @@ export const detectImage = onCall({
     throw new HttpsError("invalid-argument", "invoiceId and imageId are required");
   }
 
+  const invoiceId = request.data.invoiceId;
+  const imageId = request.data.imageId;
+  console.log(`Processing image (ID: ${imageId}) for invoice (ID: ${invoiceId})`);
+  
+  // Update status to ocr_running
+  await _updateImageStatus(userId, invoiceId, imageId, "ocr_running");
+  console.log("Status updated to ocr_running");
+
   // Log that we're starting image processing
   console.log("Starting image text detection");
   
   try {
     let detectResult;
+    
     if (request.data.imageData) {
-      // Validate base64 image data
-      try {
-        // Check if it's a valid base64 string
-        if (typeof request.data.imageData !== 'string') {
-          throw new Error('Image data must be a string');
-        }
-        
-        // Convert base64 image data to buffer
-        const imageBuffer = Buffer.from(request.data.imageData, 'base64');
-        
-        // Check if the conversion worked (empty buffer means invalid base64)
-        if (imageBuffer.length === 0) {
-          throw new Error('Invalid base64 image data');
-        }
-        
-        // Use a placeholder URL since we're using the buffer
-        detectResult = await detectTextInImage("placeholder-url", imageBuffer);
-      } catch (e) {
-        console.error("Error processing base64 image data:", e);
-        throw new HttpsError("invalid-argument", "Invalid image data: " + (e instanceof Error ? e.message : "Unknown error"));
-      }
+      // Processing base64 image data
+      console.log("Processing base64 image data");
+      
+      // ... existing code ...
     } else {
-      // Use the image URL
-      detectResult = await detectTextInImage(request.data.imageUrl);
+      // Process image URL
+      try {
+        // Added retry logic for URL-based processing
+        let retryCount = 0;
+        const maxRetries = 2;
+        let lastError = null;
+        
+        while (retryCount <= maxRetries) {
+          try {
+            console.log(`Attempt ${retryCount + 1} to process image URL: ${request.data.imageUrl}`);
+            
+            // For URL-based processing, try to download image to buffer first
+            console.log("Downloading image from URL for processing");
+            const axios = require('axios');
+            const response = await axios.get(request.data.imageUrl, {
+              responseType: 'arraybuffer',
+              timeout: 15000 // 15 second timeout for download
+            });
+            
+            console.log("Image downloaded successfully, size:", 
+                        response.data ? (response.data.length || 0) : 0, "bytes");
+            
+            // Process the downloaded image buffer
+            const imageBuffer = Buffer.from(response.data);
+            detectResult = await detectTextInImage(request.data.imageUrl, imageBuffer);
+            console.log("Text detection completed with result:", {
+              success: detectResult.success,
+              hasText: detectResult.hasText,
+              status: detectResult.status,
+              textLength: detectResult.extractedText?.length || 0
+            });
+            break; // Success, exit retry loop
+          } catch (err) {
+            lastError = err;
+            console.error(`Attempt ${retryCount + 1} failed:`, err);
+            
+            // If this was the last retry, don't wait
+            if (retryCount === maxRetries) break;
+            
+            // Wait before retrying (exponential backoff)
+            const waitTime = Math.pow(2, retryCount) * 1000;
+            console.log(`Waiting ${waitTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
+            retryCount++;
+          }
+        }
+        
+        // If we exited the loop with an error and no result, throw
+        if (!detectResult && lastError) {
+          throw lastError;
+        }
+      } catch (urlError) {
+        console.error("Error processing image URL:", urlError);
+        await _updateImageStatus(userId, invoiceId, imageId, "Error", urlError instanceof Error ? urlError.message : "Failed to process image URL");
+        throw new HttpsError("internal", "Error processing image URL: " + (urlError instanceof Error ? urlError.message : "Unknown error"));
+      }
     }
     
     // Update Firestore with the OCR results
     if (detectResult.success) {
-      const invoiceId = request.data.invoiceId;
-      const imageId = request.data.imageId;
-
       // ---- Start: Update User Costs ----
-      let priceToUse = VISION_API_PRICE_PER_UNIT_FALLBACK; // Start with fallback
-      try {
-        // Step 1: Get current price from Firestore
-        try {
-          // First try to get price from the new structure
-          const visionPriceSnap = await db.collection('cloud-pricing').doc('Google Vision').get();
-          if (visionPriceSnap.exists) {
-            const visionData = visionPriceSnap.data();
-            if (visionData?.pricePerUse) {
-              priceToUse = visionData.pricePerUse;
-              console.log(`Using Vision price from new cloud-pricing structure: ${priceToUse}`);
-            } else {
-              // Fallback to legacy pricing structure
-          const pricesSnap = await db.collection('billing').doc('apiPrices').get(); 
-          if (pricesSnap.exists && pricesSnap.data()?.google_vision_api_per_unit) {
-            priceToUse = pricesSnap.data()?.google_vision_api_per_unit;
-                console.log(`Using Vision price from legacy billing structure: ${priceToUse}`);
-              } else {
-                console.warn("API price not found in either location, using fallback price.");
-              }
-            }
-          } else {
-            // Fallback to legacy pricing structure
-            const pricesSnap = await db.collection('billing').doc('apiPrices').get(); 
-            if (pricesSnap.exists && pricesSnap.data()?.google_vision_api_per_unit) {
-              priceToUse = pricesSnap.data()?.google_vision_api_per_unit;
-              console.log(`Using Vision price from legacy billing structure: ${priceToUse}`);
-            } else {
-              console.warn("API price document not found in either location, using fallback price.");
-            }
-          }
-        } catch (priceError) {
-          console.error("Error fetching price from Firestore, using fallback:", priceError);
-        }
-
-        // Step 2: Increment estimated costs in the user document (under costs map)
-        const userDocRef = db.collection('users').doc(userId);
-        // Using set with merge: true initializes the `costs` map if it doesn't exist,
-        // but will overwrite any other fields within `costs` if they exist.
-        // If only incrementing is desired and `costs` might have other fields,
-        // consider using `update({'costs.estimated_costs': FieldValue.increment(...)})`
-        // but ensure the `costs` map is initialized elsewhere.
-        await userDocRef.set({
-          costs: {
-            estimated_costs: FieldValue.increment(priceToUse)
-          }
-        }, { merge: true }); 
-        console.log(`Incremented costs.estimated_costs for user ${userId} by ${priceToUse}`);
-
-        // Step 3: Also update the costOverall in the Google Vision document
-        try {
-          const visionRef = db.collection('cloud-pricing').doc('Google Vision');
-          await visionRef.update({
-            costOverall: FieldValue.increment(priceToUse)
-          });
-          console.log(`Updated costOverall for Google Vision by ${priceToUse}`);
-        } catch (costUpdateError) {
-          console.error("Error updating costOverall for Google Vision:", costUpdateError);
-          // Continue with processing even if this update fails
-        }
-
-      } catch (billingError) {
-        console.error(`Failed during user cost update for user ${userId}:`, billingError);
-        // Log error but continue with invoice image update
-      }
+      console.log("Updating user costs");
+      await _updateUserCosts(userId);
+      console.log("User costs updated successfully");
       // ---- End: Update User Costs ----
 
       // ---- Start: Update Invoice Image ----
       try {
+        console.log("Preparing to update Firestore document");
         const docRef = db.collection('users')
           .doc(userId)
           .collection('invoices')
@@ -271,7 +255,8 @@ export const detectImage = onCall({
           confidence: detectResult.confidence || 0,
           textBlocks: detectResult.textBlocks || [],
           status: detectResult.status,
-          lastProcessedAt: FieldValue.serverTimestamp()
+          lastProcessedAt: FieldValue.serverTimestamp(),
+          extractedText: detectResult.extractedText || null
         };
         
         console.log("Updating Firestore invoice image with data:", JSON.stringify(updateData));
@@ -279,8 +264,13 @@ export const detectImage = onCall({
         console.log(`Updated invoice image document with OCR results. Status: ${detectResult.status}`);
       } catch (dbError) {
         console.error("Error updating Firestore invoice image:", dbError);
+        await _updateImageStatus(userId, invoiceId, imageId, "Error", "Failed to update document after successful processing");
       }
       // ---- End: Update Invoice Image ----
+    } else {
+      // Handle failed OCR
+      console.log("OCR process failed, updating status to Error");
+      await _updateImageStatus(userId, invoiceId, imageId, "Error", detectResult.error || "OCR process failed");
     }
     
     // Log processing result
@@ -288,15 +278,126 @@ export const detectImage = onCall({
       success: detectResult.success,
       status: detectResult.status
     });
+    console.log("====== DETECT IMAGE COMPLETED SUCCESSFULLY ======");
     
     return detectResult;
   } catch (error) {
     // Handle errors from detectTextInImage or other processing
     console.error("Error during image processing stage:", error);
+    
+    // Update status to Error in Firestore
+    await _updateImageStatus(userId, invoiceId, imageId, "Error", error instanceof Error ? error.message : "Unknown processing error");
+    console.log("====== DETECT IMAGE FAILED ======");
+    
     // Ensure HttpsErrors are thrown correctly
     if (error instanceof HttpsError) {
         throw error;
     }
     throw new HttpsError("internal", "Error processing image: " + (error instanceof Error ? error.message : "Unknown error"));
   }
-}); 
+});
+
+// Helper function to update image status
+async function _updateImageStatus(userId: string, invoiceId: string, imageId: string, status: string, errorMessage?: string) {
+  console.log(`[_updateImageStatus] Updating status for image ${imageId} to ${status}`);
+  console.log(`[_updateImageStatus] Document path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
+  
+  try {
+    // First check if the document exists
+    const docRef = db.collection('users')
+      .doc(userId)
+      .collection('invoices')
+      .doc(invoiceId)
+      .collection('images')
+      .doc(imageId);
+    
+    const docSnap = await docRef.get();
+    if (!docSnap.exists) {
+      console.error(`[_updateImageStatus] ERROR: Document does not exist at path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
+      return;
+    }
+    
+    const updateData: {[key: string]: any} = {
+      status: status,
+      updated_at: FieldValue.serverTimestamp()
+    };
+    
+    // Add error message if provided
+    if (errorMessage) {
+      updateData.errorMessage = errorMessage;
+    }
+    
+    console.log(`[_updateImageStatus] Updating with data:`, updateData);
+    
+    await docRef.update(updateData);
+    console.log(`[_updateImageStatus] Successfully updated image status to ${status}${errorMessage ? " with error message" : ""}`);
+  } catch (error) {
+    console.error(`[_updateImageStatus] CRITICAL ERROR: Failed to update image status:`, error);
+    console.error(`[_updateImageStatus] Document path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
+    console.error(`[_updateImageStatus] Attempted status: ${status}`);
+    // We don't throw here to prevent cascading errors
+  }
+}
+
+// Helper function to update user costs
+async function _updateUserCosts(userId: string) {
+  let priceToUse = VISION_API_PRICE_PER_UNIT_FALLBACK; // Start with fallback
+  try {
+    // Step 1: Get current price from Firestore
+    try {
+      // First try to get price from the new structure
+      const visionPriceSnap = await db.collection('cloud-pricing').doc('Google Vision').get();
+      if (visionPriceSnap.exists) {
+        const visionData = visionPriceSnap.data();
+        if (visionData?.pricePerUse) {
+          priceToUse = visionData.pricePerUse;
+          console.log(`Using Vision price from new cloud-pricing structure: ${priceToUse}`);
+        } else {
+          // Fallback to legacy pricing structure
+          const pricesSnap = await db.collection('billing').doc('apiPrices').get(); 
+          if (pricesSnap.exists && pricesSnap.data()?.google_vision_api_per_unit) {
+            priceToUse = pricesSnap.data()?.google_vision_api_per_unit;
+            console.log(`Using Vision price from legacy billing structure: ${priceToUse}`);
+          } else {
+            console.warn("API price not found in either location, using fallback price.");
+          }
+        }
+      } else {
+        // Fallback to legacy pricing structure
+        const pricesSnap = await db.collection('billing').doc('apiPrices').get(); 
+        if (pricesSnap.exists && pricesSnap.data()?.google_vision_api_per_unit) {
+          priceToUse = pricesSnap.data()?.google_vision_api_per_unit;
+          console.log(`Using Vision price from legacy billing structure: ${priceToUse}`);
+        } else {
+          console.warn("API price document not found in either location, using fallback price.");
+        }
+      }
+    } catch (priceError) {
+      console.error("Error fetching price from Firestore, using fallback:", priceError);
+    }
+
+    // Step 2: Increment estimated costs in the user document (under costs map)
+    const userDocRef = db.collection('users').doc(userId);
+    await userDocRef.set({
+      costs: {
+        estimated_costs: FieldValue.increment(priceToUse)
+      }
+    }, { merge: true }); 
+    console.log(`Incremented costs.estimated_costs for user ${userId} by ${priceToUse}`);
+
+    // Step 3: Also update the costOverall in the Google Vision document
+    try {
+      const visionRef = db.collection('cloud-pricing').doc('Google Vision');
+      await visionRef.update({
+        costOverall: FieldValue.increment(priceToUse)
+      });
+      console.log(`Updated costOverall for Google Vision by ${priceToUse}`);
+    } catch (costUpdateError) {
+      console.error("Error updating costOverall for Google Vision:", costUpdateError);
+      // Continue with processing even if this update fails
+    }
+  } catch (billingError) {
+    console.error(`Failed during user cost update for user ${userId}:`, billingError);
+    // Log error but continue with invoice image update
+  }
+} 

@@ -6,11 +6,11 @@ import '../models/invoice_capture_process.dart';
 import '../models/invoice_capture_status.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/widgets/image_status_chip.dart';
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:travel/utils/invoice_scan_util.dart';
 
 InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
   if (imageInfo.status != null) {
@@ -116,10 +116,25 @@ class InvoiceCaptureScreen extends ConsumerWidget {
               footer: GridTileBar(
                 backgroundColor: Colors.black45,
                 title: ImageStatusChip(imageInfo: imageInfo),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.white),
-                  onPressed: () => _deleteImage(context, ref, imageInfo),
-                  tooltip: 'Delete Invoice',
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (imageInfo.status == 'ready' ||
+                        imageInfo.status == 'uploading')
+                      IconButton(
+                        icon: const Icon(Icons.document_scanner,
+                            color: Colors.white),
+                        onPressed: () => _scanImage(context, ref, imageInfo),
+                        tooltip: 'Scan Invoice',
+                        iconSize: 20,
+                      ),
+                    IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.white),
+                      onPressed: () => _deleteImage(context, ref, imageInfo),
+                      tooltip: 'Delete Invoice',
+                      iconSize: 20,
+                    ),
+                  ],
                 ),
               ),
               child: GestureDetector(
@@ -235,7 +250,8 @@ class InvoiceCaptureScreen extends ConsumerWidget {
       if (context.mounted) {
         ref.read(loggerProvider).d("📸 Showing success message");
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invoice uploaded successfully!')),
+          const SnackBar(
+              content: Text('Invoice uploaded! Click Scan to process.')),
         );
       }
     } catch (e) {
@@ -249,5 +265,10 @@ class InvoiceCaptureScreen extends ConsumerWidget {
         );
       }
     }
+  }
+
+  Future<void> _scanImage(BuildContext context, WidgetRef ref,
+      InvoiceCaptureProcess imageInfo) async {
+    await InvoiceScanUtil.scanImage(context, ref, journeyId, imageInfo);
   }
 }

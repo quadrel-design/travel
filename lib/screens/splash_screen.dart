@@ -1,9 +1,9 @@
-/**
- * Splash Screen
- *
- * Displays a simple loading indicator screen, typically shown during app
- * initialization while checking authentication state.
- */
+/// Splash Screen
+///
+/// Displays a simple loading indicator screen, typically shown during app
+/// initialization while checking authentication state.
+library;
+
 import 'package:flutter/material.dart';
 
 /// A stateless widget that shows a centered circular progress indicator.

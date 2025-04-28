@@ -5,6 +5,11 @@ import 'package:intl/intl.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:travel/providers/logging_provider.dart';
 
 import '../models/journey.dart';
 import '../models/invoice_capture_process.dart';
@@ -115,53 +120,115 @@ class JourneyDetailScreen extends ConsumerWidget {
                             itemCount: images.length,
                             itemBuilder: (context, index) {
                               final image = images[index];
-                              return GestureDetector(
-                                onTap: () => context.push(
-                                  '${AppRoutes.invoiceImageDetail}/${currentJourney.id}/${image.id}',
-                                  extra: image,
-                                ),
-                                child: Hero(
-                                  tag: image.id,
-                                  child: Card(
-                                    clipBehavior: Clip.antiAlias,
-                                    child: Stack(
-                                      fit: StackFit.expand,
-                                      children: [
-                                        Image.network(
-                                          image.url,
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) =>
+                              return FutureBuilder<String?>(
+                                future: ref
+                                    .read(authRepositoryProvider)
+                                    .currentUser
+                                    ?.getIdToken(),
+                                builder: (context, snapshot) {
+                                  if (snapshot.connectionState ==
+                                          ConnectionState.waiting ||
+                                      !snapshot.hasData ||
+                                      snapshot.data == null) {
+                                    return const Card(
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Center(
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2.0),
+                                      ),
+                                    );
+                                  }
+
+                                  if (snapshot.hasError) {
+                                    return const Card(
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Center(
+                                          child: Icon(Icons.error_outline)),
+                                    );
+                                  }
+
+                                  final token = snapshot.data!;
+                                  final headers = {
+                                    'Authorization': 'Bearer $token'
+                                  };
+
+                                  return GestureDetector(
+                                    onTap: () => context.push(
+                                      '${AppRoutes.invoiceImageDetail}/${currentJourney.id}/${image.id}',
+                                      extra: image,
+                                    ),
+                                    child: Hero(
+                                      tag: image.id,
+                                      child: Card(
+                                        clipBehavior: Clip.antiAlias,
+                                        child: Stack(
+                                          fit: StackFit.expand,
+                                          children: [
+                                            CachedNetworkImage(
+                                              imageUrl: image.url,
+                                              httpHeaders: headers,
+                                              fit: BoxFit.cover,
+                                              placeholder: (context, url) =>
+                                                  const Center(
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                              strokeWidth:
+                                                                  2.0)),
+                                              errorWidget: (context, url,
+                                                      error) =>
                                                   const Center(
                                                       child: Icon(Icons.error)),
-                                        ),
-                                        if (image.status != null)
-                                          Positioned(
-                                            top: 8,
-                                            right: 8,
-                                            child: Container(
-                                              padding:
-                                                  const EdgeInsets.symmetric(
-                                                horizontal: 8,
-                                                vertical: 4,
+                                            ),
+                                            if (image.status != null)
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Container(
+                                                  padding: const EdgeInsets
+                                                      .symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                                  decoration: BoxDecoration(
+                                                    color: theme.colorScheme
+                                                        .primaryContainer,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                            12),
+                                                  ),
+                                                  child: Text(
+                                                    image.status!,
+                                                    style: theme
+                                                        .textTheme.labelSmall,
+                                                  ),
+                                                ),
                                               ),
-                                              decoration: BoxDecoration(
-                                                color: theme.colorScheme
-                                                    .primaryContainer,
-                                                borderRadius:
-                                                    BorderRadius.circular(12),
-                                              ),
-                                              child: Text(
-                                                image.status!,
-                                                style:
-                                                    theme.textTheme.labelSmall,
+                                            Positioned(
+                                              bottom: 8,
+                                              right: 8,
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: Colors.black
+                                                      .withOpacity(0.6),
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: IconButton(
+                                                  icon: const Icon(
+                                                      Icons.document_scanner,
+                                                      size: 20,
+                                                      color: Colors.white),
+                                                  onPressed: () => _scanImage(
+                                                      context, ref, image),
+                                                  tooltip: 'Scan Invoice',
+                                                ),
                                               ),
                                             ),
-                                          ),
-                                      ],
+                                          ],
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                },
                               );
                             },
                           );
@@ -200,5 +267,79 @@ class JourneyDetailScreen extends ConsumerWidget {
         child: const Icon(Icons.add_a_photo),
       ),
     );
+  }
+
+  void _scanImage(
+      BuildContext context, WidgetRef ref, InvoiceCaptureProcess image) async {
+    try {
+      final logger = ref.read(loggerProvider);
+      logger.d("🔍 Starting OCR scan for image ${image.id}...");
+
+      // First update status to ocr_running
+      try {
+        final docRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(FirebaseAuth.instance.currentUser!.uid)
+            .collection('invoices')
+            .doc(journey.id)
+            .collection('images')
+            .doc(image.id);
+
+        await docRef.update({
+          'status': 'ocr_running',
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+
+        logger.d("🔍 Status updated to ocr_running");
+      } catch (updateError) {
+        logger.e("🔍 Error updating status to ocr_running", error: updateError);
+        // Continue even if this fails
+      }
+
+      // Call the OCR function
+      final functions = FirebaseFunctions.instance;
+      final callable = functions.httpsCallable('detectImage');
+
+      await callable.call({
+        'imageUrl': image.url,
+        'invoiceId': journey.id,
+        'imageId': image.id,
+      });
+
+      logger.i("🔍 OCR processing initiated successfully");
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('OCR processing started!')),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        final logger = ref.read(loggerProvider);
+        logger.e("🔍 Error starting OCR process", error: e);
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error starting OCR: $e')),
+        );
+      }
+
+      // Try to reset status on error
+      try {
+        final docRef = FirebaseFirestore.instance
+            .collection('users')
+            .doc(FirebaseAuth.instance.currentUser!.uid)
+            .collection('invoices')
+            .doc(journey.id)
+            .collection('images')
+            .doc(image.id);
+
+        await docRef.update({
+          'status': 'ready',
+          'updated_at': FieldValue.serverTimestamp(),
+        });
+      } catch (_) {
+        // Ignore errors when resetting status
+      }
+    }
   }
 }

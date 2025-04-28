@@ -6,6 +6,7 @@ import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:logger/logger.dart';
 import '../models/invoice_capture_process.dart';
+import '../models/invoice_capture_status.dart';
 import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
@@ -76,6 +77,34 @@ class _InvoiceCaptureDetailViewState
     _logger.i('Initiating scan for image ID: $imageId');
     ref.read(provider.notifier).initiateScan(imageId);
 
+    // Show OCR Started chip
+    final repository = ref.read(journeyRepositoryProvider);
+    await repository.updateImageWithOcrResults(
+      widget.journeyId,
+      imageId,
+      isInvoice: false,
+      status: 'ocr_running',
+    );
+
+    // Timer for OCR timeout
+    Timer? timeoutTimer;
+    timeoutTimer = Timer(const Duration(seconds: 60), () {
+      if (mounted) {
+        _logger.e('[INVOICE_CAPTURE] OCR timed out after 60 seconds');
+        repository.updateImageWithOcrResults(
+          widget.journeyId,
+          imageId,
+          isInvoice: false,
+          status: 'Error',
+        );
+        ref.read(provider.notifier).setScanError(imageId, "OCR timed out");
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('OCR process timed out')),
+        );
+      }
+      timeoutTimer?.cancel();
+    });
+
     try {
       // Get the current image info from state
       final state = ref.read(provider);
@@ -114,6 +143,9 @@ class _InvoiceCaptureDetailViewState
         imageId,
       );
 
+      // Cancel timeout timer as operation completed
+      timeoutTimer.cancel();
+
       _logger.i('Scan completed for $imageId: ${result['success']}');
       _logger.d('Full result from scan: $result');
 
@@ -127,8 +159,20 @@ class _InvoiceCaptureDetailViewState
         throw Exception(result['error'] ?? 'Unknown error during scan');
       }
     } catch (e, stackTrace) {
+      // Cancel timeout timer
+      timeoutTimer.cancel();
+
       _logger.e('[INVOICE_CAPTURE] Error during scan process:',
           error: e, stackTrace: stackTrace);
+
+      // Update status to Error
+      await repository.updateImageWithOcrResults(
+        widget.journeyId,
+        imageId,
+        isInvoice: false,
+        status: 'Error',
+      );
+
       ref.read(provider.notifier).setScanError(imageId, e.toString());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -494,6 +538,147 @@ class _InvoiceCaptureDetailViewState
             child: _buildAnalysisPanel(images[currentIndex]),
           ),
       ],
+    );
+  }
+
+  Widget _buildStatusChip(InvoiceCaptureProcess imageInfo) {
+    final status = InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
+
+    if (imageInfo.status == 'ocr_running') {
+      // Show OCR started chip
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.blue.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 12,
+              height: 12,
+              child: CircularProgressIndicator(
+                strokeWidth: 2.0,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              ),
+            ),
+            SizedBox(width: 8),
+            Text(
+              'OCR Started',
+              style:
+                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+      );
+    } else if (status == InvoiceCaptureStatus.invoice) {
+      // Show Invoice chip
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: Colors.green.withOpacity(0.7),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Text(
+          'Invoice',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      );
+    } else if (status == InvoiceCaptureStatus.error) {
+      // Show Error chip with retry button
+      return GestureDetector(
+        onTap: () => _showErrorDetails(imageInfo),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: Colors.red.withOpacity(0.7),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: const Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.error_outline,
+                color: Colors.white,
+                size: 16,
+              ),
+              SizedBox(width: 4),
+              Text(
+                'Error',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+              SizedBox(width: 4),
+              Icon(
+                Icons.refresh,
+                color: Colors.white,
+                size: 14,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // Return empty container if no status to show
+    return const SizedBox.shrink();
+  }
+
+  // Show error details and retry option
+  void _showErrorDetails(InvoiceCaptureProcess imageInfo) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('OCR Processing Error'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'The system encountered an error while trying to process this image.',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 12),
+              const Text('Possible reasons:'),
+              const SizedBox(height: 8),
+              _buildErrorItem('The image might not contain readable text'),
+              _buildErrorItem('The image format might not be supported'),
+              _buildErrorItem('Network connection issues'),
+              _buildErrorItem('Server timeout or processing error'),
+              const SizedBox(height: 16),
+              const Text('Would you like to try again?'),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _handleScan(imageInfo.id, imageInfo.url);
+              },
+              child: const Text('Retry'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildErrorItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 16, bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('• ', style: TextStyle(fontWeight: FontWeight.bold)),
+          Expanded(child: Text(text)),
+        ],
+      ),
     );
   }
 

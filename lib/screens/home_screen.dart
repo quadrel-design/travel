@@ -1,15 +1,14 @@
-/**
- * Home Screen
- *
- * Displays the main home screen after login, showing a list of the user's
- * journeys/invoices fetched via a stream provider. Allows navigation to
- * journey details, settings, and creating new journeys.
- */
+/// Home Screen
+///
+/// Displays the main home screen after login, showing a list of the user's
+/// journeys/invoices fetched via a stream provider. Allows navigation to
+/// journey details, settings, and creating new journeys.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:travel/models/journey.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
@@ -46,7 +45,8 @@ class HomeScreen extends ConsumerWidget {
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'App Settings',
-            onPressed: () => context.push(AppRoutes.appSettings),
+            onPressed: () =>
+                context.push('${AppRoutes.home}${AppRoutes.appSettings}'),
           ),
         ],
       ),

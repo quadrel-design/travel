@@ -3,13 +3,11 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:logger/logger.dart';
 import '../repositories/repository_exceptions.dart';
 
-/**
- * Firebase Functions Service
- *
- * Provides a service for interacting with backend Firebase Cloud Functions,
- * handling function calls, parameter passing, timeouts, and error handling.
- * It wraps Cloud Function calls and throws custom exceptions on failure.
- */
+/// Firebase Functions Service
+///
+/// Provides a service for interacting with backend Firebase Cloud Functions,
+/// handling function calls, parameter passing, timeouts, and error handling.
+/// It wraps Cloud Function calls and throws custom exceptions on failure.
 class FirebaseFunctionsService {
   final Logger _logger;
   final FirebaseFunctions _functions;
@@ -52,7 +50,7 @@ class FirebaseFunctionsService {
 
       final resultFuture = callable.call<Map<String, dynamic>>({
         'imageUrl': imageUrl,
-        'journeyId': journeyId,
+        'invoiceId': journeyId,
         'imageId': imageId,
       });
 

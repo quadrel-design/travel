@@ -1,15 +1,13 @@
-/**
- * Abstract Interface for Authentication Repository
- *
- * Defines the contract for authentication operations (sign-in, sign-up, sign-out,
- * state changes, password reset, email verification) used within the application.
- * Concrete implementations (e.g., FirebaseAuthRepository) will provide the
- * specific logic for interacting with an authentication backend.
- */
+/// Abstract Interface for Authentication Repository
+///
+/// Defines the contract for authentication operations (sign-in, sign-up, sign-out,
+/// state changes, password reset, email verification) used within the application.
+/// Concrete implementations (e.g., FirebaseAuthRepository) will provide the
+/// specific logic for interacting with an authentication backend.
+library;
+
 import 'package:firebase_auth/firebase_auth.dart'
     show User, UserCredential; // Only import needed types
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:logger/logger.dart';
 
 /// Abstract base class defining the required authentication methods.
 abstract class AuthRepository {

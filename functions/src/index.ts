@@ -89,7 +89,7 @@ import { onCall } from "firebase-functions/v2/https";
 export const testApiKeyConfig = onCall({
   enforceAppCheck: false, // Consider enabling App Check for production
   timeoutSeconds: 30,
-  memory: "128MiB",
+  memory: "256MiB",
   maxInstances: 5
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 }, async (request) => { // Explicitly type or ignore request data if unused
@@ -138,24 +138,31 @@ export async function processScanImage(imageUrl: string, skipAnalysis = false, i
     return detectResult;
   }
   
-  // Ensure detectedText is not null or undefined before passing to analysis
-  if (!detectResult.detectedText) {
-     logger.warn('No detected text found to analyze.', { imageUrl });
-     return {
-         ...detectResult,
-         status: 'error',
-         error: 'No text detected for analysis',
-         invoiceAnalysis: null,
-         isInvoice: false,
-     };
+  // Ensure extractedText is not null or undefined before passing to analysis
+  if (!detectResult.extractedText) {
+    console.log("No text was detected in the image, skipping analysis");
+    return detectResult;
   }
   
-  const analysisResult = await analyzeDetectedText(detectResult.detectedText);
-  
-  return {
-    ...detectResult,
-    status: analysisResult.status,
-    invoiceAnalysis: analysisResult.invoiceAnalysis,
-    isInvoice: analysisResult.isInvoice
-  };
+  try {
+    console.log("Running analysis on detected text");
+    const analysisResult = await analyzeDetectedText(detectResult.extractedText);
+    
+    return {
+      ...detectResult,
+      status: analysisResult.status,
+      invoiceAnalysis: analysisResult.invoiceAnalysis,
+      isInvoice: analysisResult.isInvoice
+    };
+  } catch (error) {
+    const errorMessage = (error instanceof Error) ? error.message : String(error);
+    logger.error('Analysis failed:', { error: errorMessage });
+    return {
+      ...detectResult,
+      status: 'error',
+      error: errorMessage,
+      invoiceAnalysis: null,
+      isInvoice: false
+    };
+  }
 }

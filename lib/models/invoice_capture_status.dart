@@ -52,17 +52,25 @@ enum InvoiceCaptureStatus {
   static InvoiceCaptureStatus fromFirebaseStatus(String? status) {
     switch (status) {
       case 'NoText':
+      case 'no invoice':
         return InvoiceCaptureStatus.noText;
       case 'Text':
         return InvoiceCaptureStatus.text;
       case 'Invoice':
+      case 'invoice':
         return InvoiceCaptureStatus.invoice;
       case 'Error':
         return InvoiceCaptureStatus.error;
       case 'Ready':
         return InvoiceCaptureStatus.ready;
       case 'Processing':
+      case 'ocr_running':
+      case 'analysis_running':
         return InvoiceCaptureStatus.processing;
+      case 'analysis_complete':
+        return InvoiceCaptureStatus.invoice;
+      case 'analysis_failed':
+        return InvoiceCaptureStatus.error;
       default:
         return InvoiceCaptureStatus.ready;
     }

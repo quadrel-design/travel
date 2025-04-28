@@ -1,9 +1,9 @@
-/**
- * Authentication Screen
- *
- * Provides the UI for user authentication, handling login, registration,
- * password reset, and email verification flows using Riverpod for state management.
- */
+/// Authentication Screen
+///
+/// Provides the UI for user authentication, handling login, registration,
+/// password reset, and email verification flows using Riverpod for state management.
+library;
+
 import 'dart:async'; // Added for Timer
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';

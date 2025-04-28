@@ -1,9 +1,9 @@
-/**
- * Expense Repository
- *
- * Defines the repository for managing expense data associated with invoices,
- * interacting with Firebase Firestore.
- */
+/// Expense Repository
+///
+/// Defines the repository for managing expense data associated with invoices,
+/// interacting with Firebase Firestore.
+library;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:logger/logger.dart';
@@ -104,7 +104,7 @@ class ExpenseRepository {
   /// Throws [DatabaseOperationException] on failure.
   /// Throws [NotAuthenticatedException] if the user is not logged in.
   Future<void> updateExpense(String invoiceId, Expense expense) async {
-    if (expense.id == null || expense.id!.isEmpty) {
+    if (expense.id.isEmpty) {
       throw ArgumentError('Expense ID must be provided for update.');
     }
     final userId = _getCurrentUserId();

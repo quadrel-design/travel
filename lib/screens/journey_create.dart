@@ -1,10 +1,10 @@
-/**
- * Journey Creation Screen
- *
- * Provides a form using flutter_form_builder for users to input details
- * (title, dates, description, location, budget) and create a new journey/invoice.
- * Uses [journeyFormProvider] for state management and handling the save operation.
- */
+/// Journey Creation Screen
+///
+/// Provides a form using flutter_form_builder for users to input details
+/// (title, dates, description, location, budget) and create a new journey/invoice.
+/// Uses [journeyFormProvider] for state management and handling the save operation.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // Import services for formatter
 import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
@@ -35,7 +35,7 @@ import 'package:go_router/go_router.dart';
 // import '../providers/repository_providers.dart';
 // import 'package:travel/utils/validators.dart'; // Remove this non-existent import
 import 'package:travel/constants/app_routes.dart';
-import 'package:travel/providers/location_service_provider.dart'; // Fix import path - Uncommented
+// import 'package:travel/providers/location_service_provider.dart'; // Removed location service import
 import 'package:travel/providers/journey_form_provider.dart';
 // import 'package:travel/providers/auth_repository_provider.dart';
 
@@ -187,8 +187,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
 
   // Commented out for now - will be connected to UI when implementation is finalized
 
-  /// Validates the form, creates a [Journey] object, and triggers the creation
-  /// process via the [journeyFormProvider].
+  /// Saves the journey without performing any Google Places search.
   Future<void> _saveJourney() async {
     final formState = _formKey.currentState!;
     if (formState.saveAndValidate()) {
@@ -249,36 +248,6 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       // Call the notifier to create the journey
       // The listen callback will handle success/error feedback and navigation
       await ref.read(journeyFormProvider.notifier).createJourney(newJourney);
-    }
-  }
-
-  /// Fetches location suggestions based on user input.
-  /// Used by the (currently commented out) location typeahead field.
-  Future<List<String>> _searchLocations(String pattern) async {
-    if (!mounted) return []; // Check mounted state
-    if (pattern.isEmpty) {
-      return [];
-    }
-
-    // Debounce mechanism (optional but recommended)
-    await Future.delayed(_kAutocompleteDebounceDuration);
-    if (!mounted) return []; // Check again after delay
-
-    try {
-      final locationService = ref.read(locationServiceProvider);
-      final suggestions = await locationService.searchLocations(pattern);
-
-      if (!mounted) return []; // Check again after await
-      return suggestions;
-    } catch (e) {
-      if (mounted) {
-        _showErrorSnackBar(
-          context,
-          'Search Error',
-          'Failed to fetch location suggestions: $e',
-        );
-      }
-      return [];
     }
   }
 
@@ -413,84 +382,17 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
   }
 
   Widget _buildLocationField(BuildContext context, AppLocalizations l10n) {
-    // Replace FormBuilderAutocomplete with FormBuilderField wrapping Autocomplete
-    return FormBuilderField<String>(
+    // Simple text field instead of autocomplete
+    return FormBuilderTextField(
       name: _fieldLocation,
+      decoration: InputDecoration(
+        labelText: l10n.journeyFormFieldLocationLabel,
+        hintText: l10n.journeyFormFieldLocationHint,
+        border: const OutlineInputBorder(),
+      ),
       validator: FormBuilderValidators.required(
         errorText: l10n.journeyFormFieldRequiredError,
       ),
-      builder: (FormFieldState<String?> field) {
-        return Autocomplete<String>(
-          optionsBuilder: (TextEditingValue textEditingValue) {
-            if (textEditingValue.text.isEmpty) {
-              return const [];
-            }
-            return _searchLocations(textEditingValue.text);
-          },
-          onSelected: (String selection) {
-            field.didChange(selection);
-          },
-          fieldViewBuilder: (
-            BuildContext context,
-            TextEditingController fieldTextEditingController,
-            FocusNode fieldFocusNode,
-            VoidCallback onFieldSubmitted,
-          ) {
-            // Update the field's controller if the value changes externally
-            if (field.value != null &&
-                fieldTextEditingController.text != field.value) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                fieldTextEditingController.text = field.value!;
-                // Move cursor to end
-                fieldTextEditingController.selection =
-                    TextSelection.fromPosition(
-                  TextPosition(offset: fieldTextEditingController.text.length),
-                );
-              });
-            }
-            return TextField(
-              controller: fieldTextEditingController,
-              focusNode: fieldFocusNode,
-              decoration: InputDecoration(
-                labelText: l10n.journeyFormFieldLocationLabel,
-                hintText: l10n.journeyFormFieldLocationHint,
-                border: const OutlineInputBorder(),
-                errorText: field.errorText,
-              ),
-              onChanged: (value) {
-                // Important: Update FormBuilderField state on change
-                field.didChange(value);
-              },
-              // onSubmitted: (value) => onFieldSubmitted(), // Optional: Handle submission
-            );
-          },
-          optionsViewBuilder: (context, onSelected, options) {
-            return Align(
-              alignment: Alignment.topLeft,
-              child: Material(
-                elevation: 4.0,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: ListView.builder(
-                    padding: EdgeInsets.zero,
-                    shrinkWrap: true,
-                    itemCount: options.length,
-                    itemBuilder: (BuildContext context, int index) {
-                      final String option = options.elementAt(index);
-                      return ListTile(
-                        title: Text(option),
-                        onTap: () {
-                          onSelected(option);
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ),
-            );
-          },
-        );
-      },
     );
   }
 

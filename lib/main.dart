@@ -1,145 +1,164 @@
-/**
- * Main entry point for the Flutter application.
- * Handles initialization (Firebase, Env Vars), sets up Riverpod providers,
- * configures GoRouter for navigation, and defines the root `MyApp` widget.
- */
+/// Main entry point for the Flutter application.
+/// Handles initialization (Firebase, Env Vars), sets up Riverpod providers,
+/// configures GoRouter for navigation, and defines the root `MyApp` widget.
+library;
+
+// Essential Flutter, Riverpod, and Firebase imports
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
+import 'package:firebase_core/firebase_core.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
-import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
+import 'dart:async'; // For StreamSubscription
+
+// Generated files
+import 'firebase_options.dart'; // Import generated options
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+
+// Project-specific imports (Ensure these paths are correct)
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/journey_create.dart';
-import 'package:go_router/go_router.dart';
 import 'screens/splash_screen.dart';
-import 'dart:async'; // Import dart:async for StreamSubscription
-import 'screens/invoice_capture_overview_screen.dart'; // Import renamed gallery screen
-import 'models/journey.dart'; // Import Journey model
-import 'screens/settings/app_settings_screen.dart'; // Update import for settings screen (using current filename)
-import 'repositories/auth_repository.dart'; // Import AuthRepository
-// Import generated localizations delegate
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:travel/providers/repository_providers.dart'; // Import providers
-// Import service providers
-import 'package:travel/constants/app_routes.dart'; // Import routes
-import 'package:travel/theme/antonetti_theme.dart'; // Import the custom theme
-import 'package:travel/screens/journey_detail_overview_screen.dart'; // Import new overview screen
-import 'providers/logging_provider.dart'; // Add import for logger
-import 'package:travel/screens/auth_wait_screen.dart'; // Add import for wait screen
+import 'screens/invoice_capture_overview_screen.dart';
+import 'models/journey.dart';
+import 'screens/settings/app_settings_screen.dart';
+import 'repositories/auth_repository.dart';
+import 'package:travel/providers/repository_providers.dart';
+import 'package:travel/constants/app_routes.dart';
+import 'package:travel/theme/antonetti_theme.dart';
+import 'package:travel/screens/journey_detail_overview_screen.dart';
+import 'providers/logging_provider.dart';
+import 'package:travel/screens/auth_wait_screen.dart';
 import 'package:travel/screens/journey_expenses_screen.dart';
 import 'package:travel/screens/user_management_screen.dart';
 
-// Firebase imports
-import 'package:firebase_core/firebase_core.dart';
-import 'firebase_options.dart'; // Import generated options
-import 'package:cloud_functions/cloud_functions.dart';
+// --- Provider for Firebase Initialization ---
+final firebaseInitializationProvider = FutureProvider<FirebaseApp>((ref) async {
+  print('DEBUG: firebaseInitializationProvider executing...');
+  final app = await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  // Log that the Dart await completed
+  print(
+    'DEBUG: firebaseInitializationProvider COMPLETED (Dart await returned).',
+  );
+
+  // TEMPORARY TEST REMOVED
+
+  print('DEBUG: firebaseInitializationProvider returning app.');
+  return app;
+});
+// --- End Provider ---
 
 /// Main application entry point.
 /// Initializes essential services and runs the Flutter app.
-void main() async {
+Future<void> main() async {
   // Ensure Flutter bindings are initialized.
   WidgetsFlutterBinding.ensureInitialized();
+  print('DEBUG: main() started.'); // Log start
 
   // Load environment variables from .env file.
   await dotenv.load();
+  print('DEBUG: dotenv loaded.'); // Log dotenv
 
-  // Initialize Firebase using platform-specific options.
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // NOTE: Explicit Firebase.initializeApp() call is moved to the provider above
 
-  // Connect to Firebase Emulators in debug mode
+  // Connect to Firebase Emulators in debug mode (Keep this section if you use emulators)
   if (kDebugMode) {
     try {
       // Use Firebase Functions Emulator.
-      FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
-      print('🔥 Using Firebase Functions Emulator at localhost:5001');
+      // FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
+      // print('🔥 Using Firebase Functions Emulator at localhost:5001');
     } catch (e) {
       print('⚠️ Error connecting to Firebase Functions Emulator: $e');
     }
-    // TODO: Add connections for Firestore, Auth, Storage emulators if used.
+    // Connect to Firestore Emulator
+    try {
+      // FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
+      // print('🔥 Using Firebase Firestore Emulator at localhost:8080');
+    } catch (e) {
+      print('⚠️ Error connecting to Firebase Firestore Emulator: $e');
+    }
+    // Connect to Auth Emulator
+    try {
+      // FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
+      // print('🔥 Using Firebase Auth Emulator at localhost:9099');
+    } catch (e) {
+      print('⚠️ Error connecting to Firebase Auth Emulator: $e');
+    }
+    // Connect to Storage Emulator
+    try {
+      // FirebaseStorage.instance.useStorageEmulator('localhost', 9199);
+      // print('🔥 Using Firebase Storage Emulator at localhost:9199');
+    } catch (e) {
+      print('⚠️ Error connecting to Firebase Storage Emulator: $e');
+    }
   }
 
-  // Initialize Supabase (if used)
-  // await Supabase.initialize(...);
-
-  // Initialize Logger (assuming setup is within providers or elsewhere)
-
   // Run the app within a ProviderScope for Riverpod state management.
-  runApp(ProviderScope(
-    child: const MyApp(),
-  ));
+  print('DEBUG: Calling runApp()...'); // Log before runApp
+  runApp(const ProviderScope(child: MyApp()));
+  print('DEBUG: runApp() finished.'); // Log after runApp
 }
 
 // Update redirect function to accept repository
+// NOTE: This function seems unused now that redirect logic is inside routerProvider.
+// Consider removing if it's definitely not called elsewhere.
 String? determineRedirect(AuthRepository authRepo, String? currentRoute) {
   final loggingIn = currentRoute == AppRoutes.auth;
   final splashing = currentRoute == AppRoutes.splash;
 
-  // Check currentUser instead of currentSession
   if (authRepo.currentUser == null && !loggingIn) {
     return AppRoutes.auth;
   }
 
-  // Check currentUser instead of currentSession
   if (authRepo.currentUser != null && (loggingIn || splashing)) {
     return AppRoutes.home;
   }
-
-  // No redirect needed
   return null;
 }
 
 // --- GoRouter Configuration ---
-// Make router accessible via a provider for easier access to Ref
 final routerProvider = Provider<GoRouter>((ref) {
   final authRepository = ref.watch(authRepositoryProvider);
-  final logger = ref.watch(loggerProvider); // Get the logger
+  final logger = ref.watch(loggerProvider);
 
   return GoRouter(
     initialLocation: AppRoutes.splash,
     refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
-    debugLogDiagnostics: kDebugMode, // Only log in debug mode
-
-    // Updated Redirect Logic
+    debugLogDiagnostics: kDebugMode,
     redirect: (BuildContext context, GoRouterState state) {
       final loggedIn = authRepository.currentUser != null;
       final emailVerified =
           loggedIn && (authRepository.currentUser?.emailVerified ?? false);
-      final location = state.matchedLocation; // Use matchedLocation
+      final location = state.matchedLocation;
 
       logger.d(
-          'Redirect check: location=$location, loggedIn=$loggedIn, emailVerified=$emailVerified');
+        'Redirect check: location=$location, loggedIn=$loggedIn, emailVerified=$emailVerified',
+      );
 
-      // If user is not logged in:
       if (!loggedIn) {
-        // Allow access only to /auth, otherwise redirect to /auth
         return location == AppRoutes.auth ? null : AppRoutes.auth;
       }
 
-      // If user IS logged in:
       if (loggedIn) {
-        // If email is NOT verified:
         if (!emailVerified) {
-          // Allow access only to /auth-wait, otherwise redirect there
           return location == AppRoutes.authWait ? null : AppRoutes.authWait;
-        }
-        // If email IS verified:
-        else {
-          // If they are on /auth or /auth-wait, redirect to /home
-          if (location == AppRoutes.auth || location == AppRoutes.authWait) {
+        } else {
+          if (location == AppRoutes.splash ||
+              location == AppRoutes.auth ||
+              location == AppRoutes.authWait) {
             return AppRoutes.home;
           }
-          // Otherwise, let them stay where they are (e.g., /home, /settings, etc.)
           return null;
         }
       }
-
-      return null; // Default: no redirect
+      return null;
     },
-
     routes: [
-      // Splash screen while checking auth state initially
       GoRoute(
         path: AppRoutes.splash,
         builder: (context, state) => const SplashScreen(),
@@ -147,14 +166,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.auth,
         builder: (context, state) =>
-            // Wrap AuthScreen with a standard light theme, overriding the main app theme.
-            // This might be desired for a standard authentication look & feel.
-            Theme(
-          data: ThemeData.light(), // Apply standard light theme
-          child: const AuthScreen(),
-        ),
+            Theme(data: ThemeData.light(), child: const AuthScreen()),
       ),
-      // Add route for the verification wait screen
       GoRoute(
         path: AppRoutes.authWait,
         builder: (context, state) => const AuthWaitScreen(),
@@ -163,55 +176,51 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.home,
         builder: (context, state) => const HomeScreen(),
         routes: [
-          // Nested routes require a unique path segment
           GoRoute(
-              // Path needs to be relative to parent ('/home')
-              path: '${AppRoutes.journeyDetail.split('/').last}/:journeyId',
-              builder: (context, state) {
-                // Extract journeyId safely
-                final journeyId = state.pathParameters['journeyId'];
-                // Pass journey object if available (e.g., from state.extra)
-                final journey = state.extra as Journey?;
-                if (journeyId != null && journey != null) {
-                  // Correct the screen name
-                  return JourneyDetailOverviewScreen(journey: journey);
-                } else {
-                  // Handle error: missing journeyId or journey object
-                  // Maybe navigate back or show an error screen
-                  // For now, returning a placeholder
-                  return Scaffold(
+            path: '${AppRoutes.journeyDetail.split('/').last}/:journeyId',
+            builder: (context, state) {
+              final journeyId = state.pathParameters['journeyId'];
+              final journey = state.extra as Journey?;
+              if (journeyId != null && journey != null) {
+                return JourneyDetailOverviewScreen(journey: journey);
+              } else {
+                return Scaffold(
+                  appBar: AppBar(title: const Text('Error')),
+                  body: const Center(child: Text('Journey data missing.')),
+                );
+              }
+            },
+            routes: [
+              GoRoute(
+                path: AppRoutes.invoiceCaptureOverview.split('/').last,
+                builder: (context, state) {
+                  final journey = state.extra as Journey?;
+                  if (journey != null) {
+                    return InvoiceCaptureOverviewScreen(journey: journey);
+                  } else {
+                    return Scaffold(
                       appBar: AppBar(title: const Text('Error')),
-                      body: const Center(child: Text('Journey data missing.')));
-                }
-              },
-              // Add gallery route nested under journey detail
-              routes: [
-                GoRoute(
-                  path: AppRoutes.invoiceCaptureOverview.split('/').last,
-                  builder: (context, state) {
-                    final journey = state.extra as Journey?;
-                    if (journey != null) {
-                      return InvoiceCaptureOverviewScreen(journey: journey);
-                    } else {
-                      return Scaffold(
-                          appBar: AppBar(title: const Text('Error')),
-                          body: const Center(
-                              child: Text(
-                                  'Journey data missing for invoice capture.')));
-                    }
-                  },
-                ),
-              ]),
+                      body: const Center(
+                        child: Text(
+                          'Journey data missing for invoice capture.',
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
           GoRoute(
-            path: AppRoutes.createJourney.split('/').last, // Relative path
+            path: AppRoutes.createJourney.split('/').last,
             builder: (context, state) => const CreateJourneyScreen(),
           ),
           GoRoute(
-            path: AppRoutes.appSettings.split('/').last, // Relative path
+            path: AppRoutes.appSettings.split('/').last,
             builder: (context, state) => const AppSettingsScreen(),
           ),
           GoRoute(
-            path: AppRoutes.userManagement.split('/').last, // Relative path
+            path: AppRoutes.userManagement.split('/').last,
             builder: (context, state) => const UserManagementScreen(),
           ),
           GoRoute(
@@ -230,7 +239,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
         ],
       ),
-      // Add other top-level routes if needed
     ],
   );
 });
@@ -238,11 +246,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 // Helper class to bridge Stream and Listenable for GoRouter
 class GoRouterRefreshStream extends ChangeNotifier {
   GoRouterRefreshStream(Stream<dynamic> stream) {
-    notifyListeners(); // Notify initially
-    _subscription = stream
-        .asBroadcastStream()
-        .listen((_) => notifyListeners() // Notify on stream events
-            );
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
   }
   late final StreamSubscription<dynamic> _subscription;
 
@@ -255,23 +260,51 @@ class GoRouterRefreshStream extends ChangeNotifier {
 // --- End GoRouter Configuration ---
 
 /// The root widget of the application.
-/// Consumes the [routerProvider] and sets up [MaterialApp.router]
-/// with the application theme and localization delegates.
+/// Waits for Firebase initialization before building the main app.
 class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
+    // Watch the initialization provider
+    final firebaseInitialization = ref.watch(firebaseInitializationProvider);
 
-    // Change to MaterialApp.router
-    return MaterialApp.router(
-      routerConfig: router,
-      // Apply the custom Material theme directly
-      theme: antonettiTheme,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      debugShowCheckedModeBanner: false,
+    // Show loading while Firebase initializes, or error if it fails
+    return firebaseInitialization.when(
+      loading: () {
+        print('DEBUG: MyApp waiting for Firebase init...'); // Log loading
+        // Show a simple loading screen
+        return const MaterialApp(
+          home: Scaffold(body: Center(child: CircularProgressIndicator())),
+          debugShowCheckedModeBanner: false,
+        );
+      },
+      error: (err, stack) {
+        print('DEBUG: MyApp Firebase init FAILED: $err'); // Log error
+        // Show an error screen
+        return MaterialApp(
+          home: Scaffold(
+            body: Center(child: Text('Firebase Init Failed: $err')),
+          ),
+          debugShowCheckedModeBanner: false,
+        );
+      },
+      data: (firebaseApp) {
+        print(
+          'DEBUG: MyApp Firebase init complete, building main app...',
+        ); // Log success
+        // Firebase is ready, build the main app with the router
+        final router = ref.watch(
+          routerProvider,
+        ); // Now it's safe to watch router
+        return MaterialApp.router(
+          routerConfig: router,
+          theme: antonettiTheme,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          debugShowCheckedModeBanner: false,
+        );
+      },
     );
   }
 }

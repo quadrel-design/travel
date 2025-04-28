@@ -1,11 +1,11 @@
-/**
- * Auth Wait Screen
- *
- * Displays a screen while waiting for the user to verify their email address.
- * Provides options to resend the verification email or sign out.
- * Relies on the global authentication state listener (e.g., in GoRouter)
- * to navigate away once the email is verified.
- */
+/// Auth Wait Screen
+///
+/// Displays a screen while waiting for the user to verify their email address.
+/// Provides options to resend the verification email or sign out.
+/// Relies on the global authentication state listener (e.g., in GoRouter)
+/// to navigate away once the email is verified.
+library;
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';

@@ -44,6 +44,9 @@ class InvoiceCaptureProcess extends Equatable {
   /// Processing status of the image (e.g., "Ready", "Processing", "NoText", "Text", "Invoice")
   final String? status;
 
+  /// Text extracted by OCR, populated after successful detection
+  final String? extractedText;
+
   /// Creates a new InvoiceCaptureProcess instance.
   const InvoiceCaptureProcess({
     required this.id,
@@ -55,6 +58,7 @@ class InvoiceCaptureProcess extends Equatable {
     this.location,
     this.localPath,
     this.status,
+    this.extractedText,
   });
 
   /// Creates a InvoiceCaptureProcess instance from a JSON map.
@@ -84,8 +88,9 @@ class InvoiceCaptureProcess extends Equatable {
         isInvoiceGuess: json['is_invoice_guess'] as bool? ?? false,
         location: json['location'] as String?,
         status: json['status'] as String?,
+        extractedText: json['extractedText'] as String?,
       );
-    } catch (e, stackTrace) {
+    } catch (e) {
       // Log error details - in production, use a proper logger
       // logger.error('Error in InvoiceCaptureProcess.fromJson', e, stackTrace);
       // logger.debug('JSON that caused error: $json');
@@ -118,6 +123,7 @@ class InvoiceCaptureProcess extends Equatable {
         lastProcessedAt: parseDate(map['last_processed_at'] as String?),
         updatedAt: parseDate(map['updated_at'] as String?),
         status: map['status'] as String?,
+        extractedText: map['extractedText'] as String?,
       );
     } catch (e) {
       // Log error with proper logger in production
@@ -147,6 +153,7 @@ class InvoiceCaptureProcess extends Equatable {
       'last_processed_at': lastProcessedAt?.toIso8601String(),
       'location': location,
       'status': status,
+      'extractedText': extractedText,
       // localPath is typically not saved to Firestore
     };
   }
@@ -165,10 +172,12 @@ class InvoiceCaptureProcess extends Equatable {
     String? location,
     String? localPath,
     String? status,
+    String? extractedText,
     bool setLastProcessedAtNull = false,
     bool setUpdatedAtNull = false,
     bool setLocationNull = false,
     bool setStatusNull = false,
+    bool setExtractedTextNull = false,
   }) {
     return InvoiceCaptureProcess(
       id: id ?? this.id,
@@ -182,6 +191,8 @@ class InvoiceCaptureProcess extends Equatable {
       location: setLocationNull ? null : location ?? this.location,
       localPath: localPath ?? this.localPath,
       status: setStatusNull ? null : status ?? this.status,
+      extractedText:
+          setExtractedTextNull ? null : extractedText ?? this.extractedText,
     );
   }
 
@@ -196,6 +207,7 @@ class InvoiceCaptureProcess extends Equatable {
         location,
         localPath,
         status,
+        extractedText,
       ];
 
   /// Creates a string representation of this InvoiceCaptureProcess.

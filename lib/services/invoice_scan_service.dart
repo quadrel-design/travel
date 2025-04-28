@@ -1,9 +1,9 @@
-/**
- * Invoice Scan Service
- *
- * Provides a service to manage the end-to-end invoice scanning process,
- * including triggering the backend scan function and processing/validating the results.
- */
+/// Invoice Scan Service
+///
+/// Provides a service to manage the end-to-end invoice scanning process,
+/// including triggering the backend scan function and processing/validating the results.
+library;
+
 import 'package:flutter/material.dart';
 import 'package:logger/logger.dart';
 import '../services/firebase_functions_service.dart';
@@ -140,21 +140,32 @@ class InvoiceScanService {
 
   /// Validates a location string using the LocationService.
   /// Tries to find a Place ID and get details to return a formatted address.
-  /// Returns the original location string if validation fails or an error occurs.
+  /// Returns the original location string if validation fails, location service is disabled, or an error occurs.
   Future<String?> _validateLocation(String location) async {
     try {
+      // Skip validation if location is empty
+      if (location.isEmpty) {
+        return location;
+      }
+
+      // Safely attempt to find place ID - will return null if API is disabled
       final placeId = await _locationService.findPlaceId(location);
       if (placeId != null) {
+        // Safely get place details - will return null if API is disabled
         final placeDetails = await _locationService.getPlaceDetails(placeId);
-        if (placeDetails != null) {
+        if (placeDetails != null &&
+            placeDetails.containsKey('formatted_address')) {
           final formattedAddress = placeDetails['formatted_address'] as String;
           _logger.i('Location validated: $formattedAddress');
           return formattedAddress;
         }
       }
-      return location; // Return original if validation fails
+
+      _logger.d(
+          'Location validation skipped or failed, using original: $location');
+      return location; // Return original if validation fails or is skipped
     } catch (e) {
-      _logger.w('Error validating location: $e');
+      _logger.w('Error validating location, using original: $e');
       return location; // Return original location on error
     }
   }

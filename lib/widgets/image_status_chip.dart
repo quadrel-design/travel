@@ -16,6 +16,7 @@ class ImageStatusChip extends StatelessWidget {
     // Get the appropriate label based on status
     String label;
     Color chipColor;
+    bool showSpinner = false;
 
     switch (status) {
       case InvoiceCaptureStatus.ready:
@@ -23,8 +24,16 @@ class ImageStatusChip extends StatelessWidget {
         chipColor = Colors.grey;
         break;
       case InvoiceCaptureStatus.processing:
-        label = l10n.imageStatusProcessing;
-        chipColor = Colors.blue;
+        // Check the raw status to differentiate between OCR and analysis
+        if (imageInfo.status == 'ocr_running') {
+          label = 'OCR Processing';
+          chipColor = Colors.blue;
+          showSpinner = true;
+        } else {
+          label = l10n.imageStatusProcessing;
+          chipColor = Colors.blue;
+          showSpinner = true;
+        }
         break;
       case InvoiceCaptureStatus.noText:
         label = l10n.imageStatusNoText;
@@ -36,12 +45,36 @@ class ImageStatusChip extends StatelessWidget {
         break;
       case InvoiceCaptureStatus.invoice:
         label = l10n.imageStatusInvoice;
-        chipColor = Colors.purple;
+        chipColor = Colors.blue;
         break;
       case InvoiceCaptureStatus.error:
         label = l10n.imageStatusError;
         chipColor = Colors.red;
         break;
+    }
+
+    if (showSpinner) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 12,
+            height: 12,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.0,
+              valueColor: AlwaysStoppedAnimation<Color>(chipColor),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              label,
+              style: TextStyle(color: chipColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      );
     }
 
     return Chip(

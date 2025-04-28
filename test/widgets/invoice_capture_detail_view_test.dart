@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:travel/models/journey.dart';
 import 'package:travel/models/invoice_capture_process.dart';
-import 'package:travel/providers/invoice_capture_provider.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/repositories/invoice_repository.dart';
 import 'package:travel/widgets/invoice_capture_detail_view.dart';

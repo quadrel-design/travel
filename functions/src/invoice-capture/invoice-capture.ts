@@ -49,6 +49,12 @@ export const scanImage = onCall({
     imageId: request.data.imageId
   });
 
+  // Defensive check for required IDs
+  if (!request.data.invoiceId || !request.data.imageId) {
+    console.error("Missing invoiceId or imageId in request:", request.data);
+    throw new HttpsError("invalid-argument", "invoiceId and imageId are required");
+  }
+
   // Check if the user is authenticated
   if (!request.auth) {
     console.error("Authentication error: User not authenticated");
@@ -100,9 +106,9 @@ export const scanImage = onCall({
     }
     
     // Step 2: Analyze the detected text if not skipped
-    if (!detectResult.detectedText) {
+    if (!detectResult.extractedText) {
       // Handle case where detectResult succeeded but text is empty (shouldn't happen if hasText is true, but safeguard)
-      console.warn("Detected text is empty despite hasText being true. Skipping analysis.");
+      console.warn("Extracted text is empty despite hasText being true. Skipping analysis.");
       return {
         ...detectResult,
         status: "Text", // Set status to Text if analysis is skipped due to no text
@@ -110,7 +116,7 @@ export const scanImage = onCall({
         isInvoice: false
       };
     }
-    const analysisResult = await analyzeDetectedText(detectResult.detectedText);
+    const analysisResult = await analyzeDetectedText(detectResult.extractedText);
     
     // Combine the results
     const combinedResult = {
@@ -130,12 +136,10 @@ export const scanImage = onCall({
           .collection('images')
           .doc(request.data.imageId);
         
-        // Keep both detectedText (for API response) and detected_text (for Firestore)
-        // for backward compatibility, but don't set redundant fields
+        // Keep compatibility with both field names
         const updateData: any = {
           hasText: detectResult.hasText,
-          detected_text: detectResult.detectedText || "",
-          detectedText: detectResult.detectedText || "", // For API compatibility
+          extractedText: detectResult.extractedText || "", // Primary field
           confidence: detectResult.confidence || 0,
           textBlocks: detectResult.textBlocks || [],
           status: combinedResult.status,

@@ -72,9 +72,20 @@
         ],
         "maxAgeSeconds": 3600
       }
-    ]
+    ],
+    "rules": "storage.rules"
   },
   "emulators": {
+    "firestore": {
+      "host": "localhost",
+      "port": 8080,
+      "rules": "firestore.rules"
+    },
+    "storage": {
+      "host": "localhost",
+      "port": 9199,
+      "rules": "storage.rules"
+    },
     "functions": {
       "host": "127.0.0.1"
     },

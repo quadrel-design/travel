@@ -112,7 +112,7 @@ class Expense extends Equatable {
         date: DateTime.now(),
         category: 'Unknown',
         paidBy: '',
-        sharedWith: [],
+        sharedWith: const [],
       );
     }
   }

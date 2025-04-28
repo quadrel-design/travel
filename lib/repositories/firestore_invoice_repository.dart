@@ -1,9 +1,8 @@
-/**
- * Firestore Invoice Repository Implementation
- *
- * Provides a concrete implementation of the InvoiceRepository interface using
- * Firebase Firestore for database operations and Firebase Storage for image handling.
- */
+/// Firestore Invoice Repository Implementation
+///
+/// Provides a concrete implementation of the InvoiceRepository interface using
+/// Firebase Firestore for database operations and Firebase Storage for image handling.
+library;
 // ignore_for_file: unused_field
 
 import 'dart:async';
@@ -465,6 +464,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         url: downloadUrl,
         imagePath: storagePath,
         isInvoiceGuess: false,
+        status: 'ready', // Set initial status to ready for scan
       );
 
       // Store in Firestore
@@ -474,6 +474,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         'created_at': now.toIso8601String(),
         'updated_at': now.toIso8601String(),
         'storage_ref': storagePath,
+        'status': 'ready', // Ensure status is set in Firestore
       };
 
       await _getImagesCollection(userId, journeyId).doc(imageId).set(docData);

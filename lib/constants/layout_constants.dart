@@ -12,4 +12,4 @@ const int kGridCrossAxisCount = 3;
 const double kGridCrossAxisSpacing = 8.0;
 
 // Default spacing between rows in a grid
-const double kGridMainAxisSpacing = 8.0; 
+const double kGridMainAxisSpacing = 8.0;
