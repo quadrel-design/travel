@@ -19,10 +19,10 @@ InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
   return InvoiceCaptureStatus.ready;
 }
 
-class InvoiceCaptureScreen extends ConsumerWidget {
+class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String journeyId;
 
-  const InvoiceCaptureScreen({super.key, required this.journeyId});
+  const InvoiceCaptureDetailScreen({super.key, required this.journeyId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -61,5 +61,6 @@ flutter:
     - assets/images/
     - assets/images/auth/
     - assets/images/icons/
+    - assets/icons/
 
   # To add custom fonts to your application, add a fonts section here, 
