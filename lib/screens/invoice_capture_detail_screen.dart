@@ -28,7 +28,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final projectImagesAsyncValue = ref.watch(invoiceImagesStreamProvider({
       'projectId': projectId,
-      'invoiceId': '', // Provide the correct invoiceId if available
+      'invoiceId': 'main', // Use 'main' as the default invoiceId
     }));
 
     final projectAsyncValue = ref.watch(projectStreamProvider(projectId));
@@ -84,7 +84,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
               ElevatedButton(
                 onPressed: () => ref.invalidate(invoiceImagesStreamProvider({
                   'projectId': projectId,
-                  'invoiceId': '', // Provide the correct invoiceId if available
+                  'invoiceId': 'main', // Use 'main' as the default invoiceId
                 })),
                 child: const Text('Retry', style: TextStyle(fontSize: 10)),
               ),

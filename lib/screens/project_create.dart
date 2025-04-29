@@ -462,7 +462,7 @@ class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         // Allow digits and at most one decimal point
-        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d* ')),
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
       ],
       valueTransformer: (text) => num.tryParse(text ?? ''),
       validator: FormBuilderValidators.compose([

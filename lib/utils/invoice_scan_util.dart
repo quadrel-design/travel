@@ -74,7 +74,7 @@ class InvoiceScanUtil {
         'status': status,
         'extractedText': extractedText ?? '',
         'confidence': confidence,
-        'lastProcessedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
         'manuallyUpdated': true // Flag to indicate this was updated by client
       };
 
@@ -122,7 +122,7 @@ class InvoiceScanUtil {
 
         await docRef.update({
           'status': 'ocr_running',
-          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
 
         logger.d("🔍 Status updated to ocr_running");
@@ -337,7 +337,7 @@ class InvoiceScanUtil {
 
         await docRef.update({
           'status': 'ready',
-          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       } catch (_) {
         // Ignore errors when resetting status

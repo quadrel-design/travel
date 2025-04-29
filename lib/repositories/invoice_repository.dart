@@ -90,8 +90,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       final projectData = project.toJson();
       projectData.remove('id');
       // projectData.remove('user_id'); // Keep if needed for rules/queries
-      // Consider adding an 'updated_at' timestamp
-      projectData['updated_at'] = FieldValue.serverTimestamp();
+      // Consider adding an 'updatedAt' timestamp
+      projectData['updatedAt'] = FieldValue.serverTimestamp();
 
       // Use Firestore update by document ID
       await _firestore
@@ -203,18 +203,19 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   @override
   Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(
       String projectId, String invoiceId) {
+    final userId = _getCurrentUserId();
+    print('[STREAM] Using userId: $userId');
     _logger.d(
         '[REPO STREAM] Creating image stream for project $projectId, invoice $invoiceId');
     try {
       final query = _firestore
           .collection('users')
-          .doc(_getCurrentUserId())
+          .doc(userId)
           .collection('projects')
           .doc(projectId)
           .collection('invoices')
           .doc(invoiceId)
-          .collection('invoice_images')
-          .orderBy('uploadedAt', descending: true);
+          .collection('invoice_images');
       final stream = query.snapshots();
       return stream.map((querySnapshot) {
         _logger.d(
@@ -223,16 +224,14 @@ class ProjectRepositoryImpl implements InvoiceRepository {
             .map((doc) {
               try {
                 final data = doc.data();
+                print('Firestore image doc: $data');
                 final info =
                     InvoiceCaptureProcess.fromJson(data).copyWith(id: doc.id);
-                _logger.d(
-                    '[REPO STREAM MAP INNER] Mapped doc \\${doc.id} to: \\${info.id}, \\${info.url}, \\${info.lastProcessedAt}');
+                print('Parsed image info: $info');
                 return info;
               } catch (e, stackTrace) {
-                _logger.e(
-                    '[REPO STREAM MAP INNER] Error mapping item: \\${doc.id}',
-                    error: e,
-                    stackTrace: stackTrace);
+                print('Error parsing image doc: $e');
+                print('Stack trace: $stackTrace');
                 return null;
               }
             })
@@ -325,12 +324,18 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   Future<InvoiceCaptureProcess> uploadInvoiceImage(
       String projectId, Uint8List fileBytes, String fileName) async {
     final userId = _getCurrentUserId(); // Use helper
+    print('[UPLOAD] Using userId: $userId');
     _logger
         .i('Uploading image $fileName to project $projectId for user $userId');
 
-    // Construct the storage path using user ID
+    // Generate a unique image ID
+    final imageId = DateTime.now().millisecondsSinceEpoch.toString();
+    final now = DateTime.now();
+
+    // Use 'main' as the invoiceId for both storage and Firestore
+    const invoiceId = 'main';
     final imagePath =
-        'users/$userId/projects/$projectId/invoices/$projectId/invoice_images/$fileName';
+        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
     final imageRef = _storage.ref().child(imagePath);
 
     try {
@@ -341,37 +346,36 @@ class ProjectRepositoryImpl implements InvoiceRepository {
 
       // Use correct constructor parameters for InvoiceCaptureProcess
       final imageInfo = InvoiceCaptureProcess(
-        id: '', // Firestore will generate ID
+        id: imageId,
         url: downloadUrl,
-        imagePath: imagePath, // Use the storage path
+        imagePath: imagePath,
+        status: 'ready', // Use lowercase for consistency
         isInvoiceGuess: false,
+        lastProcessedAt: now,
+        location: null,
+        invoiceAnalysis: null,
       );
 
-      final docRef = await _firestore
+      final docData = {
+        ...imageInfo.toJson(),
+        'uploadedAt':
+            FieldValue.serverTimestamp(), // Use camelCase for Firestore field
+      };
+
+      await _firestore
           .collection('users')
-          .doc(userId) // Use obtained userId
+          .doc(userId)
           .collection('projects')
           .doc(projectId)
           .collection('invoices')
-          .doc(projectId)
+          .doc(invoiceId)
           .collection('invoice_images')
-          .add(imageInfo.toJson()); // Use the toJson method
+          .doc(imageId)
+          .set(docData);
 
-      _logger.i('Image metadata added to Firestore with ID: ${docRef.id}');
+      _logger.i('Image metadata added to Firestore with ID: $imageId');
       // Return the InvoiceCaptureProcess object with the new ID
-      return imageInfo.copyWith(id: docRef.id);
-    } on FirebaseException catch (e, s) {
-      _logger.e('FirebaseException uploading image: ${e.message}',
-          error: e, stackTrace: s);
-      if (e.code == 'object-not-found') {
-        throw ImageUploadException('Storage object not found.', e, s);
-      } else if (e.code == 'unauthorized') {
-        throw NotAuthenticatedException(
-            'Unauthorized to upload image. Check Storage rules.');
-      } else {
-        throw ImageUploadException(
-            'Firebase error during upload: ${e.code}', e, s);
-      }
+      return imageInfo;
     } catch (e, s) {
       _logger.e('Unknown error uploading image', error: e, stackTrace: s);
       throw ImageUploadException(
@@ -448,7 +452,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .d('Updating image $imageId in project $projectId with OCR results');
 
       final data = <String, dynamic>{
-        'updated_at': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       };
 
       if (isInvoice != null) data['is_invoice_guess'] = isInvoice;

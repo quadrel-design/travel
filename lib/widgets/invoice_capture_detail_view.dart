@@ -67,15 +67,6 @@ class _InvoiceCaptureDetailViewState
     final provider = invoiceCaptureProvider(
         (projectId: widget.projectId, invoiceId: 'main'));
 
-    // Check if a scan is already in progress
-    if (ref.read(provider).scanningImageId != null) {
-      _logger.w(
-          'Another scan is already in progress, ignoring request for $imageId');
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Scan is already in progress.')));
-      return;
-    }
-
     _logger.i('Initiating scan for image ID: $imageId');
     ref.read(provider.notifier).initiateScan(imageId);
 
@@ -434,7 +425,13 @@ class _InvoiceCaptureDetailViewState
     final provider = invoiceCaptureProvider(
         (projectId: widget.projectId, invoiceId: 'main'));
     final state = ref.watch(provider);
-    final isScanning = state.scanningImageId != null;
+
+    // Debug logging: print all images received
+    _logger.d('[INVOICE_CAPTURE] UI received ${images.length} images:');
+    for (final img in images) {
+      _logger.d(
+          '[INVOICE_CAPTURE] Image: id=${img.id}, url=${img.url}, status=${img.status}, imagePath=${img.imagePath}');
+    }
 
     // Handle case when images are removed
     if (images.isNotEmpty && currentIndex >= images.length) {
@@ -452,13 +449,12 @@ class _InvoiceCaptureDetailViewState
     }
 
     return Scaffold(
-      appBar: _buildAppBar(images, isScanning),
+      appBar: _buildAppBar(images),
       body: _buildBody(images),
     );
   }
 
-  PreferredSizeWidget? _buildAppBar(
-      List<InvoiceCaptureProcess> images, bool isScanning) {
+  PreferredSizeWidget? _buildAppBar(List<InvoiceCaptureProcess> images) {
     if (!_showAppBar) return null;
 
     return AppBar(
@@ -466,20 +462,9 @@ class _InvoiceCaptureDetailViewState
       actions: [
         if (!_isDeleting)
           IconButton(
-            icon: isScanning
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                    ),
-                  )
-                : const Icon(Icons.document_scanner),
-            onPressed: isScanning
-                ? null
-                : () => _handleScan(
-                    images[currentIndex].id, images[currentIndex].url),
+            icon: const Icon(Icons.document_scanner),
+            onPressed: () =>
+                _handleScan(images[currentIndex].id, images[currentIndex].url),
             tooltip: 'Scan Invoice',
           ),
         if (!_isDeleting)

@@ -4,13 +4,14 @@
  * to process images, update user costs, and store results in Firestore.
  */
 // Load environment variables from .env file (useful for local development)
-import * as dotenv from 'dotenv';
+import * as dotenv from "dotenv";
 dotenv.config();
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { ImageAnnotatorClient } from "@google-cloud/vision";
-import { app } from '../init';
+import { app } from "../init";
+import axios from "axios";
 
 // Initialize Firestore
 const db = getFirestore(app);
@@ -188,17 +189,19 @@ export const detectImage = onCall({
             
             // For URL-based processing, try to download image to buffer first
             console.log("Downloading image from URL for processing");
-            const axios = require('axios');
             const response = await axios.get(request.data.imageUrl, {
-              responseType: 'arraybuffer',
+              responseType: "arraybuffer",
               timeout: 15000 // 15 second timeout for download
             });
             
-            console.log("Image downloaded successfully, size:", 
-                        response.data ? (response.data.length || 0) : 0, "bytes");
+            // Assert response.data is Buffer or string for length
+            const data = response.data as Buffer | string;
+            const dataLength = typeof data === "string" ? Buffer.byteLength(data) : (Buffer.isBuffer(data) ? data.length : 0);
+            console.log("Downloaded image size:", dataLength, "bytes");
             
             // Process the downloaded image buffer
-            const imageBuffer = Buffer.from(response.data);
+            // Assert response.data is Buffer or string for Buffer.from
+            const imageBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
             detectResult = await detectTextInImage(request.data.imageUrl, imageBuffer);
             console.log("Text detection completed with result:", {
               success: detectResult.success,
@@ -244,33 +247,48 @@ export const detectImage = onCall({
       // ---- Start: Update Invoice Image ----
       try {
         console.log("Preparing to update Firestore document");
-        const docRef = db.collection('users')
+        const docRef = db.collection("users")
           .doc(userId)
-          .collection('invoices')
+          .collection("invoices")
           .doc(invoiceId)
-          .collection('images')
+          .collection("images")
           .doc(imageId);
-        
-        const updateData = {
+
+        const updateData: { [key: string]: any } = {
           confidence: detectResult.confidence || 0,
           textBlocks: detectResult.textBlocks || [],
-          status: detectResult.status,
+          status: detectResult.hasText ? "invoice" : "no invoice",
           lastProcessedAt: FieldValue.serverTimestamp(),
-          extractedText: detectResult.extractedText || null
+          extractedText: detectResult.extractedText ?? "",
         };
-        
-        console.log("Updating Firestore invoice image with data:", JSON.stringify(updateData));
+
+        if (detectResult.error) {
+          updateData.errorMessage = detectResult.error;
+        }
+
         await docRef.update(updateData);
-        console.log(`Updated invoice image document with OCR results. Status: ${detectResult.status}`);
+        console.log("Updated invoice image document with OCR results. Status:", updateData.status);
       } catch (dbError) {
         console.error("Error updating Firestore invoice image:", dbError);
-        await _updateImageStatus(userId, invoiceId, imageId, "Error", "Failed to update document after successful processing");
+        await _updateImageStatus(userId, invoiceId, imageId, "error", "Failed to update document after successful processing");
       }
       // ---- End: Update Invoice Image ----
     } else {
       // Handle failed OCR
-      console.log("OCR process failed, updating status to Error");
-      await _updateImageStatus(userId, invoiceId, imageId, "Error", detectResult.error || "OCR process failed");
+      console.log("OCR process failed, updating status to error");
+      await _updateImageStatus(userId, invoiceId, imageId, "error", detectResult.error || "OCR process failed");
+      // Also clear extractedText on error
+      const docRef = db.collection("users")
+        .doc(userId)
+        .collection("invoices")
+        .doc(invoiceId)
+        .collection("images")
+        .doc(imageId);
+      await docRef.update({
+        extractedText: "",
+        lastProcessedAt: FieldValue.serverTimestamp(),
+        errorMessage: detectResult.error || "OCR process failed"
+      });
     }
     
     // Log processing result
@@ -304,11 +322,11 @@ async function _updateImageStatus(userId: string, invoiceId: string, imageId: st
   
   try {
     // First check if the document exists
-    const docRef = db.collection('users')
+    const docRef = db.collection("users")
       .doc(userId)
-      .collection('invoices')
+      .collection("invoices")
       .doc(invoiceId)
-      .collection('images')
+      .collection("images")
       .doc(imageId);
     
     const docSnap = await docRef.get();
@@ -317,9 +335,9 @@ async function _updateImageStatus(userId: string, invoiceId: string, imageId: st
       return;
     }
     
-    const updateData: {[key: string]: any} = {
+    const updateData: { [key: string]: any } = {
       status: status,
-      updated_at: FieldValue.serverTimestamp()
+      updatedAt: FieldValue.serverTimestamp()
     };
     
     // Add error message if provided
@@ -327,12 +345,12 @@ async function _updateImageStatus(userId: string, invoiceId: string, imageId: st
       updateData.errorMessage = errorMessage;
     }
     
-    console.log(`[_updateImageStatus] Updating with data:`, updateData);
+    console.log("[_updateImageStatus] Updating with data:", updateData);
     
     await docRef.update(updateData);
     console.log(`[_updateImageStatus] Successfully updated image status to ${status}${errorMessage ? " with error message" : ""}`);
   } catch (error) {
-    console.error(`[_updateImageStatus] CRITICAL ERROR: Failed to update image status:`, error);
+    console.error("[_updateImageStatus] CRITICAL ERROR: Failed to update image status:", error);
     console.error(`[_updateImageStatus] Document path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
     console.error(`[_updateImageStatus] Attempted status: ${status}`);
     // We don't throw here to prevent cascading errors
@@ -346,7 +364,7 @@ async function _updateUserCosts(userId: string) {
     // Step 1: Get current price from Firestore
     try {
       // First try to get price from the new structure
-      const visionPriceSnap = await db.collection('cloud-pricing').doc('Google Vision').get();
+      const visionPriceSnap = await db.collection("cloud-pricing").doc("Google Vision").get();
       if (visionPriceSnap.exists) {
         const visionData = visionPriceSnap.data();
         if (visionData?.pricePerUse) {
@@ -354,7 +372,7 @@ async function _updateUserCosts(userId: string) {
           console.log(`Using Vision price from new cloud-pricing structure: ${priceToUse}`);
         } else {
           // Fallback to legacy pricing structure
-          const pricesSnap = await db.collection('billing').doc('apiPrices').get(); 
+          const pricesSnap = await db.collection("billing").doc("apiPrices").get(); 
           if (pricesSnap.exists && pricesSnap.data()?.google_vision_api_per_unit) {
             priceToUse = pricesSnap.data()?.google_vision_api_per_unit;
             console.log(`Using Vision price from legacy billing structure: ${priceToUse}`);
@@ -364,7 +382,7 @@ async function _updateUserCosts(userId: string) {
         }
       } else {
         // Fallback to legacy pricing structure
-        const pricesSnap = await db.collection('billing').doc('apiPrices').get(); 
+        const pricesSnap = await db.collection("billing").doc("apiPrices").get(); 
         if (pricesSnap.exists && pricesSnap.data()?.google_vision_api_per_unit) {
           priceToUse = pricesSnap.data()?.google_vision_api_per_unit;
           console.log(`Using Vision price from legacy billing structure: ${priceToUse}`);
@@ -377,7 +395,7 @@ async function _updateUserCosts(userId: string) {
     }
 
     // Step 2: Increment estimated costs in the user document (under costs map)
-    const userDocRef = db.collection('users').doc(userId);
+    const userDocRef = db.collection("users").doc(userId);
     await userDocRef.set({
       costs: {
         estimated_costs: FieldValue.increment(priceToUse)
@@ -387,7 +405,7 @@ async function _updateUserCosts(userId: string) {
 
     // Step 3: Also update the costOverall in the Google Vision document
     try {
-      const visionRef = db.collection('cloud-pricing').doc('Google Vision');
+      const visionRef = db.collection("cloud-pricing").doc("Google Vision");
       await visionRef.update({
         costOverall: FieldValue.increment(priceToUse)
       });
@@ -400,4 +418,31 @@ async function _updateUserCosts(userId: string) {
     console.error(`Failed during user cost update for user ${userId}:`, billingError);
     // Log error but continue with invoice image update
   }
+}
+
+// TEST FUNCTION: Run OCR on a hardcoded image for local testing
+if (require.main === module) {
+  (async () => {
+    const userId = "YOUR_USER_ID"; // Replace with a real user ID
+    const invoiceId = "YOUR_INVOICE_ID"; // Replace with a real invoice ID
+    const imageId = "YOUR_IMAGE_ID"; // Replace with a real image ID
+    const imageUrl = "YOUR_IMAGE_URL"; // Replace with a real image URL
+
+    // Simulate a request object
+    const request = {
+      auth: { uid: userId },
+      data: {
+        imageUrl,
+        invoiceId,
+        imageId,
+      },
+    };
+    try {
+      const result = await (detectImage as any)._callableHandler(request, {});
+      console.log("Test OCR result:", result);
+    } catch (e) {
+      console.error("Test OCR error:", e);
+    }
+    process.exit(0);
+  })();
 } 

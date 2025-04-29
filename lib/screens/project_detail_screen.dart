@@ -290,7 +290,7 @@ class ProjectDetailScreen extends ConsumerWidget {
 
         await docRef.update({
           'status': 'ocr_running',
-          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
 
         logger.d("🔍 Status updated to ocr_running");
@@ -338,7 +338,7 @@ class ProjectDetailScreen extends ConsumerWidget {
 
         await docRef.update({
           'status': 'ready',
-          'updated_at': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
         });
       } catch (_) {
         // Ignore errors when resetting status

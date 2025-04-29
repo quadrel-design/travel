@@ -31,46 +31,24 @@ enum InvoiceCaptureStatus {
   error;
 
   /// Convert the enum to a string that matches the Firebase Function status
-  String toFirebaseStatus() {
-    switch (this) {
-      case InvoiceCaptureStatus.noText:
-        return 'NoText';
-      case InvoiceCaptureStatus.text:
-        return 'Text';
-      case InvoiceCaptureStatus.invoice:
-        return 'Invoice';
-      case InvoiceCaptureStatus.error:
-        return 'Error';
-      case InvoiceCaptureStatus.ready:
-        return 'Ready';
-      case InvoiceCaptureStatus.processing:
-        return 'Processing';
-    }
-  }
+  String toFirebaseStatus() => toString().split('.').last;
 
   /// Create an InvoiceCaptureStatus from a Firebase Function status string
   static InvoiceCaptureStatus fromFirebaseStatus(String? status) {
     switch (status) {
       case 'NoText':
-      case 'no invoice':
         return InvoiceCaptureStatus.noText;
       case 'Text':
         return InvoiceCaptureStatus.text;
       case 'Invoice':
-      case 'invoice':
         return InvoiceCaptureStatus.invoice;
       case 'Error':
         return InvoiceCaptureStatus.error;
-      case 'Ready':
-        return InvoiceCaptureStatus.ready;
       case 'Processing':
       case 'ocr_running':
       case 'analysis_running':
         return InvoiceCaptureStatus.processing;
-      case 'analysis_complete':
-        return InvoiceCaptureStatus.invoice;
-      case 'analysis_failed':
-        return InvoiceCaptureStatus.error;
+      case 'Ready':
       default:
         return InvoiceCaptureStatus.ready;
     }
@@ -98,22 +76,4 @@ enum InvoiceCaptureStatus {
 
   /// Whether the image processing failed with an error
   bool get hasError => this == InvoiceCaptureStatus.error;
-
-  /// A user-friendly name for this status
-  String get displayName {
-    switch (this) {
-      case InvoiceCaptureStatus.ready:
-        return 'Ready for processing';
-      case InvoiceCaptureStatus.processing:
-        return 'Processing';
-      case InvoiceCaptureStatus.noText:
-        return 'No text found';
-      case InvoiceCaptureStatus.text:
-        return 'Text detected';
-      case InvoiceCaptureStatus.invoice:
-        return 'Invoice detected';
-      case InvoiceCaptureStatus.error:
-        return 'Processing error';
-    }
-  }
 }

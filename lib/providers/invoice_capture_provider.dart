@@ -34,35 +34,26 @@ class InvoiceCaptureState extends Equatable {
   /// General error message not specific to a particular image
   final String? generalError;
 
-  /// ID of the image currently being scanned, if any
-  final String? scanningImageId;
-
   const InvoiceCaptureState({
     this.images = const [],
     this.scanError = const {},
     this.generalError,
-    this.scanningImageId,
   });
 
   /// Creates a copy of this state with the specified fields replaced with new values.
   ///
-  /// The [clearGeneralError] and [clearScanningImageId] flags can be used to reset
-  /// those fields to null.
+  /// The [clearGeneralError] flag can be used to reset the generalError field to null.
   InvoiceCaptureState copyWith({
     List<InvoiceCaptureProcess>? images,
     Map<String, String?>? scanError,
     String? generalError,
-    String? scanningImageId,
     bool clearGeneralError = false,
-    bool clearScanningImageId = false,
   }) {
     return InvoiceCaptureState(
       images: images ?? this.images,
       scanError: scanError ?? this.scanError,
       generalError:
           clearGeneralError ? null : generalError ?? this.generalError,
-      scanningImageId:
-          clearScanningImageId ? null : scanningImageId ?? this.scanningImageId,
     );
   }
 
@@ -71,7 +62,6 @@ class InvoiceCaptureState extends Equatable {
         images,
         scanError,
         generalError,
-        scanningImageId,
       ];
 }
 
@@ -138,7 +128,6 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   void initiateScan(String imageId) {
     _logger.d('Initiating scan for image ID: $imageId');
     state = state.copyWith(
-      scanningImageId: imageId,
       scanError: {},
     );
   }
@@ -152,7 +141,6 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
     _logger.w('Setting scan error for image ID $imageId: $error');
     state = state.copyWith(
       scanError: {...state.scanError, imageId: error},
-      scanningImageId: null,
     );
   }
 

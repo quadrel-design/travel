@@ -42,7 +42,8 @@ class InvoiceAnalysisPanel extends StatelessWidget {
               const SizedBox(height: UIConstants.kSectionSpacing),
               _buildInvoiceStatus(),
               if (imageInfo.invoiceAnalysis != null)
-                _buildStructuredAnalysis(imageInfo.invoiceAnalysis!)
+                _buildStructuredAnalysis(
+                    InvoiceAnalysis.fromJson(imageInfo.invoiceAnalysis!))
               else if (imageInfo.extractedText != null &&
                   imageInfo.extractedText!.isNotEmpty)
                 _buildExtractedText(),

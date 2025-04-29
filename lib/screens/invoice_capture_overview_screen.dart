@@ -36,11 +36,16 @@ class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
 class _InvoiceCaptureOverviewScreenState
     extends ConsumerState<InvoiceCaptureOverviewScreen> {
   late final Logger _logger;
+  late final Map<String, String> _invoiceImagesProviderParams;
 
   @override
   void initState() {
     super.initState();
     _logger = ref.read(loggerProvider);
+    _invoiceImagesProviderParams = {
+      'projectId': widget.project.id,
+      'invoiceId': 'main',
+    };
   }
 
   @override
@@ -77,10 +82,8 @@ class _InvoiceCaptureOverviewScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    final projectImagesAsyncValue = ref.watch(invoiceImagesStreamProvider({
-      'projectId': widget.project.id,
-      'invoiceId': '', // Provide the correct invoiceId if available
-    }));
+    final projectImagesAsyncValue =
+        ref.watch(invoiceImagesStreamProvider(_invoiceImagesProviderParams));
 
     return Scaffold(
       appBar: AppBar(
@@ -135,7 +138,12 @@ class _InvoiceCaptureOverviewScreenState
     return projectImagesAsyncValue.when(
       data: (images) {
         _logger.d(
-            '[INVOICE_CAPTURE] Received ${images.length} images from stream');
+            '[INVOICE_CAPTURE] Received \\${images.length} images from stream');
+        print('[UI] Images received: \\${images.length}');
+        for (final img in images) {
+          print(
+              '[UI] Image: id=\\${img.id}, url=\\${img.url}, status=\\${img.status}');
+        }
 
         if (images.isEmpty) {
           return const Center(child: Text("No invoices captured yet."));
@@ -224,7 +232,24 @@ class _InvoiceCaptureOverviewScreenState
         _logger.e('[INVOICE_CAPTURE] Error loading images',
             error: error, stackTrace: stack);
         return Center(
-          child: Text('Error: $error'),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text('Error:',
+                  style: TextStyle(fontWeight: FontWeight.bold)),
+              Text(error.toString(), style: const TextStyle(color: Colors.red)),
+              const SizedBox(height: 8),
+              const Text('Stack trace:'),
+              SizedBox(
+                height: 100,
+                child: SingleChildScrollView(
+                  child: Text(stack.toString() ?? 'No stack trace'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text('Check Firestore rules and data for this project.'),
+            ],
+          ),
         );
       },
     );
