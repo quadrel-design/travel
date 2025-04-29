@@ -27,8 +27,8 @@ import 'package:logger/logger.dart';
 // import 'dart:html' if (dart.library.html) 'package:flutter/foundation.dart'
 //     as html;
 
-import '../models/journey.dart';
 import '../models/invoice_capture_process.dart';
+import '../models/project.dart';
 import 'invoice_repository.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
 
@@ -61,13 +61,19 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   final Logger _logger;
 
   // Cache collection references to avoid recreating them
-  CollectionReference<Map<String, dynamic>> _getUserJourneysCollection(
+  CollectionReference<Map<String, dynamic>> _getProjectsCollection(
           String userId) =>
-      _firestore.collection('users').doc(userId).collection('invoices');
+      _firestore.collection('users').doc(userId).collection('projects');
 
-  CollectionReference<Map<String, dynamic>> _getImagesCollection(
-          String userId, String journeyId) =>
-      _getUserJourneysCollection(userId).doc(journeyId).collection('images');
+  CollectionReference<Map<String, dynamic>> _getInvoicesCollection(
+          String userId, String projectId) =>
+      _getProjectsCollection(userId).doc(projectId).collection('invoices');
+
+  CollectionReference<Map<String, dynamic>> _getInvoiceImagesCollection(
+          String userId, String projectId, String invoiceId) =>
+      _getInvoicesCollection(userId, projectId)
+          .doc(invoiceId)
+          .collection('invoice_images');
 
   // Helper to get current user ID, throws NotAuthenticatedException if null
   String _getCurrentUserId() {
@@ -80,165 +86,163 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     return userId;
   }
 
-  // --- Journey Methods ---
+  // --- Project Methods ---
   @override
-  Stream<List<Journey>> fetchUserJourneys() {
+  Stream<List<Project>> fetchUserProjects() {
     try {
       final userId = _getCurrentUserId();
-      _logger.d('Setting up stream for user journeys: $userId');
+      _logger.d('Setting up stream for user projects: $userId');
 
-      return _getUserJourneysCollection(userId).snapshots().map((snapshot) {
+      return _getProjectsCollection(userId).snapshots().map((snapshot) {
         _logger.d(
-            'Received journey snapshot with ${snapshot.docs.length} documents.');
+            'Received project snapshot with ${snapshot.docs.length} documents.');
         return snapshot.docs
             .map((doc) {
               try {
                 final data = doc.data();
                 data['id'] = doc.id;
-                return Journey.fromMap(data);
+                return Project.fromMap(data);
               } catch (e) {
-                _logger.e('Error parsing Journey:', error: e);
+                _logger.e('Error parsing Project:', error: e);
                 return null;
               }
             })
-            .where((journey) => journey != null)
-            .cast<Journey>()
+            .where((project) => project != null)
+            .cast<Project>()
             .toList();
       }).handleError((error, stackTrace) {
-        _logger.e('Error fetching user journeys stream',
+        _logger.e('Error fetching user projects stream',
             error: error, stackTrace: stackTrace);
         throw DatabaseFetchException(
-            'Failed to fetch journeys: ${error.toString()}', error, stackTrace);
+            'Failed to fetch projects: ${error.toString()}', error, stackTrace);
       });
     } catch (e, stackTrace) {
-      _logger.e('Error creating journeys stream',
+      _logger.e('Error creating projects stream',
           error: e, stackTrace: stackTrace);
       return Stream.error(DatabaseFetchException(
-          'Failed to create journeys stream: $e', e, stackTrace));
+          'Failed to create projects stream: $e', e, stackTrace));
     }
   }
 
   @override
-  Stream<Journey?> getJourneyStream(String journeyId) {
+  Stream<Project?> getProjectStream(String projectId) {
     try {
       final userId = _getCurrentUserId();
       _logger.d(
-          'Setting up stream for single journey: $journeyId for user $userId');
+          'Setting up stream for single project: $projectId for user $userId');
 
-      return _getUserJourneysCollection(userId)
-          .doc(journeyId)
+      return _getProjectsCollection(userId)
+          .doc(projectId)
           .snapshots()
           .map((snapshot) {
         if (snapshot.exists && snapshot.data() != null) {
           try {
-            _logger.d('Received snapshot for journey $journeyId');
+            _logger.d('Received snapshot for project $projectId');
             final data = snapshot.data()!;
             data['id'] = snapshot.id;
-            return Journey.fromMap(data);
+            return Project.fromMap(data);
           } catch (e) {
-            _logger.e('Error parsing Journey:', error: e);
+            _logger.e('Error parsing Project:', error: e);
             return null;
           }
         } else {
-          _logger.w('Journey $journeyId does not exist or has no data.');
+          _logger.w('Project $projectId does not exist or has no data.');
           return null;
         }
       }).handleError((error, stackTrace) {
-        _logger.e('Error fetching single journey stream ($journeyId)',
+        _logger.e('Error fetching single project stream ($projectId)',
             error: error, stackTrace: stackTrace);
         throw DatabaseFetchException(
-            'Failed to fetch journey details: ${error.toString()}',
+            'Failed to fetch project details: ${error.toString()}',
             error,
             stackTrace);
       });
     } catch (e, stackTrace) {
-      _logger.e('Error creating journey stream for $journeyId',
+      _logger.e('Error creating project stream for $projectId',
           error: e, stackTrace: stackTrace);
       return Stream.error(DatabaseFetchException(
-          'Failed to create journey stream: $e', e, stackTrace));
+          'Failed to create project stream: $e', e, stackTrace));
     }
   }
 
   @override
-  Future<Journey> addJourney(Journey journey) async {
+  Future<Project> addProject(Project project) async {
     try {
       final userId = _getCurrentUserId();
-      _logger.i('Adding journey: ${journey.title} for user: $userId');
+      _logger.i('Adding project: ${project.title} for user: $userId');
 
       // Add user ID and timestamps if not already set
-      final journeyWithMeta = journey.copyWith(
+      final projectWithMeta = project.copyWith(
         userId: userId,
         // Add timestamps if the model supports it
       );
 
-      final docRef = await _getUserJourneysCollection(userId)
-          .add(journeyWithMeta.toJson());
+      final docRef =
+          await _getProjectsCollection(userId).add(projectWithMeta.toJson());
 
-      _logger.i('Journey added with ID: ${docRef.id}');
-      // Return the Journey object with the new ID
-      return journeyWithMeta.copyWith(id: docRef.id);
+      _logger.i('Project added with ID: ${docRef.id}');
+      // Return the Project object with the new ID
+      return projectWithMeta.copyWith(id: docRef.id);
     } on FirebaseException catch (e, stackTrace) {
-      _logger.e('FirebaseException adding journey: ${e.message}',
+      _logger.e('FirebaseException adding project: ${e.message}',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'Failed to add journey: ${e.code}', e, stackTrace);
+          'Failed to add project: ${e.code}', e, stackTrace);
     } catch (e, stackTrace) {
-      _logger.e('Unknown error adding journey',
+      _logger.e('Unknown error adding project',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred while adding the journey.',
+          'An unexpected error occurred while adding the project.',
           e,
           stackTrace);
     }
   }
 
   @override
-  Future<void> updateJourney(Journey journey) async {
+  Future<void> updateProject(Project project) async {
     try {
       final userId = _getCurrentUserId();
-      _logger.d('Updating journey ID: ${journey.id} for user: $userId');
+      _logger.d('Updating project ID: ${project.id} for user: $userId');
 
       // Prepare data, remove id and potentially user_id if handled by rules
-      final journeyData = journey.toJson();
-      journeyData.remove('id');
+      final projectData = project.toJson();
+      projectData.remove('id');
       // Add updated_at timestamp
-      journeyData['updated_at'] = FieldValue.serverTimestamp();
+      projectData['updated_at'] = FieldValue.serverTimestamp();
 
       // Use Firestore update by document ID
-      await _getUserJourneysCollection(userId)
-          .doc(journey.id)
-          .update(journeyData);
+      await _getProjectsCollection(userId).doc(project.id).update(projectData);
 
-      _logger.i('Successfully updated journey ID: ${journey.id}');
+      _logger.i('Successfully updated project ID: ${project.id}');
     } on FirebaseException catch (e, stackTrace) {
-      _logger.e('FirebaseException updating journey ${journey.id}',
+      _logger.e('FirebaseException updating project ${project.id}',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'Failed to update journey: ${e.message}', e, stackTrace);
+          'Failed to update project: ${e.message}', e, stackTrace);
     } on NotAuthenticatedException {
       // Re-throw specific exception
       rethrow;
     } catch (e, stackTrace) {
-      _logger.e('Unexpected error updating journey ${journey.id}',
+      _logger.e('Unexpected error updating project ${project.id}',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred while updating the journey.',
+          'An unexpected error occurred while updating the project.',
           e,
           stackTrace);
     }
   }
 
   @override
-  Future<void> deleteJourney(String journeyId) async {
+  Future<void> deleteProject(String projectId) async {
     String userId =
         'unknown_user'; // Default for logging if user ID fetch fails
     try {
       userId = _getCurrentUserId();
       _logger
-          .d('Attempting to delete journey ID: $journeyId for user: $userId');
+          .d('Attempting to delete project ID: $projectId for user: $userId');
 
       // --- 1. Delete associated images from Firebase Storage ---
-      final storagePath = 'users/$userId/invoices/$journeyId';
+      final storagePath = 'users/$userId/projects/$projectId/invoices';
       _logger.d('Listing files in storage path: $storagePath for deletion.');
 
       try {
@@ -255,84 +259,71 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           _logger.d('No files found in storage path $storagePath to delete.');
         }
       } on FirebaseException catch (e, stackTrace) {
-        _logger.e('FirebaseException deleting journey content $journeyId',
+        _logger.e('FirebaseException deleting project content $projectId',
             error: e, stackTrace: stackTrace);
         // Log error but continue with DB deletion
         _logger.w('Continuing with database deletion despite storage error.');
       }
 
-      // --- 2. Delete the journey record from Firestore ---
-      _logger.d('Deleting journey record ID: $journeyId from database.');
-      await _getUserJourneysCollection(userId).doc(journeyId).delete();
+      // --- 2. Delete the project record from Firestore ---
+      _logger.d('Deleting project record ID: $projectId from database.');
+      await _getProjectsCollection(userId).doc(projectId).delete();
 
       _logger.i(
-          'Successfully deleted journey ID: $journeyId and associated data.');
+          'Successfully deleted project ID: $projectId and associated data.');
     } on FirebaseException catch (e, stackTrace) {
       // Catch Firestore exceptions
-      _logger.e('FirebaseException deleting journey record $journeyId',
+      _logger.e('FirebaseException deleting project record $projectId',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'Failed to delete journey record: ${e.message}', e, stackTrace);
+          'Failed to delete project record: ${e.message}', e, stackTrace);
     } on NotAuthenticatedException {
       // Re-throw specific exception
       rethrow;
     } catch (e, stackTrace) {
-      _logger.e('Unexpected error deleting journey $journeyId',
+      _logger.e('Unexpected error deleting project $projectId',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred while deleting the journey.',
+          'An unexpected error occurred while deleting the project.',
           e,
           stackTrace);
     }
   }
 
-  // --- Journey Image Methods ---
+  // --- Project Image Methods ---
   @override
-  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(String journeyId) {
+  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(
+      String projectId, String invoiceId) {
     try {
       final userId = _getCurrentUserId();
-      if (journeyId.isEmpty) {
+      if (projectId.isEmpty || invoiceId.isEmpty) {
         return Stream<List<InvoiceCaptureProcess>>.value([]);
       }
-
-      final journeyDoc = _getUserJourneysCollection(userId).doc(journeyId);
-
-      return journeyDoc
-          .get()
-          .asStream()
-          .asyncExpand<List<InvoiceCaptureProcess>>((journeySnapshot) {
-        if (!journeySnapshot.exists) {
-          return Stream<List<InvoiceCaptureProcess>>.value([]);
-        }
-
-        return _getImagesCollection(userId, journeyId)
-            .orderBy('uploaded_at', descending: true)
-            .snapshots()
-            .map<List<InvoiceCaptureProcess>>((snapshot) {
-          return snapshot.docs
-              .map((doc) {
-                try {
-                  final data = doc.data();
-                  data['id'] = doc.id;
-
-                  if (!data.containsKey('url') ||
-                      !data.containsKey('image_path')) {
-                    return null;
-                  }
-
-                  final info = InvoiceCaptureProcess.fromJson(data);
-                  return info.url.isNotEmpty && info.imagePath.isNotEmpty
-                      ? info
-                      : null;
-                } catch (e) {
-                  _logger.e('Error parsing image document', error: e);
+      final imagesCollection =
+          _getInvoiceImagesCollection(userId, projectId, invoiceId)
+              .orderBy('uploaded_at', descending: true);
+      return imagesCollection.snapshots().map((snapshot) {
+        return snapshot.docs
+            .map((doc) {
+              try {
+                final data = doc.data();
+                data['id'] = doc.id;
+                if (!data.containsKey('url') ||
+                    !data.containsKey('image_path')) {
                   return null;
                 }
-              })
-              .where((info) => info != null)
-              .cast<InvoiceCaptureProcess>()
-              .toList();
-        });
+                final info = InvoiceCaptureProcess.fromJson(data);
+                return info.url.isNotEmpty && info.imagePath.isNotEmpty
+                    ? info
+                    : null;
+              } catch (e) {
+                _logger.e('Error parsing image document', error: e);
+                return null;
+              }
+            })
+            .where((info) => info != null)
+            .cast<InvoiceCaptureProcess>()
+            .toList();
       }).handleError((error, stackTrace) {
         throw DatabaseFetchException(
             'Failed to fetch images', error, stackTrace);
@@ -385,8 +376,8 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   }
 
   Future<String> _getImageDownloadUrl(
-      String userId, String journeyId, String fileName) async {
-    final storagePath = 'users/$userId/invoices/$journeyId/images/$fileName';
+      String userId, String projectId, String fileName) async {
+    final storagePath = 'users/$userId/projects/$projectId/invoices/$fileName';
     final ref = _storage.ref().child(storagePath);
 
     try {
@@ -417,7 +408,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
 
   @override
   Future<InvoiceCaptureProcess> uploadInvoiceImage(
-    String journeyId,
+    String projectId,
     Uint8List imageBytes,
     String fileName,
   ) async {
@@ -426,7 +417,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final storageFileName = '${timestamp}_$fileName';
     final storagePath =
-        'users/$userId/invoices/$journeyId/images/$storageFileName';
+        'users/$userId/projects/$projectId/invoices/$storageFileName';
 
     try {
       // Compress image
@@ -438,7 +429,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         contentType: 'image/jpeg',
         customMetadata: {
           'userId': userId,
-          'journeyId': journeyId,
+          'projectId': projectId,
           'imageId': imageId,
           'originalFileName': fileName,
           'uploadedAt': DateTime.now().toIso8601String(),
@@ -455,7 +446,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
 
       // Get download URL
       final downloadUrl =
-          await _getImageDownloadUrl(userId, journeyId, storageFileName);
+          await _getImageDownloadUrl(userId, projectId, storageFileName);
 
       // Create image info object
       final now = DateTime.now();
@@ -477,7 +468,9 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         'status': 'ready', // Ensure status is set in Firestore
       };
 
-      await _getImagesCollection(userId, journeyId).doc(imageId).set(docData);
+      await _getInvoiceImagesCollection(userId, projectId, imageId)
+          .doc(imageId)
+          .set(docData);
 
       return imageInfo;
     } catch (e, stackTrace) {
@@ -487,13 +480,15 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   }
 
   @override
-  Future<void> deleteInvoiceImage(String journeyId, String imageId) async {
+  Future<void> deleteInvoiceImage(String projectId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
 
       // Get the image document to find the storage path
       final imageDoc =
-          await _getImagesCollection(userId, journeyId).doc(imageId).get();
+          await _getInvoiceImagesCollection(userId, projectId, imageId)
+              .doc(imageId)
+              .get();
 
       if (!imageDoc.exists) {
         throw DatabaseOperationException(
@@ -505,7 +500,9 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       await _storage.ref().child(imageInfo.imagePath).delete();
 
       // Then delete from Firestore
-      await _getImagesCollection(userId, journeyId).doc(imageId).delete();
+      await _getInvoiceImagesCollection(userId, projectId, imageId)
+          .doc(imageId)
+          .delete();
     } catch (e, stackTrace) {
       throw DatabaseOperationException('Failed to delete image', e, stackTrace);
     }
@@ -513,7 +510,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
 
   @override
   Future<void> updateImageWithOcrResults(
-    String journeyId,
+    String projectId,
     String imageId, {
     bool? isInvoice,
     String? status,
@@ -527,7 +524,9 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         if (status != null) 'status': status,
       };
 
-      await _getImagesCollection(userId, journeyId).doc(imageId).update(data);
+      await _getInvoiceImagesCollection(userId, projectId, imageId)
+          .doc(imageId)
+          .update(data);
     } catch (e, stackTrace) {
       throw DatabaseOperationException(
           'Failed to update OCR results', e, stackTrace);

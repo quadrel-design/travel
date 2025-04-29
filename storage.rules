@@ -2,17 +2,10 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{userId}/invoices/{journeyId}/images/{fileName} {
-      // Allow public read access to images, but maintain secure write access
-      allow read: if true;  // Allow public read
-      allow write: if request.auth != null && request.auth.uid == userId;  // Only authenticated user can write
-    }
-    
-    // Legacy path for transition period
-    match /users/{userId}/journeys/{journeyId}/images/{fileName} {
-      // Allow public read access to images, but maintain secure write access
-      allow read: if true;  // Allow public read
-      allow write: if request.auth != null && request.auth.uid == userId;  // Only authenticated user can write
+    // Invoice images: users/{userId}/projects/{projectId}/invoices/{invoiceId}/invoice_images/{fileName}
+    match /users/{userId}/projects/{projectId}/invoices/{invoiceId}/invoice_images/{fileName} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+      allow write: if request.auth != null && request.auth.uid == userId;
     }
   }
 } 

@@ -2,7 +2,7 @@
  * User Model
  *
  * This file defines the User model which represents a user of the application,
- * including their authentication information and associated journeys.
+ * including their authentication information and associated projects.
  * It includes serialization methods for JSON and Firestore compatibility.
  */
 
@@ -12,7 +12,7 @@ import 'package:flutter/foundation.dart';
 /// Represents a user of the application.
 ///
 /// This model stores user information such as authentication details,
-/// profile data, and references to their journeys.
+/// profile data, and references to their projects.
 @immutable
 class User extends Equatable {
   /// Unique identifier for the user (typically from Firebase Auth)
@@ -27,20 +27,20 @@ class User extends Equatable {
   /// URL to the user's profile image, if available
   final String? profileImageUrl;
 
-  /// List of journey IDs associated with this user
-  final List<String> journeyIds;
+  /// List of project IDs associated with the user
+  final List<String> projectIds;
 
   /// Creates a new User instance.
   ///
   /// The [id], [email], and [name] parameters are required.
   /// [profileImageUrl] is optional and may be null.
-  /// [journeyIds] defaults to an empty list if not provided.
+  /// [projectIds] is required and must not be empty.
   const User({
     required this.id,
     required this.email,
     required this.name,
-    this.profileImageUrl,
-    this.journeyIds = const [],
+    required this.profileImageUrl,
+    required this.projectIds,
   });
 
   /// Creates a User instance from a JSON map.
@@ -54,10 +54,10 @@ class User extends Equatable {
         id: json['id'] as String? ?? '',
         email: json['email'] as String? ?? '',
         name: json['name'] as String? ?? '',
-        profileImageUrl: json['profileImageUrl'] as String?,
-        journeyIds: json['journeyIds'] != null
-            ? List<String>.from(json['journeyIds'])
-            : const [],
+        profileImageUrl: json['profile_image_url'] as String? ?? '',
+        projectIds: (json['project_ids'] as List<dynamic>? ?? [])
+            .map((id) => id as String)
+            .toList(),
       );
     } catch (e) {
       // In production code, use a proper logger
@@ -69,7 +69,8 @@ class User extends Equatable {
         id: json['id'] as String? ?? '',
         email: json['email'] as String? ?? '',
         name: 'Error: Invalid user data',
-        journeyIds: const [],
+        profileImageUrl: null,
+        projectIds: const [],
       );
     }
   }
@@ -82,8 +83,8 @@ class User extends Equatable {
       'id': id,
       'email': email,
       'name': name,
-      'profileImageUrl': profileImageUrl,
-      'journeyIds': journeyIds,
+      'profile_image_url': profileImageUrl,
+      'project_ids': projectIds,
     };
   }
 
@@ -93,34 +94,34 @@ class User extends Equatable {
     String? email,
     String? name,
     String? profileImageUrl,
-    List<String>? journeyIds,
+    List<String>? projectIds,
   }) {
     return User(
       id: id ?? this.id,
       email: email ?? this.email,
       name: name ?? this.name,
       profileImageUrl: profileImageUrl ?? this.profileImageUrl,
-      journeyIds: journeyIds ?? this.journeyIds,
+      projectIds: projectIds ?? this.projectIds,
     );
   }
 
-  /// Adds a journey ID to the user's list of journeys.
+  /// Adds a project ID to the user's list of projects.
   ///
-  /// Returns a new User instance with the updated journey list.
-  /// Ensures no duplicate journey IDs are added.
-  User addJourney(String journeyId) {
-    if (journeyIds.contains(journeyId)) {
+  /// Returns a new User instance with the updated project list.
+  /// Ensures no duplicate project IDs are added.
+  User addProject(String projectId) {
+    if (projectIds.contains(projectId)) {
       return this;
     }
-    return copyWith(journeyIds: [...journeyIds, journeyId]);
+    return copyWith(projectIds: [...projectIds, projectId]);
   }
 
-  /// Removes a journey ID from the user's list of journeys.
+  /// Removes a project ID from the user's list of projects.
   ///
-  /// Returns a new User instance with the updated journey list.
-  User removeJourney(String journeyId) {
+  /// Returns a new User instance with the updated project list.
+  User removeProject(String projectId) {
     return copyWith(
-      journeyIds: journeyIds.where((id) => id != journeyId).toList(),
+      projectIds: projectIds.where((id) => id != projectId).toList(),
     );
   }
 
@@ -136,7 +137,7 @@ class User extends Equatable {
 
   @override
   String toString() {
-    return 'User(id: $id, email: $email, name: $name, profileImageUrl: $profileImageUrl, journeyIds: $journeyIds)';
+    return 'User(id: $id, email: $email, name: $name, profileImageUrl: $profileImageUrl, projectIds: $projectIds)';
   }
 
   @override
@@ -145,6 +146,6 @@ class User extends Equatable {
         email,
         name,
         profileImageUrl,
-        journeyIds,
+        projectIds,
       ];
 }

@@ -1,8 +1,8 @@
-/// Journey Creation Screen
+/// Project Creation Screen
 ///
 /// Provides a form using flutter_form_builder for users to input details
-/// (title, dates, description, location, budget) and create a new journey/invoice.
-/// Uses [journeyFormProvider] for state management and handling the save operation.
+/// (title, dates, description, location, budget) and create a new project/invoice.
+/// Uses [projectFormProvider] for state management and handling the save operation.
 library;
 
 import 'package:flutter/material.dart';
@@ -14,8 +14,8 @@ import 'package:uuid/uuid.dart'; // For generating IDs
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 // import 'package:travel/providers/logging_provider.dart'; // Import logger provider
 
-// Ensure Journey model is imported
-import '../models/journey.dart'; // Import Journey model
+// Ensure Project model is imported
+import '../models/project.dart'; // Import Project model
 // Import AppTitle
 // Import the new widget
 import 'package:flutter_form_builder/flutter_form_builder.dart';
@@ -29,41 +29,41 @@ import 'package:go_router/go_router.dart';
 
 // Remove imports for non-existent files
 // import '../providers/auth_provider.dart';
-// import '../providers/journey_provider.dart';
+// import '../providers/project_provider.dart';
 
 // Add imports used by the logic (might have been missed)
 // import '../providers/repository_providers.dart';
 // import 'package:travel/utils/validators.dart'; // Remove this non-existent import
 import 'package:travel/constants/app_routes.dart';
 // import 'package:travel/providers/location_service_provider.dart'; // Removed location service import
-import 'package:travel/providers/journey_form_provider.dart';
+import 'package:travel/providers/project_form_provider.dart';
 // import 'package:travel/providers/auth_repository_provider.dart';
 
-/// A screen widget for creating new journeys/invoices.
-class CreateJourneyScreen extends ConsumerStatefulWidget {
-  const CreateJourneyScreen({super.key});
+/// A screen widget for creating new projects/invoices.
+class ProjectCreateScreen extends ConsumerStatefulWidget {
+  const ProjectCreateScreen({super.key});
 
   @override
-  ConsumerState<CreateJourneyScreen> createState() =>
-      _CreateJourneyScreenState();
+  ConsumerState<ProjectCreateScreen> createState() =>
+      _ProjectCreateScreenState();
 }
 
-/// State class for the [CreateJourneyScreen].
-class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
+/// State class for the [ProjectCreateScreen].
+class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
   static const Duration _kAutocompleteDebounceDuration =
       Duration(milliseconds: 300);
 
   // Constants for form field names
-  /// Form field name for the journey title.
+  /// Form field name for the project title.
   static const _fieldName = 'name';
 
-  /// Form field name for the journey description.
+  /// Form field name for the project description.
   static const _fieldDescription = 'description';
 
-  /// Form field name for the journey location.
+  /// Form field name for the project location.
   static const _fieldLocation = 'location';
 
-  /// Form field name for the journey budget.
+  /// Form field name for the project budget.
   static const _fieldBudget = 'budget';
 
   // ScaffoldMessenger Key
@@ -89,7 +89,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
 
   /// The selected end date.
   DateTime? _endDate;
-  // Removed local _isLoading state - now managed by journeyFormProvider
+  // Removed local _isLoading state - now managed by projectFormProvider
 
   @override
   void dispose() {
@@ -187,8 +187,8 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
 
   // Commented out for now - will be connected to UI when implementation is finalized
 
-  /// Saves the journey without performing any Google Places search.
-  Future<void> _saveJourney() async {
+  /// Saves the project without performing any Google Places search.
+  Future<void> _saveProject() async {
     final formState = _formKey.currentState!;
     if (formState.saveAndValidate()) {
       final formData = formState.value;
@@ -227,13 +227,13 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       if (currentUserId == null) {
         if (mounted) {
           _showErrorSnackBar(
-              context, "Error", "User session lost. Cannot save journey.");
+              context, "Error", "User session lost. Cannot save project.");
         }
         return; // Cannot proceed without user ID
       }
 
-      // Create the Journey object
-      final newJourney = Journey(
+      // Create the Project object
+      final newProject = Project(
         id: const Uuid().v4(), // Generate new ID
         userId: currentUserId, // Now guaranteed non-null
         title: title,
@@ -245,33 +245,33 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
         isCompleted: false,
       );
 
-      // Call the notifier to create the journey
+      // Call the notifier to create the project
       // The listen callback will handle success/error feedback and navigation
-      await ref.read(journeyFormProvider.notifier).createJourney(newJourney);
+      await ref.read(projectFormProvider.notifier).createProject(newProject);
     }
   }
 
-  /// Builds the UI for the Create Journey screen.
+  /// Builds the UI for the Create Project screen.
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
 
     // Watch the form state provider
-    final formState = ref.watch(journeyFormProvider);
+    final formState = ref.watch(projectFormProvider);
     final isLoading = formState.isLoading; // Get loading state from provider
 
     // Listen to the form provider for side effects (navigation, snackbars)
-    ref.listen<JourneyFormState>(journeyFormProvider, (previous, next) {
+    ref.listen<ProjectFormState>(projectFormProvider, (previous, next) {
       // Handle errors shown via SnackBar
       if (next.error != null && next.error != previous?.error) {
-        _showErrorSnackBar(context, l10n.journeySaveErrorTitle, next.error!);
+        _showErrorSnackBar(context, l10n.projectSaveErrorTitle, next.error!);
         // Optionally reset the error in the provider after showing it
         // This prevents the snackbar from reappearing on rebuild
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             // Check mounted before interacting with ref post-frame
-            ref.read(journeyFormProvider.notifier).state =
+            ref.read(projectFormProvider.notifier).state =
                 next.copyWith(clearError: true);
           }
         });
@@ -280,23 +280,23 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
       if (next.isSuccess && previous?.isSuccess == false) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(l10n.journeySaveSuccessDesc),
+            content: Text(l10n.projectSaveSuccessDesc),
             backgroundColor: Colors.green,
           ),
         );
-        // Navigate on success, passing the created journey if available
-        if (next.journey != null) {
+        // Navigate on success, passing the created project if available
+        if (next.project != null) {
           context.pushReplacement(
-              '${AppRoutes.home}/${AppRoutes.journeyDetail.split('/').last}/${next.journey!.id}',
-              extra: next.journey);
+              '${AppRoutes.home}/${AppRoutes.projectDetail.split('/').last}/${next.project!.id}',
+              extra: next.project);
         } else {
-          // Fallback navigation if journey data isn't in state
+          // Fallback navigation if project data isn't in state
           context.pop();
         }
         // Reset provider state after navigation completes (optional, depends on desired behavior)
         // WidgetsBinding.instance.addPostFrameCallback((_) {
         //   if (mounted) {
-        //      ref.read(journeyFormProvider.notifier).resetState();
+        //      ref.read(projectFormProvider.notifier).resetState();
         //   }
         // });
       }
@@ -305,14 +305,14 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     return Scaffold(
       key: _scaffoldMessengerKey, // Use the key here
       appBar: AppBar(
-        title: Text(l10n.createJourneyTitle),
+        title: Text(l10n.createProjectTitle),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
         ),
         actions: [
           TextButton(
-            onPressed: isLoading ? null : _saveJourney,
+            onPressed: isLoading ? null : _saveProject,
             child: Text(l10n.save),
           ),
         ],
@@ -349,17 +349,17 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     return FormBuilderTextField(
       name: _fieldName,
       decoration: InputDecoration(
-        labelText: l10n.journeyFormFieldNameLabel,
-        hintText: l10n.journeyFormFieldNameHint,
+        labelText: l10n.projectFormFieldNameLabel,
+        hintText: l10n.projectFormFieldNameHint,
         border: const OutlineInputBorder(), // Add standard border
       ),
       validator: FormBuilderValidators.compose([
         FormBuilderValidators.required(
-          errorText: l10n.journeyFormFieldRequiredError,
+          errorText: l10n.projectFormFieldRequiredError,
         ), // Add error text
         FormBuilderValidators.minLength(
           3,
-          errorText: l10n.journeyFormFieldNameMinLengthError,
+          errorText: l10n.projectFormFieldNameMinLengthError,
         ),
       ]),
     );
@@ -369,14 +369,14 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     return FormBuilderTextField(
       name: _fieldDescription,
       decoration: InputDecoration(
-        labelText: l10n.journeyFormFieldDescLabel,
-        hintText: l10n.journeyFormFieldDescHint,
+        labelText: l10n.projectFormFieldDescLabel,
+        hintText: l10n.projectFormFieldDescHint,
         border: const OutlineInputBorder(), // Add standard border
       ),
       maxLines: 3,
       validator: FormBuilderValidators.maxLength(
         500,
-        errorText: l10n.journeyFormFieldDescMaxLengthError,
+        errorText: l10n.projectFormFieldDescMaxLengthError,
       ),
     );
   }
@@ -386,12 +386,12 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     return FormBuilderTextField(
       name: _fieldLocation,
       decoration: InputDecoration(
-        labelText: l10n.journeyFormFieldLocationLabel,
-        hintText: l10n.journeyFormFieldLocationHint,
+        labelText: l10n.projectFormFieldLocationLabel,
+        hintText: l10n.projectFormFieldLocationHint,
         border: const OutlineInputBorder(),
       ),
       validator: FormBuilderValidators.required(
-        errorText: l10n.journeyFormFieldRequiredError,
+        errorText: l10n.projectFormFieldRequiredError,
       ),
     );
   }
@@ -406,8 +406,8 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
             controller: _startDateDisplayController,
             readOnly: true,
             decoration: InputDecoration(
-              labelText: l10n.journeyFormFieldFromLabel,
-              hintText: l10n.journeyFormFieldFromHint,
+              labelText: l10n.projectFormFieldFromLabel,
+              hintText: l10n.projectFormFieldFromHint,
               border: const OutlineInputBorder(), // Add standard border
               suffixIcon: const Icon(Icons.calendar_today),
             ),
@@ -415,7 +415,7 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
             validator: (value) {
               // Validate the underlying _startDate
               if (_startDate == null) {
-                return l10n.journeyFormFieldRequiredError;
+                return l10n.projectFormFieldRequiredError;
               }
               return null; // Return null if valid
             },
@@ -428,8 +428,8 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
             controller: _endDateDisplayController,
             readOnly: true,
             decoration: InputDecoration(
-              labelText: l10n.journeyFormFieldTillLabel,
-              hintText: l10n.journeyFormFieldTillHint,
+              labelText: l10n.projectFormFieldTillLabel,
+              hintText: l10n.projectFormFieldTillHint,
               border: const OutlineInputBorder(), // Add standard border
               suffixIcon: const Icon(Icons.calendar_today),
             ),
@@ -437,10 +437,10 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
             validator: (value) {
               // Validate the underlying _endDate
               if (_endDate == null) {
-                return l10n.journeyFormFieldRequiredError;
+                return l10n.projectFormFieldRequiredError;
               }
               if (_startDate != null && _endDate!.isBefore(_startDate!)) {
-                return l10n.journeySaveInvalidDateRange;
+                return l10n.projectSaveInvalidDateRange;
               }
               return null; // Return null if valid
             },
@@ -454,25 +454,25 @@ class _CreateJourneyScreenState extends ConsumerState<CreateJourneyScreen> {
     return FormBuilderTextField(
       name: _fieldBudget,
       decoration: InputDecoration(
-        labelText: l10n.journeyFormFieldBudgetLabel,
-        hintText: l10n.journeyFormFieldBudgetHint,
+        labelText: l10n.projectFormFieldBudgetLabel,
+        hintText: l10n.projectFormFieldBudgetHint,
         border: const OutlineInputBorder(), // Add standard border
         prefixIcon: const Icon(Icons.attach_money), // Add money icon
       ),
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       inputFormatters: [
         // Allow digits and at most one decimal point
-        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*$')),
+        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d* ')),
       ],
       valueTransformer: (text) => num.tryParse(text ?? ''),
       validator: FormBuilderValidators.compose([
         // Budget is optional, so no required validator
         FormBuilderValidators.numeric(
-          errorText: l10n.journeyFormFieldNumericError,
+          errorText: l10n.projectFormFieldNumericError,
         ),
         FormBuilderValidators.min(
           0,
-          errorText: l10n.journeyFormFieldBudgetMinError,
+          errorText: l10n.projectFormFieldBudgetMinError,
         ),
       ]),
     );

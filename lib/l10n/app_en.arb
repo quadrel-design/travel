@@ -26,15 +26,15 @@
   "verificationErrorTitle": "Verification Error",
   "verificationErrorDesc": "Could not verify email. Please try again.",
 
-  "journeySaveErrorTitle": "Save Error",
-  "journeySaveSuccessTitle": "Journey Saved",
-  "journeySaveSuccessDesc": "Your new journey has been created.",
-  "journeySaveMissingInfoDesc": "Please fill in all required fields, including dates.",
-  "journeySaveInvalidDateRange": "End date cannot be before start date.",
-  "journeyDeleteSuccessDesc": "Journey deleted.",
-  "journeyDeleteErrorDesc": "Failed to delete journey: {error}",
-  "@journeyDeleteErrorDesc": {
-      "description": "Error message when deleting journey, includes details",
+  "projectSaveErrorTitle": "Save Error",
+  "projectSaveSuccessTitle": "Project Saved",
+  "projectSaveSuccessDesc": "Your new project has been created.",
+  "projectSaveMissingInfoDesc": "Please fill in all required fields, including dates.",
+  "projectSaveInvalidDateRange": "End date cannot be before start date.",
+  "projectDeleteSuccessDesc": "Project deleted.",
+  "projectDeleteErrorDesc": "Failed to delete project: {error}",
+  "@projectDeleteErrorDesc": {
+      "description": "Error message when deleting project, includes details",
       "placeholders": {
         "error": {
           "type": "Object"
@@ -53,47 +53,43 @@
   "settingsItemTimeManagement": "Time Management",
   "settingsItemLogout": "Logout",
 
-  "homeScreenNoJourneys": "No journeys yet! Start by adding one.",
+  "homeScreenNoProjects": "No projects yet! Start by adding one.",
   "homeScreenRetryButton": "Retry",
-  "homeScreenAddJourneyTooltip": "Add Journey",
-  "homeScreenRefreshTooltip": "Refresh Journeys",
+  "homeScreenAddProjectTooltip": "Add Project",
+  "homeScreenRefreshTooltip": "Refresh Projects",
 
-  "createJourneyTitle": "Create Journey",
-  "createJourneyErrorUserNotLoggedIn": "User not logged in. Cannot create journey.",
-  "saveButton": "Save Journey",
+  "createProjectTitle": "Create Project",
+  "createProjectErrorUserNotLoggedIn": "User not logged in. Cannot create project.",
+  "projectFormFieldNameLabel": "Project Name",
+  "projectFormFieldNameDesc": "Enter a descriptive name for your project.",
+  "projectFormFieldNameHint": "e.g., Summer Vacation in Italy",
+  "projectFormFieldRequiredError": "This field is required.",
+  "projectFormFieldNameMinLengthError": "Name must be at least 3 characters.",
+  "projectFormFieldFromLabel": "From",
+  "projectFormFieldFromHint": "Select start date",
+  "projectFormFieldTillLabel": "Till",
+  "projectFormFieldTillHint": "Select end date",
+  "projectFormFieldDescLabel": "Description",
+  "projectFormFieldDescDesc": "Add some details about your project plans.",
+  "projectFormFieldDescHint": "Describe your project...",
+  "projectFormFieldDescMaxLengthError": "Description too long (max 500 chars).",
+  "projectFormFieldLocationLabel": "Location",
+  "projectFormFieldLocationDesc": "Where is this project taking place?",
+  "projectFormFieldLocationHint": "Start typing a city or place...",
+  "projectFormFieldBudgetLabel": "Budget ($)",
+  "projectFormFieldBudgetDesc": "Estimated budget for the project.",
+  "projectFormFieldBudgetHint": "e.g., 2000",
+  "projectFormFieldNumericError": "Please enter a valid number.",
+  "projectFormFieldBudgetMinError": "Budget must be a positive number.",
 
-  "journeyFormFieldNameLabel": "Travel Name",
-  "journeyFormFieldNameDesc": "Enter a descriptive name for your trip.",
-  "journeyFormFieldNameHint": "e.g., Summer Vacation in Italy",
-  "journeyFormFieldRequiredError": "This field is required.",
-  "journeyFormFieldNameMinLengthError": "Name must be at least 3 characters.",
-  "journeyFormFieldFromLabel": "From",
-  "journeyFormFieldFromHint": "Select start date",
-  "journeyFormFieldTillLabel": "Till",
-  "journeyFormFieldTillHint": "Select end date",
-  "journeyFormFieldDescLabel": "Description",
-  "journeyFormFieldDescDesc": "Add some details about your travel plans.",
-  "journeyFormFieldDescHint": "Describe your journey...",
-  "journeyFormFieldDescMaxLengthError": "Description too long (max 500 chars).",
-  "journeyFormFieldLocationLabel": "Location",
-  "journeyFormFieldLocationDesc": "Where is this journey taking place?",
-  "journeyFormFieldLocationHint": "Start typing a city or place...",
-  "journeyFormFieldBudgetLabel": "Budget ($)",
-  "journeyFormFieldBudgetDesc": "Estimated budget for the trip.",
-  "journeyFormFieldBudgetHint": "e.g., 2000",
-  "journeyFormFieldNumericError": "Please enter a valid number.",
-  "journeyFormFieldBudgetMinError": "Budget must be a positive number.",
-
-  "detailScreenErrorMissingData": "Error: Journey data missing",
-
-  "journeyDetailInfoLabel": "Info",
-  "@journeyDetailInfoLabel": { "description": "Label for the Info tab in journey details" },
-  "journeyDetailExpensesLabel": "Expenses",
-  "@journeyDetailExpensesLabel": { "description": "Label for the Expenses tab in journey details" },
-  "journeyDetailParticipantsLabel": "Participants",
-  "@journeyDetailParticipantsLabel": { "description": "Label for the Participants tab in journey details" },
-  "journeyDetailImagesLabel": "Images",
-  "@journeyDetailImagesLabel": { "description": "Label for the Images tab in journey details" },
+  "projectDetailInfoLabel": "Info",
+  "@projectDetailInfoLabel": { "description": "Label for the Info tab in project details" },
+  "projectDetailExpensesLabel": "Expenses",
+  "@projectDetailExpensesLabel": { "description": "Label for the Expenses tab in project details" },
+  "projectDetailParticipantsLabel": "Participants",
+  "@projectDetailParticipantsLabel": { "description": "Label for the Participants tab in project details" },
+  "projectDetailImagesLabel": "Images",
+  "@projectDetailImagesLabel": { "description": "Label for the Images tab in project details" },
 
   "galleryTitle": "Gallery",
   "@galleryTitle": { "description": "Title for the image gallery page" },
@@ -242,46 +238,32 @@
   "@forgotPasswordButton": {
     "description": "Text for the forgot password button"
   },
-  "yourJourneysTitle": "Your Journeys",
-  "@yourJourneysTitle": {
-    "description": "Title for the home screen displaying the list of journeys"
+  "yourProjectsTitle": "Your Projects",
+  "@yourProjectsTitle": {
+    "description": "Title for the home screen displaying the list of projects"
   },
 
-  "journeySettingsTitle": "Journey Settings",
-  "@journeySettingsTitle": {
-    "description": "Title for the journey settings screen"
-  },
-  "journeyDeleteLabel": "Delete Journey",
-  "@journeyDeleteLabel": {
-    "description": "Label for the delete journey action"
-  },
-  "journeyDeleteConfirmTitle": "Confirm Deletion",
-  "@journeyDeleteConfirmTitle": {
-    "description": "Title for the delete confirmation dialog"
-  },
-  "journeyDeleteConfirmDesc": "Are you sure you want to delete the journey '{journeyTitle}'? This action cannot be undone.",
-  "@journeyDeleteConfirmDesc": {
-    "description": "Confirmation message asking the user to confirm journey deletion.",
+  "projectSettingsTitle": "Project Settings",
+  "@projectSettingsTitle": { "description": "Title for the project settings screen" },
+  "projectDeleteLabel": "Delete Project",
+  "@projectDeleteLabel": { "description": "Label for the delete project action" },
+  "projectDeleteConfirmTitle": "Confirm Deletion",
+  "@projectDeleteConfirmTitle": { "description": "Title for the delete confirmation dialog" },
+  "projectDeleteConfirmDesc": "Are you sure you want to delete the project '{projectTitle}'? This action cannot be undone.",
+  "@projectDeleteConfirmDesc": {
+    "description": "Confirmation message asking the user to confirm project deletion.",
     "placeholders": {
-      "journeyTitle": {
+      "projectTitle": {
         "type": "String",
         "example": "Trip to Paris"
       }
     }
   },
-  "cancelButton": "Cancel",
-  "@cancelButton": {
-    "description": "Generic cancel button text"
-  },
-  "deleteButton": "Delete",
-  "@deleteButton": {
-    "description": "Generic delete button text"
-  },
-  "journeyDeleteSuccess": "Journey '{journeyTitle}' deleted successfully.",
-  "@journeyDeleteSuccess": {
-    "description": "Success message shown after deleting a journey.",
+  "projectDeleteSuccess": "Project '{projectTitle}' deleted successfully.",
+  "@projectDeleteSuccess": {
+    "description": "Success message shown after deleting a project.",
     "placeholders": {
-      "journeyTitle": {
+      "projectTitle": {
         "type": "String",
         "example": "Trip to Paris"
       }
@@ -292,10 +274,14 @@
     "description": "Text indicating deletion is in progress"
   },
 
-  "cancelButtonLabel": "Cancel",
-  "@cancelButtonLabel": { "description": "Generic Cancel button label (alternative)" },
-  "deleteButtonLabel": "Delete" ,
-  "@deleteButtonLabel": { "description": "Generic Delete button label (alternative)" },
+  "cancelButton": "Cancel",
+  "@cancelButton": {
+    "description": "Generic cancel button text"
+  },
+  "deleteButton": "Delete",
+  "@deleteButton": {
+    "description": "Generic delete button text"
+  },
 
   "invoiceTotalLabel": "Total",
   "@invoiceTotalLabel": { "description": "Label for the total amount in the invoice summary bar" },
@@ -366,56 +352,31 @@
   "registerErrorEmailInUse": "Email is already in use",
   "@registerErrorEmailInUse": { "description": "Error message shown when email is already registered" },
 
-  "homeTitle": "My Journeys",
-  "@homeTitle": { "description": "Title for the home page showing journeys" },
+  "homeTitle": "My Projects",
+  "@homeTitle": { "description": "Title for the home page showing projects" },
 
-  "homeEmptyState": "No journeys yet",
-  "@homeEmptyState": { "description": "Message shown when there are no journeys" },
+  "homeEmptyState": "No projects yet",
+  "@homeEmptyState": { "description": "Message shown when there are no projects" },
 
-  "homeAddJourneyTooltip": "Add new journey",
-  "@homeAddJourneyTooltip": { "description": "Tooltip for the add journey FAB" },
+  "homeAddProjectTooltip": "Add new project",
+  "@homeAddProjectTooltip": { "description": "Tooltip for the add project FAB" },
 
-  "journeyTitleLabel": "Journey Title",
-  "@journeyTitleLabel": { "description": "Label for journey title input" },
-
-  "journeyDescriptionLabel": "Description",
-  "@journeyDescriptionLabel": { "description": "Label for journey description input" },
-
-  "journeyStartDateLabel": "Start Date",
-  "@journeyStartDateLabel": { "description": "Label for journey start date" },
-
-  "journeyEndDateLabel": "End Date",
-  "@journeyEndDateLabel": { "description": "Label for journey end date" },
-
-  "journeyLocationLabel": "Location",
-  "@journeyLocationLabel": { "description": "Label for journey location" },
-
-  "journeyCreateTitle": "New Journey",
-  "@journeyCreateTitle": { "description": "Title for journey creation page" },
-
-  "journeyCreateButtonLabel": "Create Journey",
-  "@journeyCreateButtonLabel": { "description": "Label for journey create button" },
-
-  "journeyEditTitle": "Edit Journey",
-  "@journeyEditTitle": { "description": "Title for journey edit page" },
-
-  "journeyEditButtonLabel": "Save Changes",
-  "@journeyEditButtonLabel": { "description": "Label for journey edit save button" },
-
-  "journeyDeleteConfirmTitle": "Delete Journey?",
-  "@journeyDeleteConfirmTitle": { "description": "Title for journey deletion confirmation dialog" },
-
-  "journeyDeleteConfirmMessage": "Are you sure you want to delete this journey? This action cannot be undone.",
-  "@journeyDeleteConfirmMessage": { "description": "Message in journey deletion confirmation dialog" },
-
-  "deleteButtonLabel": "Delete",
-  "@deleteButtonLabel": { "description": "Label for delete buttons" },
-
-  "cancelButtonLabel": "Cancel",
-  "@cancelButtonLabel": { "description": "Label for cancel buttons" },
-
-  "saveButtonLabel": "Save",
-  "@saveButtonLabel": { "description": "Label for save buttons" },
+  "projectTitleLabel": "Project Title",
+  "projectDescriptionLabel": "Description",
+  "projectStartDateLabel": "Start Date",
+  "projectEndDateLabel": "End Date",
+  "projectLocationLabel": "Location",
+  "projectCreateTitle": "New Project",
+  "projectCreateButtonLabel": "Create Project",
+  "projectEditTitle": "Edit Project",
+  "projectEditButtonLabel": "Save Changes",
+  "projectDeleteConfirmTitle": "Delete Project?",
+  "projectDeleteConfirmMessage": "Are you sure you want to delete this project? This action cannot be undone.",
+  "projectNotFound": "Project not found",
+  "projectSaveSuccess": "Project saved successfully",
+  "@projectSaveSuccess": {
+    "description": "Message shown when a project is saved successfully"
+  },
 
   "errorGeneric": "An error occurred",
   "@errorGeneric": { "description": "Generic error message" },
@@ -483,19 +444,14 @@
   "addInvoiceFromGalleryTooltip": "Add invoice from gallery",
   "@addInvoiceFromGalleryTooltip": { "description": "Tooltip for the FAB to add an invoice from the device gallery" },
 
-  "journeyNotFound": "Journey not found",
-  "@journeyNotFound": {
-    "description": "Message shown when a journey cannot be found"
-  },
-
-  "invoiceImages": "Journey Images",
+  "invoiceImages": "Project Images",
   "@invoiceImages": {
-    "description": "Title for the journey images section"
+    "description": "Title for the project images section"
   },
 
   "noImagesYet": "No images yet",
   "@noImagesYet": {
-    "description": "Message shown when there are no images in a journey"
+    "description": "Message shown when there are no images in a project"
   },
 
   "addImage": "Add Image",
@@ -503,9 +459,9 @@
     "description": "Label for the add image button"
   },
 
-  "journeySaveSuccess": "Journey saved successfully",
-  "@journeySaveSuccess": {
-    "description": "Message shown when a journey is saved successfully"
+  "projectSaveSuccess": "Project saved successfully",
+  "@projectSaveSuccess": {
+    "description": "Message shown when a project is saved successfully"
   },
 
   "save": "Save",

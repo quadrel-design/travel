@@ -11,25 +11,28 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:travel/providers/logging_provider.dart';
 
-import '../models/journey.dart';
+import '../models/project.dart';
 import '../models/invoice_capture_process.dart';
 
-class JourneyDetailScreen extends ConsumerWidget {
-  final Journey journey;
+class ProjectDetailScreen extends ConsumerWidget {
+  final Project project;
   final _dateFormat = DateFormat('dd/MM/yyyy');
 
-  JourneyDetailScreen({super.key, required this.journey});
+  ProjectDetailScreen({super.key, required this.project});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
 
-    // Watch the journey stream for real-time updates
-    final journeyStream = ref.watch(journeyStreamProvider(journey.id));
+    // Watch the project stream for real-time updates
+    final projectStream = ref.watch(projectStreamProvider(project.id));
 
-    // Watch the journey images stream
-    final imagesStream = ref.watch(invoiceImagesStreamProvider(journey.id));
+    // Watch the project images stream (requires both projectId and invoiceId)
+    final imagesStream = ref.watch(
+      invoiceImagesStreamProvider(
+          {'projectId': project.id, 'invoiceId': 'main'}),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -37,20 +40,20 @@ class JourneyDetailScreen extends ConsumerWidget {
           icon: const Icon(Icons.chevron_left),
           onPressed: () => context.pop(),
         ),
-        title: Text(journey.title),
+        title: Text(project.title),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () =>
-                context.push('${AppRoutes.journeySettings}/${journey.id}'),
+                context.push('${AppRoutes.projectSettings}/${project.id}'),
           ),
         ],
       ),
-      body: journeyStream.when(
-        data: (Journey? currentJourney) {
-          if (currentJourney == null) {
+      body: projectStream.when(
+        data: (Project? currentProject) {
+          if (currentProject == null) {
             return Center(
-              child: Text(l10n.journeyNotFound),
+              child: Text(l10n.projectNotFound),
             );
           }
 
@@ -64,27 +67,27 @@ class JourneyDetailScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        currentJourney.title,
+                        currentProject.title,
                         style: theme.textTheme.headlineMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        currentJourney.description,
+                        currentProject.description,
                         style: theme.textTheme.bodyLarge,
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Location: ${currentJourney.location}',
+                        'Location: ${currentProject.location}',
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Dates: ${_dateFormat.format(currentJourney.startDate)} - ${_dateFormat.format(currentJourney.endDate)}',
+                        'Dates: ${_dateFormat.format(currentProject.startDate)} - ${_dateFormat.format(currentProject.endDate)}',
                         style: theme.textTheme.bodyMedium,
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Budget: \$${currentJourney.budget.toStringAsFixed(2)}',
+                        'Budget: \$${currentProject.budget.toStringAsFixed(2)}',
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
@@ -154,7 +157,7 @@ class JourneyDetailScreen extends ConsumerWidget {
 
                                   return GestureDetector(
                                     onTap: () => context.push(
-                                      '${AppRoutes.invoiceImageDetail}/${currentJourney.id}/${image.id}',
+                                      '${AppRoutes.invoiceImageDetail}/${project.id}/${image.id}',
                                       extra: image,
                                     ),
                                     child: Hero(
@@ -208,8 +211,8 @@ class JourneyDetailScreen extends ConsumerWidget {
                                               right: 8,
                                               child: Container(
                                                 decoration: BoxDecoration(
-                                                  color: Colors.black
-                                                      .withOpacity(0.6),
+                                                  color: Colors.black.withAlpha(
+                                                      (0.5 * 255).toInt()),
                                                   shape: BoxShape.circle,
                                                 ),
                                                 child: IconButton(
@@ -255,14 +258,14 @@ class JourneyDetailScreen extends ConsumerWidget {
         ),
         error: (error, stack) => Center(
           child: Text(
-            'Error loading journey: $error',
+            'Error loading project: $error',
             style: TextStyle(color: theme.colorScheme.error),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () =>
-            context.push('${AppRoutes.invoiceCapture}/${journey.id}'),
+            context.push('${AppRoutes.invoiceCapture}/${project.id}'),
         tooltip: l10n.addImage,
         child: const Icon(Icons.add_a_photo),
       ),
@@ -281,7 +284,7 @@ class JourneyDetailScreen extends ConsumerWidget {
             .collection('users')
             .doc(FirebaseAuth.instance.currentUser!.uid)
             .collection('invoices')
-            .doc(journey.id)
+            .doc(project.id)
             .collection('images')
             .doc(image.id);
 
@@ -302,7 +305,7 @@ class JourneyDetailScreen extends ConsumerWidget {
 
       await callable.call({
         'imageUrl': image.url,
-        'invoiceId': journey.id,
+        'invoiceId': project.id,
         'imageId': image.id,
       });
 
@@ -329,7 +332,7 @@ class JourneyDetailScreen extends ConsumerWidget {
             .collection('users')
             .doc(FirebaseAuth.instance.currentUser!.uid)
             .collection('invoices')
-            .doc(journey.id)
+            .doc(project.id)
             .collection('images')
             .doc(image.id);
 

@@ -4,16 +4,16 @@ import 'package:travel/models/expense.dart';
 import 'package:intl/intl.dart';
 // import 'package:supabase_flutter/supabase_flutter.dart'; // Removed
 
-class ExpenseListScreen extends StatefulWidget {
-  final String journeyId;
+class ProjectExpensesScreen extends StatefulWidget {
+  final String projectId;
 
-  const ExpenseListScreen({super.key, required this.journeyId});
+  const ProjectExpensesScreen({super.key, required this.projectId});
 
   @override
-  State<ExpenseListScreen> createState() => _ExpenseListScreenState();
+  State<ProjectExpensesScreen> createState() => _ProjectExpensesScreenState();
 }
 
-class _ExpenseListScreenState extends State<ExpenseListScreen> {
+class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
   bool _isLoading = true;
   // Make _expenses final and initialize empty
   // The list will be replaced by the fetched data later
@@ -333,7 +333,7 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
 
               final newExpense = Expense(
                 id: 'temp-${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
-                journeyId:
+                projectId:
                     '', // Will be set by the caller in _addExpense (needs migration)
                 title: _title,
                 description: _description.isNotEmpty ? _description : null,

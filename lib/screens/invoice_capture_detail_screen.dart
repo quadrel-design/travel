@@ -20,27 +20,29 @@ InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
 }
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
-  final String journeyId;
+  final String projectId;
 
-  const InvoiceCaptureDetailScreen({super.key, required this.journeyId});
+  const InvoiceCaptureDetailScreen({super.key, required this.projectId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final journeyImagesAsyncValue =
-        ref.watch(invoiceImagesStreamProvider(journeyId));
+    final projectImagesAsyncValue = ref.watch(invoiceImagesStreamProvider({
+      'projectId': projectId,
+      'invoiceId': '', // Provide the correct invoiceId if available
+    }));
 
-    final journeyAsyncValue = ref.watch(journeyStreamProvider(journeyId));
+    final projectAsyncValue = ref.watch(projectStreamProvider(projectId));
 
     return Scaffold(
       appBar: AppBar(
-        title: journeyAsyncValue.when(
-          data: (journey) =>
-              Text('Invoices: ${journey?.title ?? "Loading..."}'),
+        title: projectAsyncValue.when(
+          data: (project) =>
+              Text('Invoices: ${project?.title ?? "Loading..."}'),
           loading: () => const Text('Invoices: Loading...'),
           error: (_, __) => const Text('Invoices'),
         ),
       ),
-      body: _buildBody(context, ref, journeyImagesAsyncValue),
+      body: _buildBody(context, ref, projectImagesAsyncValue),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _pickAndUploadImage(context, ref),
         heroTag: 'upload',
@@ -80,8 +82,10 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
               const Icon(Icons.error_outline, color: Colors.redAccent),
               const SizedBox(height: 4),
               ElevatedButton(
-                onPressed: () =>
-                    ref.invalidate(invoiceImagesStreamProvider(journeyId)),
+                onPressed: () => ref.invalidate(invoiceImagesStreamProvider({
+                  'projectId': projectId,
+                  'invoiceId': '', // Provide the correct invoiceId if available
+                })),
                 child: const Text('Retry', style: TextStyle(fontSize: 10)),
               ),
             ],
@@ -92,8 +96,8 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildBody(BuildContext context, WidgetRef ref,
-      AsyncValue<List<InvoiceCaptureProcess>> journeyImagesAsyncValue) {
-    return journeyImagesAsyncValue.when(
+      AsyncValue<List<InvoiceCaptureProcess>> projectImagesAsyncValue) {
+    return projectImagesAsyncValue.when(
       data: (images) {
         ref.read(loggerProvider).d(
             '[INVOICE_CAPTURE] Received ${images.length} images from stream');
@@ -143,7 +147,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                     context,
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
-                        journeyId: journeyId,
+                        projectId: projectId,
                         initialIndex: index,
                         images: images,
                       ),
@@ -172,7 +176,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
   Future<void> _deleteImage(BuildContext context, WidgetRef ref,
       InvoiceCaptureProcess imageInfo) async {
-    final repo = ref.read(journeyRepositoryProvider);
+    final repo = ref.read(projectRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -199,7 +203,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
     try {
       ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
-        journeyId,
+        projectId,
         imageInfo.id,
       );
       ref.read(loggerProvider).i("🗑️ Invoice deleted successfully");
@@ -220,7 +224,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _pickAndUploadImage(BuildContext context, WidgetRef ref) async {
-    final repo = ref.read(journeyRepositoryProvider);
+    final repo = ref.read(projectRepositoryProvider);
     final picker = ImagePicker();
 
     try {
@@ -240,7 +244,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
       ref.read(loggerProvider).d("📸 Starting repository upload...");
       final uploadResult =
-          await repo.uploadInvoiceImage(journeyId, fileBytes, fileName);
+          await repo.uploadInvoiceImage(projectId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
       ref
@@ -269,6 +273,6 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
       InvoiceCaptureProcess imageInfo) async {
-    await InvoiceScanUtil.scanImage(context, ref, journeyId, imageInfo);
+    await InvoiceScanUtil.scanImage(context, ref, projectId, imageInfo);
   }
 }

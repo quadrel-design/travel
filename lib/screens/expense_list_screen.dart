@@ -9,15 +9,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // Keep Riverpod import
 
 // Change to ConsumerWidget
 class ExpenseListScreen extends ConsumerWidget {
-  // Screen needs context about which Journey it belongs to.
-  final String journeyId;
+  // Screen needs context about which project it belongs to.
+  final String projectId;
 
-  const ExpenseListScreen({super.key, required this.journeyId});
+  const ExpenseListScreen({super.key, required this.projectId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // final detectedSumsAsync = ref.watch(detectedSumsProvider(journeyId)); // Comment this line
-    // final expensesAsync = ref.watch(expensesProvider(journeyId)); // Assuming this exists
+    // final detectedSumsAsync = ref.watch(detectedSumsProvider(projectId)); // Comment this line
+    // final expensesAsync = ref.watch(expensesProvider(projectId)); // Assuming this exists
 
     // Placeholder build method for now
     return Scaffold(
@@ -26,7 +26,7 @@ class ExpenseListScreen extends ConsumerWidget {
         child: Padding(
           padding: EdgeInsets.all(16.0),
           child: Text(
-            'Expense list and totals are temporarily unavailable while Journey features are being migrated.',
+            'Expense list and totals are temporarily unavailable while project features are being migrated.',
             textAlign: TextAlign.center,
           ),
         ),

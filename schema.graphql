@@ -1,17 +1,17 @@
 # This is a complete schema for the Travel App
-# It includes User and Journey types with all necessary fields and relationships
+# It includes User and Project types with all necessary fields and relationships
 
 type User @model @auth(rules: [{ allow: owner }]) {
   id: ID!
   email: String!
   name: String
   profileImageUrl: String
-  journeys: [Journey] @hasMany(indexName: "byUser", fields: ["id"])
+  projects: [Project] @hasMany(indexName: "byUser", fields: ["id"])
   createdAt: AWSDateTime!
   updatedAt: AWSDateTime!
 }
 
-type Journey @model @auth(rules: [{ allow: owner }]) {
+type Project @model @auth(rules: [{ allow: owner }]) {
   id: ID!
   title: String!
   description: String

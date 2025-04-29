@@ -22,10 +22,12 @@ import 'package:firebase_storage/firebase_storage.dart';
 
 import '../providers/logging_provider.dart';
 import 'package:travel/repositories/invoice_repository.dart';
-import 'package:travel/repositories/journey_repository.dart';
-import 'package:travel/models/journey.dart';
 import 'package:travel/repositories/firestore_invoice_repository.dart';
 import 'package:travel/repositories/firebase_auth_repository.dart';
+import 'package:travel/repositories/project_repository.dart';
+import 'package:travel/models/project.dart';
+import 'package:travel/models/expense.dart';
+import 'package:travel/repositories/expense_repository.dart';
 
 /// Provider for accessing the Firestore database instance.
 ///
@@ -77,12 +79,12 @@ final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
 /// This provider delivers a real-time stream of the authenticated user's invoices.
 /// The stream automatically updates when invoices are added, modified, or removed.
 final userInvoicesStreamProvider =
-    StreamProvider.autoDispose<List<Journey>>((ref) {
+    StreamProvider.autoDispose<List<Project>>((ref) {
   // Get the repository
   final repository = ref.watch(invoiceRepositoryProvider);
   // Return the stream from the repository method
   // Error handling should be done within the stream or by the UI watching this provider
-  return repository.fetchUserJourneys();
+  return repository.fetchUserProjects();
 });
 
 /// Stream provider for all images associated with an invoice.
@@ -91,18 +93,16 @@ final userInvoicesStreamProvider =
 /// The stream automatically updates when images are added, modified, or removed.
 ///
 /// Parameters:
-///   - invoiceId: The ID of the invoice to fetch images for
+///   - params: A map containing 'projectId' and 'invoiceId'
 final invoiceImagesStreamProvider = StreamProvider.autoDispose
-    .family<List<InvoiceCaptureProcess>, String>((ref, invoiceId) {
-  // Get the repository
+    .family<List<InvoiceCaptureProcess>, Map<String, String>>((ref, params) {
   final repository = ref.watch(invoiceRepositoryProvider);
-  // Get logger
   final logger = ref.watch(loggerProvider);
-  // *** Log Provider Execution ***
+  final projectId = params['projectId']!;
+  final invoiceId = params['invoiceId']!;
   logger.d(
-      '[PROVIDER] invoiceImagesStreamProvider executing for invoiceId: $invoiceId');
-  // Return the stream from the repository method
-  return repository.getInvoiceImagesStream(invoiceId);
+      '[PROVIDER] invoiceImagesStreamProvider executing for projectId: $projectId, invoiceId: $invoiceId');
+  return repository.getInvoiceImagesStream(projectId, invoiceId);
 });
 
 /// Stream provider for a single invoice by ID.
@@ -113,22 +113,31 @@ final invoiceImagesStreamProvider = StreamProvider.autoDispose
 /// Parameters:
 ///   - invoiceId: The ID of the invoice to stream
 final invoiceStreamProvider =
-    StreamProvider.family<Journey?, String>((ref, invoiceId) {
+    StreamProvider.family<Project?, String>((ref, invoiceId) {
   final repository = ref.watch(invoiceRepositoryProvider);
   final logger = ref.watch(loggerProvider);
   logger.d(
       '[PROVIDER] invoiceStreamProvider executing for invoiceId: $invoiceId');
-  return repository.getJourneyStream(invoiceId);
+  return repository.getProjectStream(invoiceId);
 });
 
-// TODO: Refactor codebase to use `invoice*Provider` names directly and remove these legacy aliases.
-// Legacy providers for backwards compatibility
-final journeyRepositoryProvider =
-    Provider<InvoiceRepository>((ref) => ref.watch(invoiceRepositoryProvider));
-final userJourneysStreamProvider = Provider<AsyncValue<List<Journey>>>(
-    (ref) => ref.watch(userInvoicesStreamProvider));
-final journeyStreamProvider = Provider.family<AsyncValue<Journey?>, String>(
-    (ref, id) => ref.watch(invoiceStreamProvider(id)));
+/// Stream provider for all expenses associated with an invoice.
+///
+/// This provider delivers a real-time stream of all expenses for a specific invoice.
+/// The stream automatically updates when expenses are added, modified, or removed.
+///
+/// Parameters:
+///   - params: A map containing 'projectId' and 'invoiceId'
+final expensesStreamProvider = StreamProvider.autoDispose
+    .family<List<Expense>, Map<String, String>>((ref, params) {
+  final repository = ref.watch(expenseRepositoryProvider);
+  final logger = ref.watch(loggerProvider);
+  final projectId = params['projectId']!;
+  final invoiceId = params['invoiceId']!;
+  logger.d(
+      '[PROVIDER] expensesStreamProvider executing for projectId: $projectId, invoiceId: $invoiceId');
+  return repository.getExpensesStream(projectId, invoiceId);
+});
 
 /// Provider for tracking the gallery upload state.
 ///
@@ -136,3 +145,25 @@ final journeyStreamProvider = Provider.family<AsyncValue<Journey?>, String>(
 /// operation is currently in progress. UI components can observe this state
 /// to show appropriate loading indicators.
 final galleryUploadStateProvider = StateProvider<bool>((ref) => false);
+
+final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
+  final firestore = ref.watch(firestoreProvider);
+  final auth = ref.watch(firebaseAuthProvider);
+  final logger = ref.watch(loggerProvider);
+  return ExpenseRepository(firestore: firestore, auth: auth, logger: logger);
+});
+
+// TODO: Refactor codebase to use `invoice*Provider` names directly and remove these legacy aliases.
+// Legacy providers for backwards compatibility
+final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  final firestore = ref.watch(firestoreProvider);
+  final storage = ref.watch(firebaseStorageProvider);
+  final auth = ref.watch(firebaseAuthProvider);
+  final logger = ref.watch(loggerProvider);
+
+  return FirestoreInvoiceRepository(firestore, storage, auth, logger);
+});
+final userProjectsStreamProvider = Provider<AsyncValue<List<Project>>>(
+    (ref) => ref.watch(userInvoicesStreamProvider));
+final projectStreamProvider = Provider.family<AsyncValue<Project?>, String>(
+    (ref, id) => ref.watch(invoiceStreamProvider(id)));

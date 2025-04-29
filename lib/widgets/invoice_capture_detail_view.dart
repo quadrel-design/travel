@@ -23,12 +23,12 @@ class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
   const InvoiceCaptureDetailView({
     super.key,
     this.initialIndex = 0,
-    required this.journeyId,
+    required this.projectId,
     required this.images,
   });
 
   final int initialIndex;
-  final String journeyId;
+  final String projectId;
   final List<InvoiceCaptureProcess> images;
 
   @override
@@ -64,7 +64,8 @@ class _InvoiceCaptureDetailViewState
   /// Handle scanning the current image
   Future<void> _handleScan(String imageId, String? imageUrl) async {
     if (!mounted) return;
-    final provider = invoiceCaptureProvider(widget.journeyId);
+    final provider = invoiceCaptureProvider(
+        (projectId: widget.projectId, invoiceId: 'main'));
 
     // Check if a scan is already in progress
     if (ref.read(provider).scanningImageId != null) {
@@ -79,9 +80,9 @@ class _InvoiceCaptureDetailViewState
     ref.read(provider.notifier).initiateScan(imageId);
 
     // Show OCR Started chip
-    final repository = ref.read(journeyRepositoryProvider);
+    final repository = ref.read(projectRepositoryProvider);
     await repository.updateImageWithOcrResults(
-      widget.journeyId,
+      widget.projectId,
       imageId,
       isInvoice: false,
       status: 'ocr_running',
@@ -93,7 +94,7 @@ class _InvoiceCaptureDetailViewState
       if (mounted) {
         _logger.e('[INVOICE_CAPTURE] OCR timed out after 60 seconds');
         repository.updateImageWithOcrResults(
-          widget.journeyId,
+          widget.projectId,
           imageId,
           isInvoice: false,
           status: 'Error',
@@ -140,7 +141,7 @@ class _InvoiceCaptureDetailViewState
 
       final result = await functionsService.scanImage(
         urlToDownload,
-        widget.journeyId,
+        widget.projectId,
         imageId,
       );
 
@@ -168,7 +169,7 @@ class _InvoiceCaptureDetailViewState
 
       // Update status to Error
       await repository.updateImageWithOcrResults(
-        widget.journeyId,
+        widget.projectId,
         imageId,
         isInvoice: false,
         status: 'Error',
@@ -213,7 +214,7 @@ class _InvoiceCaptureDetailViewState
   Future<void> _processAndStoreScanResults(
       Map<String, dynamic> result, String imageId) async {
     // Store the OCR results using the repository
-    final repository = ref.read(journeyRepositoryProvider);
+    final repository = ref.read(projectRepositoryProvider);
     final status = result['status'] as String? ?? 'Text';
 
     // Extract invoice analysis data if available
@@ -249,7 +250,7 @@ class _InvoiceCaptureDetailViewState
 
     // Update the repository with all the processed data
     await repository.updateImageWithOcrResults(
-      widget.journeyId,
+      widget.projectId,
       imageId,
       isInvoice: isInvoice,
       status: status,
@@ -430,7 +431,8 @@ class _InvoiceCaptureDetailViewState
   @override
   Widget build(BuildContext context) {
     final images = widget.images;
-    final provider = invoiceCaptureProvider(widget.journeyId);
+    final provider = invoiceCaptureProvider(
+        (projectId: widget.projectId, invoiceId: 'main'));
     final state = ref.watch(provider);
     final isScanning = state.scanningImageId != null;
 
@@ -501,7 +503,7 @@ class _InvoiceCaptureDetailViewState
               try {
                 await functionsService.analyzeImage(
                   imageInfo.extractedText!,
-                  widget.journeyId,
+                  widget.projectId,
                   imageInfo.id,
                 );
                 // Wait a moment for Firestore to update
@@ -717,7 +719,7 @@ class _InvoiceCaptureDetailViewState
   }
 
   Future<void> _handleDelete() async {
-    final repository = ref.read(journeyRepositoryProvider);
+    final repository = ref.read(projectRepositoryProvider);
     final images = widget.images;
 
     if (!mounted) return;
@@ -745,11 +747,11 @@ class _InvoiceCaptureDetailViewState
     final String fileName = p.basename(imagePathToDelete);
 
     _logger.i(
-        'Attempting delete via repository for journey ${widget.journeyId}, image $imageIdToDelete, filename $fileName');
+        'Attempting delete via repository for project ${widget.projectId}, image $imageIdToDelete, filename $fileName');
 
     try {
       await repository.deleteInvoiceImage(
-        widget.journeyId,
+        widget.projectId,
         images[currentIndex].id,
       );
       _logger.i(

@@ -25,7 +25,7 @@ void main() {
     container = ProviderContainer(
       overrides: [
         loggerProvider.overrideWithValue(mockLogger),
-        journeyRepositoryProvider.overrideWithValue(mockRepository),
+        projectRepositoryProvider.overrideWithValue(mockRepository),
       ],
     );
   });
@@ -54,7 +54,7 @@ void main() {
         container: container,
         child: MaterialApp(
           home: InvoiceCaptureDetailView(
-            journeyId: 'test-journey',
+            projectId: 'test-project',
             images: testImages,
             initialIndex: 0,
           ),
@@ -73,7 +73,7 @@ void main() {
         container: container,
         child: const MaterialApp(
           home: InvoiceCaptureDetailView(
-            journeyId: 'test-journey',
+            projectId: 'test-project',
             images: [],
             initialIndex: 0,
           ),
@@ -99,7 +99,7 @@ void main() {
         container: container,
         child: MaterialApp(
           home: InvoiceCaptureDetailView(
-            journeyId: 'test-journey',
+            projectId: 'test-project',
             images: testImages,
             initialIndex: 0,
           ),

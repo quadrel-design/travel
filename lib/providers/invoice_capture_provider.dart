@@ -2,7 +2,7 @@
  * Invoice Capture Provider
  * 
  * This file defines state management for the invoice capture feature.
- * It handles loading journey images, tracking scan status, managing errors,
+ * It handles loading project images, tracking scan status, managing errors,
  * and coordinating the OCR and analysis process.
  * 
  * The providers in this file are essential for the invoice capture workflow,
@@ -21,11 +21,11 @@ import 'package:travel/providers/repository_providers.dart';
 /// State class for the invoice capture feature.
 ///
 /// Tracks the current state of invoice scanning and processing, including:
-/// - List of journey images
+/// - List of project images
 /// - Scanning status and errors
 /// - General errors that might occur during the process
 class InvoiceCaptureState extends Equatable {
-  /// List of images associated with the journey
+  /// List of images associated with the project
   final List<InvoiceCaptureProcess> images;
 
   /// Map of image IDs to error messages for scan operations
@@ -78,56 +78,55 @@ class InvoiceCaptureState extends Equatable {
 /// StateNotifier that manages invoice capture state and operations.
 ///
 /// Handles:
-/// - Loading journey images
+/// - Loading project images
 /// - Tracking scan status
 /// - Managing scan errors
 /// - Updating scan status for specific images
 class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   final Logger _logger;
-  final String _journeyId;
+  final String _projectId;
+  final String _invoiceId;
   final Ref _ref;
   StreamSubscription<List<InvoiceCaptureProcess>>? _imageStreamSubscription;
 
-  /// Creates a new InvoiceCaptureNotifier for the specified journey.
-  ///
-  /// Automatically loads initial images upon creation.
+  /// Creates a new InvoiceCaptureNotifier for the specified project and invoice.
   ///
   /// Parameters:
-  ///   - _journeyId: The ID of the journey to load images from
+  ///   - _projectId: The ID of the project to load images from
+  ///   - _invoiceId: The ID of the invoice to load images from
   ///   - _logger: Logger instance for tracking operations
   ///   - _ref: Riverpod Ref for reading other providers
-  ///   - _ref: Reference to the Riverpod provider context
-  InvoiceCaptureNotifier(this._journeyId, this._logger, this._ref)
+  InvoiceCaptureNotifier(
+      this._projectId, this._invoiceId, this._logger, this._ref)
       : super(const InvoiceCaptureState()) {
-    _logger.i('InvoiceCaptureNotifier initialized for journeyId: $_journeyId');
+    _logger.i(
+        'InvoiceCaptureNotifier initialized for projectId: $_projectId, invoiceId: $_invoiceId');
     _loadInitialImages();
   }
 
-  /// Loads the initial set of images for this journey.
-  ///
-  /// Sets up a stream subscription that keeps the state updated with the latest images.
+  /// Loads the initial set of images for this project and invoice.
   Future<void> _loadInitialImages() async {
     try {
-      _logger.d('Loading initial images for journey $_journeyId');
+      _logger.d(
+          'Loading initial images for project $_projectId, invoice $_invoiceId');
       final repository = _ref.read(invoiceRepositoryProvider);
-
       _imageStreamSubscription =
-          repository.getInvoiceImagesStream(_journeyId).listen(
+          repository.getInvoiceImagesStream(_projectId, _invoiceId).listen(
         (images) {
-          _logger.d('Received ${images.length} images from stream');
+          _logger.d('Received \\${images.length} images from stream');
           state = state.copyWith(images: images);
         },
         onError: (error, stackTrace) {
           _logger.e('[INVOICE_CAPTURE] Error in image stream:', error: error);
           state = state.copyWith(
-            generalError: 'Failed to load images: ${error.toString()}',
+            generalError: 'Failed to load images: \\${error.toString()}',
           );
         },
       );
     } catch (e) {
       _logger.e('[INVOICE_CAPTURE] Error loading initial images:', error: e);
       state = state.copyWith(
-        generalError: 'Failed to load images: ${e.toString()}',
+        generalError: 'Failed to load images: \\${e.toString()}',
       );
     }
   }
@@ -170,29 +169,33 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
 
   @override
   void dispose() {
-    _logger.d('Disposing InvoiceCaptureNotifier for journeyId: $_journeyId');
+    _logger.d(
+        'Disposing InvoiceCaptureNotifier for projectId: $_projectId, invoiceId: $_invoiceId');
     _imageStreamSubscription?.cancel();
     super.dispose();
   }
 }
 
-/// Provider for managing invoice capture state for a specific journey.
+/// Provider for managing invoice capture state for a specific project and invoice.
 ///
 /// This provider creates and maintains a StateNotifier that manages all aspects
-/// of the invoice capture process for a given journey ID, including:
+/// of the invoice capture process for a given project ID and invoice ID, including:
 /// - Image loading and tracking
 /// - OCR scanning status
 /// - Error handling
 /// - State updates
 ///
 /// Parameters:
-///   - journeyId: The ID of the journey to manage invoice capture for
+///   - projectId: The ID of the project to manage invoice capture for
+///   - invoiceId: The ID of the invoice to manage invoice capture for
 ///
-/// Usage: `final captureState = ref.watch(invoiceCaptureProvider(journeyId));`
-final invoiceCaptureProvider = StateNotifierProvider.autoDispose
-    .family<InvoiceCaptureNotifier, InvoiceCaptureState, String>(
-  (ref, journeyId) {
+/// Usage: `final captureState = ref.watch(invoiceCaptureProvider(projectId, invoiceId));`
+final invoiceCaptureProvider = StateNotifierProvider.autoDispose.family<
+    InvoiceCaptureNotifier,
+    InvoiceCaptureState,
+    ({String projectId, String invoiceId})>(
+  (ref, ids) {
     final logger = ref.watch(loggerProvider);
-    return InvoiceCaptureNotifier(journeyId, logger, ref);
+    return InvoiceCaptureNotifier(ids.projectId, ids.invoiceId, logger, ref);
   },
 );

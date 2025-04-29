@@ -1,8 +1,8 @@
 /// Home Screen
 ///
 /// Displays the main home screen after login, showing a list of the user's
-/// journeys/invoices fetched via a stream provider. Allows navigation to
-/// journey details, settings, and creating new journeys.
+/// projects/invoices fetched via a stream provider. Allows navigation to
+/// project details, settings, and creating new projects.
 library;
 
 import 'package:flutter/material.dart';
@@ -12,11 +12,12 @@ import 'package:intl/intl.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
+import 'package:travel/models/project.dart';
 
 // Change to ConsumerWidget (or ConsumerStatefulWidget if other state needed later)
 /// The main screen displayed after successful login.
-/// Shows a list of the user's journeys/invoices fetched from Firestore
-/// using the [userJourneysStreamProvider].
+/// Shows a list of the user's projects/invoices fetched from Firestore
+/// using the [userProjectsStreamProvider].
 class HomeScreen extends ConsumerWidget {
   // Changed to ConsumerWidget
   const HomeScreen({super.key});
@@ -27,20 +28,20 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the new stream provider
-    final journeysAsyncValue = ref.watch(userJourneysStreamProvider);
+    final projectsAsyncValue = ref.watch(userProjectsStreamProvider);
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final dateFormat = DateFormat('dd/MM/yyyy'); // Local instance if needed
 
     // Helper for navigation, still needed
-    void goToCreateJourney() {
-      context.push(AppRoutes.createJourney);
+    void goToCreateProject() {
+      context.push(AppRoutes.createProject);
       // No need to manually refresh anymore, stream provider handles updates
     }
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(l10n.yourJourneysTitle),
+        title: Text(l10n.yourProjectsTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined),
@@ -51,32 +52,32 @@ class HomeScreen extends ConsumerWidget {
         ],
       ),
       // Use AsyncValue.when to handle loading/error/data states
-      body: journeysAsyncValue.when(
-        data: (journeys) {
-          if (journeys.isEmpty) {
-            return Center(child: Text(l10n.homeScreenNoJourneys));
+      body: projectsAsyncValue.when(
+        data: (projects) {
+          if (projects.isEmpty) {
+            return Center(child: Text(l10n.homeScreenNoProjects));
           }
           // Build the list view if data is available
           return ListView.builder(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: journeys.length,
+            itemCount: projects.length,
             itemBuilder: (context, index) {
-              final journey = journeys[index];
+              final project = projects[index];
               final dateRange =
-                  '${dateFormat.format(journey.startDate)} - ${dateFormat.format(journey.endDate)}';
-              final subtitleText = '${journey.description}\n$dateRange';
+                  '${dateFormat.format(project.startDate)} - ${dateFormat.format(project.endDate)}';
+              final subtitleText = '${project.description}\n$dateRange';
 
               return Card(
                 child: ListTile(
-                  title: Text(journey.title),
+                  title: Text(project.title),
                   subtitle: Text(subtitleText),
                   isThreeLine: true,
                   onTap: () {
                     // Construct the path for the nested route
-                    final journeyDetailPath =
-                        AppRoutes.journeyDetail.split('/').last;
-                    context.push('/home/$journeyDetailPath/${journey.id}',
-                        extra: journey);
+                    final projectDetailPath =
+                        AppRoutes.projectDetail.split('/').last;
+                    context.push('/home/$projectDetailPath/${project.id}',
+                        extra: project);
                   },
                 ),
               );
@@ -86,17 +87,17 @@ class HomeScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stack) {
           // Consider logging the error stack here
-          // ref.read(loggerProvider).e('Error loading journeys', error: error, stackTrace: stack);
+          // ref.read(loggerProvider).e('Error loading projects', error: error, stackTrace: stack);
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Error loading journeys: $error',
+                Text('Error loading projects: $error',
                     style: TextStyle(color: theme.colorScheme.error)),
                 const SizedBox(height: 10),
                 ElevatedButton(
                   // Refresh logic might need reconsideration - ref.refresh might work
-                  onPressed: () => ref.refresh(userJourneysStreamProvider),
+                  onPressed: () => ref.refresh(userProjectsStreamProvider),
                   child: Text(l10n.homeScreenRetryButton),
                 )
               ],
@@ -105,8 +106,8 @@ class HomeScreen extends ConsumerWidget {
         },
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: goToCreateJourney,
-        tooltip: l10n.homeScreenAddJourneyTooltip,
+        onPressed: goToCreateProject,
+        tooltip: l10n.homeScreenAddProjectTooltip,
         child: const Icon(Icons.add),
       ),
     );

@@ -2,7 +2,7 @@
  * Invoice Capture Process Model
  *
  * This file defines the InvoiceCaptureProcess model which represents an image
- * associated with a journey, including its metadata and any extracted information
+ * associated with a project, including its metadata and any extracted information
  * such as text, invoice data, and processing status.
  */
 
@@ -13,7 +13,7 @@ import 'dart:convert';
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:travel/providers/logging_provider.dart';
 
-/// Represents an image associated with a journey and its metadata.
+/// Represents an image associated with a project and its metadata.
 ///
 /// This model stores information about images including their storage path,
 /// extracted data from OCR processing, and status information.

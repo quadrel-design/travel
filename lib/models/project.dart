@@ -1,7 +1,7 @@
 /*
- * Journey Model
+ * Project Model
  *
- * This file defines the Journey model which represents a travel journey with
+ * This file defines the Project model which represents a travel project with
  * details such as destination, dates, budget, and completion status.
  * It includes serialization methods for JSON and Firestore compatibility.
  */
@@ -10,43 +10,43 @@
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 
-/// Represents a travel journey with its associated details.
+/// Represents a travel project with its associated details.
 ///
-/// A Journey is the core entity in the travel app, representing a trip with
+/// A Project is the core entity in the travel app, representing a trip with
 /// start and end dates, budget information, and other metadata.
 @immutable
-class Journey extends Equatable {
-  /// Unique identifier for the journey
+class Project extends Equatable {
+  /// Unique identifier for the project
   final String id;
 
-  /// ID of the user who owns this journey
+  /// ID of the user who owns this project
   final String userId;
 
-  /// Title/name of the journey
+  /// Title/name of the project
   final String title;
 
-  /// Detailed description of the journey
+  /// Detailed description of the project
   final String description;
 
-  /// Location/destination of the journey
+  /// Location/destination of the project
   final String location;
 
-  /// Start date of the journey
+  /// Start date of the project
   final DateTime startDate;
 
-  /// End date of the journey
+  /// End date of the project
   final DateTime endDate;
 
-  /// Planned budget for the journey
+  /// Planned budget for the project
   final double budget;
 
-  /// Whether the journey has been completed
+  /// Whether the project has been completed
   final bool isCompleted;
 
-  /// Creates a new Journey instance.
+  /// Creates a new Project instance.
   ///
   /// All parameters except [isCompleted] are required.
-  const Journey({
+  const Project({
     required this.id,
     required this.userId,
     required this.title,
@@ -58,11 +58,11 @@ class Journey extends Equatable {
     required this.isCompleted,
   });
 
-  /// Creates a Journey instance from a JSON map.
+  /// Creates a Project instance from a JSON map.
   ///
   /// Handles various edge cases like missing fields and invalid date formats.
-  /// Returns a Journey with default values for missing or invalid fields.
-  factory Journey.fromJson(Map<String, dynamic> json) {
+  /// Returns a Project with default values for missing or invalid fields.
+  factory Project.fromJson(Map<String, dynamic> json) {
     final startDateStr = json['start_date'];
     final endDateStr = json['end_date'];
 
@@ -73,7 +73,7 @@ class Journey extends Equatable {
         final parsedDate = DateTime.tryParse(dateValue);
         if (parsedDate == null) {
           // WARNING: Failed to parse date string, using fallback
-          // print('WARNING [Journey.fromJson]: Failed to parse date string: "$dateValue", using fallback.');
+          // print('WARNING [Project.fromJson]: Failed to parse date string: "$dateValue", using fallback.');
           return fallback;
         }
         return parsedDate;
@@ -81,12 +81,12 @@ class Journey extends Equatable {
       // Log if the value is not null and not a string
       if (dateValue != null) {
         // WARNING: Unexpected type for date field, using fallback
-        // print('WARNING [Journey.fromJson]: Unexpected type for date field: ${dateValue.runtimeType}, value: "$dateValue", using fallback.');
+        // print('WARNING [Project.fromJson]: Unexpected type for date field: ${dateValue.runtimeType}, value: "$dateValue", using fallback.');
       }
       return fallback;
     }
 
-    return Journey(
+    return Project(
       id: json['id'] as String? ?? '',
       userId: json['user_id'] as String? ?? '',
       title: json['title'] as String? ?? '',
@@ -100,7 +100,7 @@ class Journey extends Equatable {
     );
   }
 
-  /// Converts this Journey instance to a JSON map.
+  /// Converts this Project instance to a JSON map.
   ///
   /// The resulting map uses snake_case keys to match the API/database conventions.
   /// Note that the 'id' field is not included as it's typically managed by the database.
@@ -117,10 +117,10 @@ class Journey extends Equatable {
     };
   }
 
-  /// Creates a copy of this Journey with the given fields replaced with new values.
+  /// Creates a copy of this Project with the given fields replaced with new values.
   ///
-  /// This is useful for updating a Journey without modifying the original instance.
-  Journey copyWith({
+  /// This is useful for updating a Project without modifying the original instance.
+  Project copyWith({
     String? id,
     String? userId,
     String? title,
@@ -131,7 +131,7 @@ class Journey extends Equatable {
     double? budget,
     bool? isCompleted,
   }) {
-    return Journey(
+    return Project(
       id: id ?? this.id,
       userId: userId ?? this.userId,
       title: title ?? this.title,
@@ -157,19 +157,19 @@ class Journey extends Equatable {
         isCompleted,
       ];
 
-  /// Creates a Journey instance from a Map<String, dynamic>.
+  /// Creates a Project instance from a Map<String, dynamic>.
   ///
-  /// This method handles error cases gracefully, returning a default Journey
+  /// This method handles error cases gracefully, returning a default Project
   /// with error indicators if parsing fails.
   ///
   /// Differs from fromJson in that it expects specific formats for certain fields
   /// and provides different defaults.
-  factory Journey.fromMap(Map<String, dynamic> map) {
+  factory Project.fromMap(Map<String, dynamic> map) {
     try {
-      return Journey(
+      return Project(
         id: map['id'] ?? '',
         userId: map['user_id'] ?? '',
-        title: map['title'] ?? 'Untitled Journey',
+        title: map['title'] ?? 'Untitled Project',
         description: map['description'] ?? '',
         location: map['location'] ?? 'Unknown',
         startDate: map['start_date'] != null
@@ -182,12 +182,12 @@ class Journey extends Equatable {
         isCompleted: map['is_completed'] ?? false,
       );
     } catch (e) {
-      // In case of parsing errors, return a default Journey with error indicators
-      return Journey(
+      // In case of parsing errors, return a default Project with error indicators
+      return Project(
         id: map['id'] ?? '',
         userId: map['user_id'] ?? '',
-        title: 'Error Loading Journey',
-        description: 'Error loading journey data.',
+        title: 'Error Loading Project',
+        description: 'Error loading project data.',
         location: 'Unknown',
         startDate: DateTime.now(),
         endDate: DateTime.now().add(const Duration(days: 7)),
@@ -197,12 +197,12 @@ class Journey extends Equatable {
     }
   }
 
-  /// Creates a string representation of this Journey.
+  /// Creates a string representation of this Project.
   ///
   /// Useful for debugging and logging.
   @override
   String toString() {
-    return 'Journey(id: $id, title: $title, location: $location, '
+    return 'Project(id: $id, title: $title, location: $location, '
         'startDate: $startDate, endDate: $endDate, budget: $budget, '
         'isCompleted: $isCompleted)';
   }

@@ -81,7 +81,7 @@ Key fields involved in this workflow:
 
 - All Cloud Functions and client code now use `invoiceId` as the standard field/parameter name for invoice-related operations.
 - All function calls, Firestore paths, and UI logic expect and use `invoiceId` and `imageId`.
-- Any previous references to `journeyId` for invoices have been renamed to `invoiceId` for clarity and consistency.
+- Any previous references to `projectsId` for invoices have been renamed to `invoiceId` for clarity and consistency.
 
 ## UI Status Handling
 
@@ -146,7 +146,7 @@ The application now uses a centralized utility class `InvoiceScanUtil` to handle
 // Example usage from any screen
 Future<void> _scanImage(BuildContext context, WidgetRef ref,
     InvoiceCaptureProcess imageInfo) async {
-  await InvoiceScanUtil.scanImage(context, ref, journeyId, imageInfo);
+  await InvoiceScanUtil.scanImage(context, ref, projectsId, imageInfo);
 }
 ```
 

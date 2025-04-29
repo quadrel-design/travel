@@ -13,7 +13,7 @@ class InvoiceScanUtil {
   static Future<void> manuallyUpdateOcrResults(
       BuildContext context,
       WidgetRef ref,
-      String journeyId,
+      String projectId,
       String imageId,
       Map<String, dynamic> resultData) async {
     final logger = ref.read(loggerProvider);
@@ -26,7 +26,7 @@ class InvoiceScanUtil {
           .collection('users')
           .doc(userId)
           .collection('invoices')
-          .doc(journeyId)
+          .doc(projectId)
           .collection('images')
           .doc(imageId);
 
@@ -89,12 +89,12 @@ class InvoiceScanUtil {
   }
 
   static Future<void> scanImage(BuildContext context, WidgetRef ref,
-      String journeyId, InvoiceCaptureProcess imageInfo) async {
+      String projectId, InvoiceCaptureProcess imageInfo) async {
     final logger = ref.read(loggerProvider);
     try {
       logger.d("🔍 Starting OCR scan for image ${imageInfo.id}...");
       logger.d("🔍 Image URL: ${imageInfo.url}");
-      logger.d("🔍 Journey ID: $journeyId");
+      logger.d("🔍 Project ID: $projectId");
       logger.d("🔍 Image ID: ${imageInfo.id}");
 
       // Immediately show feedback to user
@@ -113,12 +113,12 @@ class InvoiceScanUtil {
             .collection('users')
             .doc(userId)
             .collection('invoices')
-            .doc(journeyId)
+            .doc(projectId)
             .collection('images')
             .doc(imageInfo.id);
 
         logger.d(
-            "🔍 Updating document at path: /users/$userId/invoices/$journeyId/images/${imageInfo.id}");
+            "🔍 Updating document at path: /users/$userId/invoices/$projectId/images/${imageInfo.id}");
 
         await docRef.update({
           'status': 'ocr_running',
@@ -145,11 +145,11 @@ class InvoiceScanUtil {
 
       final params = {
         'imageUrl': imageInfo.url,
-        'invoiceId': journeyId,
+        'invoiceId': projectId,
         'imageId': imageInfo.id,
       };
       print(
-          'Calling detectImage with invoiceId: $journeyId, imageId: ${imageInfo.id}, imageUrl: ${imageInfo.url}');
+          'Calling detectImage with invoiceId: $projectId, imageId: ${imageInfo.id}, imageUrl: ${imageInfo.url}');
       logger.d("🔍 Function parameters: $params");
 
       final result = await callable.call(params);
@@ -226,7 +226,7 @@ class InvoiceScanUtil {
             .collection('users')
             .doc(userId)
             .collection('invoices')
-            .doc(journeyId)
+            .doc(projectId)
             .collection('images')
             .doc(imageInfo.id);
 
@@ -261,7 +261,7 @@ class InvoiceScanUtil {
           // Manually update the document with OCR results
           if (result.data is Map) {
             await InvoiceScanUtil.manuallyUpdateOcrResults(context, ref,
-                journeyId, imageInfo.id, result.data as Map<String, dynamic>);
+                projectId, imageInfo.id, result.data as Map<String, dynamic>);
           } else {
             // Try to convert non-map data to a map
             final fallbackMap = <String, dynamic>{
@@ -270,7 +270,7 @@ class InvoiceScanUtil {
               'confidence': 0.0
             };
             await InvoiceScanUtil.manuallyUpdateOcrResults(
-                context, ref, journeyId, imageInfo.id, fallbackMap);
+                context, ref, projectId, imageInfo.id, fallbackMap);
           }
         } else {
           logger
@@ -283,10 +283,10 @@ class InvoiceScanUtil {
         // Still try to manually update if verification failed
         if (result.data is Map) {
           await InvoiceScanUtil.manuallyUpdateOcrResults(context, ref,
-              journeyId, imageInfo.id, result.data as Map<String, dynamic>);
+              projectId, imageInfo.id, result.data as Map<String, dynamic>);
         } else {
           await InvoiceScanUtil.manuallyUpdateOcrResults(
-              context, ref, journeyId, imageInfo.id, {'status': 'unknown'});
+              context, ref, projectId, imageInfo.id, {'status': 'unknown'});
         }
       }
 
@@ -331,7 +331,7 @@ class InvoiceScanUtil {
             .collection('users')
             .doc(FirebaseAuth.instance.currentUser!.uid)
             .collection('invoices')
-            .doc(journeyId)
+            .doc(projectId)
             .collection('images')
             .doc(imageInfo.id);
 

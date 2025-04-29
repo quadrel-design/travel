@@ -37,7 +37,7 @@ class InvoiceScanService {
   /// Parameters:
   ///  - [imageId]: The unique ID of the image document in Firestore.
   ///  - [imageUrl]: The URL of the image to be scanned.
-  ///  - [journeyId]: The ID of the parent invoice/journey document.
+  ///  - [projectId]: The ID of the parent invoice/project document.
   ///  - [onScanComplete]: A callback function executed after processing (success or failure).
   ///
   /// Returns: A [Map<String, dynamic>] containing the result from the Cloud Function
@@ -45,7 +45,7 @@ class InvoiceScanService {
   Future<Map<String, dynamic>> scanImage({
     required String imageId,
     required String imageUrl,
-    required String journeyId,
+    required String projectId,
     required VoidCallback onScanComplete,
   }) async {
     Map<String, dynamic> result = {'success': false};
@@ -59,13 +59,13 @@ class InvoiceScanService {
           .i('Calling Firebase Cloud Function for scanning image ID: $imageId');
       result = await _functionsService.scanImage(
         imageUrl,
-        journeyId,
+        projectId,
         imageId, // Pass necessary parameters
       );
 
       _logger.i('Scan completed for $imageId: ${result['success']}');
       // Since the functions service now throws on failure, this point means success.
-      await _processSuccessfulScan(journeyId, imageId, result);
+      await _processSuccessfulScan(projectId, imageId, result);
 
       onScanComplete();
       return result;
@@ -96,7 +96,7 @@ class InvoiceScanService {
   /// Processes the results from a successful Cloud Function scan call.
   /// Extracts relevant data, validates location, and updates the repository.
   Future<void> _processSuccessfulScan(
-      String journeyId, String imageId, Map<String, dynamic> result) async {
+      String projectId, String imageId, Map<String, dynamic> result) async {
     // Extract basic data
     final status = result['status'] as String? ?? 'Text';
 
@@ -124,7 +124,7 @@ class InvoiceScanService {
 
     // Update the repository
     await _repository.updateImageWithOcrResults(
-      journeyId,
+      projectId,
       imageId,
       isInvoice: isInvoice,
       status: status,

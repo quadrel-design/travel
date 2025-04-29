@@ -3,7 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:travel/models/journey.dart';
+import 'package:travel/models/project.dart';
 import '../models/invoice_capture_process.dart';
 import '../models/invoice_capture_status.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,8 +25,8 @@ InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
 }
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
-  final Journey journey;
-  const InvoiceCaptureOverviewScreen({super.key, required this.journey});
+  final Project project;
+  const InvoiceCaptureOverviewScreen({super.key, required this.project});
 
   @override
   ConsumerState<InvoiceCaptureOverviewScreen> createState() =>
@@ -77,14 +77,16 @@ class _InvoiceCaptureOverviewScreenState
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    final journeyImagesAsyncValue =
-        ref.watch(invoiceImagesStreamProvider(widget.journey.id));
+    final projectImagesAsyncValue = ref.watch(invoiceImagesStreamProvider({
+      'projectId': widget.project.id,
+      'invoiceId': '', // Provide the correct invoiceId if available
+    }));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Invoices: ${widget.journey.title}'),
+        title: Text('Invoices: ${widget.project.title}'),
       ),
-      body: _buildBody(context, journeyImagesAsyncValue),
+      body: _buildBody(context, projectImagesAsyncValue),
       floatingActionButton: FloatingActionButton(
         onPressed: () => _pickAndUploadImage(context),
         heroTag: 'upload',
@@ -129,8 +131,8 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Widget _buildBody(BuildContext context,
-      AsyncValue<List<InvoiceCaptureProcess>> journeyImagesAsyncValue) {
-    return journeyImagesAsyncValue.when(
+      AsyncValue<List<InvoiceCaptureProcess>> projectImagesAsyncValue) {
+    return projectImagesAsyncValue.when(
       data: (images) {
         _logger.d(
             '[INVOICE_CAPTURE] Received ${images.length} images from stream');
@@ -201,7 +203,7 @@ class _InvoiceCaptureOverviewScreenState
                     context,
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
-                        journeyId: widget.journey.id,
+                        projectId: widget.project.id,
                         initialIndex: index,
                         images: images,
                       ),
@@ -230,7 +232,7 @@ class _InvoiceCaptureOverviewScreenState
 
   Future<void> _deleteImage(
       BuildContext context, InvoiceCaptureProcess imageInfo) async {
-    final repo = ref.read(journeyRepositoryProvider);
+    final repo = ref.read(projectRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -257,7 +259,7 @@ class _InvoiceCaptureOverviewScreenState
     try {
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
-        widget.journey.id,
+        widget.project.id,
         imageInfo.id,
       );
       _logger.i("🗑️ Invoice deleted successfully");
@@ -278,7 +280,7 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Future<void> _pickAndUploadImage(BuildContext context) async {
-    final repo = ref.read(journeyRepositoryProvider);
+    final repo = ref.read(projectRepositoryProvider);
     final picker = ImagePicker();
 
     try {
@@ -296,7 +298,7 @@ class _InvoiceCaptureOverviewScreenState
 
       _logger.d("📸 Starting repository upload...");
       final uploadResult =
-          await repo.uploadInvoiceImage(widget.journey.id, fileBytes, fileName);
+          await repo.uploadInvoiceImage(widget.project.id, fileBytes, fileName);
 
       _logger.i("📸 Repository upload completed successfully");
       _logger.d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
@@ -326,6 +328,6 @@ class _InvoiceCaptureOverviewScreenState
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
       InvoiceCaptureProcess imageInfo) async {
     // Use the utility class to scan the image
-    await InvoiceScanUtil.scanImage(context, ref, widget.journey.id, imageInfo);
+    await InvoiceScanUtil.scanImage(context, ref, widget.project.id, imageInfo);
   }
 }

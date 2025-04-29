@@ -2,14 +2,14 @@
  * Expense Model
  *
  * This file defines the Expense model which represents a financial expense
- * associated with a journey, including amount, category, sharing details,
+ * associated with a project, including amount, category, sharing details,
  * and receipt information.
  */
 
 import 'package:equatable/equatable.dart';
 import 'package:uuid/uuid.dart';
 
-/// Represents a financial expense associated with a journey.
+/// Represents a financial expense associated with a project.
 ///
 /// This model tracks expenses with details about the amount, category,
 /// who paid, and who the expense was shared with.
@@ -17,8 +17,8 @@ class Expense extends Equatable {
   /// Unique identifier for the expense
   final String id;
 
-  /// ID of the journey this expense belongs to
-  final String journeyId;
+  /// The ID of the project this expense is associated with
+  final String projectId;
 
   /// Title/name of the expense
   final String title;
@@ -50,7 +50,7 @@ class Expense extends Equatable {
   /// If [id] is not provided, a new UUID will be generated.
   Expense({
     String? id,
-    required this.journeyId,
+    required this.projectId,
     required this.title,
     required this.amount,
     required this.date,
@@ -68,7 +68,7 @@ class Expense extends Equatable {
   static bool isValid(Expense expense) {
     return expense.title.isNotEmpty &&
         expense.amount > 0 &&
-        expense.journeyId.isNotEmpty &&
+        expense.projectId.isNotEmpty &&
         expense.category.isNotEmpty &&
         expense.paidBy.isNotEmpty &&
         expense.sharedWith.isNotEmpty;
@@ -82,7 +82,7 @@ class Expense extends Equatable {
     try {
       return Expense(
         id: map['id'] as String? ?? '',
-        journeyId: map['journeyId'] as String? ?? '',
+        projectId: map['project_id'] as String? ?? '',
         title: map['title'] as String? ?? '',
         amount: (map['amount'] is num)
             ? (map['amount'] as num).toDouble()
@@ -91,9 +91,9 @@ class Expense extends Equatable {
             ? DateTime.parse(map['date'] as String)
             : (map['date'] as DateTime?) ?? DateTime.now(),
         category: map['category'] as String? ?? '',
-        paidBy: map['paidBy'] as String? ?? '',
-        sharedWith: map['sharedWith'] != null
-            ? List<String>.from(map['sharedWith'] as List)
+        paidBy: map['paid_by'] as String? ?? '',
+        sharedWith: map['shared_with'] != null
+            ? List<String>.from(map['shared_with'] as List)
             : <String>[],
         description: map['description'] as String?,
         receiptUrl: map['receiptUrl'] as String?,
@@ -106,7 +106,7 @@ class Expense extends Equatable {
       // Return a minimal valid expense rather than throwing
       return Expense(
         id: map['id'] as String? ?? '',
-        journeyId: map['journeyId'] as String? ?? '',
+        projectId: map['project_id'] as String? ?? '',
         title: 'Error: Invalid expense data',
         amount: 0.0,
         date: DateTime.now(),
@@ -129,13 +129,13 @@ class Expense extends Equatable {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'journeyId': journeyId,
+      'project_id': projectId,
       'title': title,
       'amount': amount,
       'date': date.toIso8601String(),
       'category': category,
-      'paidBy': paidBy,
-      'sharedWith': sharedWith,
+      'paid_by': paidBy,
+      'shared_with': sharedWith,
       'description': description,
       'receiptUrl': receiptUrl,
     };
@@ -144,7 +144,7 @@ class Expense extends Equatable {
   /// Creates a copy of this Expense with the given fields replaced with new values.
   Expense copyWith({
     String? id,
-    String? journeyId,
+    String? projectId,
     String? title,
     double? amount,
     DateTime? date,
@@ -156,7 +156,7 @@ class Expense extends Equatable {
   }) {
     return Expense(
       id: id ?? this.id,
-      journeyId: journeyId ?? this.journeyId,
+      projectId: projectId ?? this.projectId,
       title: title ?? this.title,
       amount: amount ?? this.amount,
       date: date ?? this.date,
@@ -171,7 +171,7 @@ class Expense extends Equatable {
   @override
   List<Object?> get props => [
         id,
-        journeyId,
+        projectId,
         title,
         amount,
         date,
@@ -187,7 +187,7 @@ class Expense extends Equatable {
   /// Useful for debugging and logging.
   @override
   String toString() {
-    return 'Expense(id: $id, journeyId: $journeyId, title: $title, '
+    return 'Expense(id: $id, projectId: $projectId, title: $title, '
         'amount: $amount, date: $date, category: $category, '
         'paidBy: $paidBy, sharedWith: ${sharedWith.length} people)';
   }

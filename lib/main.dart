@@ -20,20 +20,20 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 // Project-specific imports (Ensure these paths are correct)
 import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/journey_create.dart';
+import 'screens/project_create.dart';
 import 'screens/splash_screen.dart';
 import 'screens/invoice_capture_overview_screen.dart';
-import 'models/journey.dart';
 import 'screens/settings/app_settings_screen.dart';
 import 'repositories/auth_repository.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/theme/antonetti_theme.dart';
-import 'package:travel/screens/journey_detail_overview_screen.dart';
+import 'package:travel/screens/project_detail_overview_screen.dart';
 import 'providers/logging_provider.dart';
 import 'package:travel/screens/auth_wait_screen.dart';
-import 'package:travel/screens/journey_expenses_screen.dart';
+import 'package:travel/screens/project_expenses_screen.dart';
 import 'package:travel/screens/user_management_screen.dart';
+import 'models/project.dart';
 
 // --- Provider for Firebase Initialization ---
 final firebaseInitializationProvider = FutureProvider<FirebaseApp>((ref) async {
@@ -177,16 +177,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const HomeScreen(),
         routes: [
           GoRoute(
-            path: '${AppRoutes.journeyDetail.split('/').last}/:journeyId',
+            path: '${AppRoutes.projectDetail.split('/').last}/:projectId',
             builder: (context, state) {
-              final journeyId = state.pathParameters['journeyId'];
-              final journey = state.extra as Journey?;
-              if (journeyId != null && journey != null) {
-                return JourneyDetailOverviewScreen(journey: journey);
+              final projectId = state.pathParameters['projectId'];
+              final project = state.extra as Project?;
+              if (projectId != null && project != null) {
+                return ProjectDetailOverviewScreen(project: project);
               } else {
                 return Scaffold(
                   appBar: AppBar(title: const Text('Error')),
-                  body: const Center(child: Text('Journey data missing.')),
+                  body: const Center(child: Text('Project data missing.')),
                 );
               }
             },
@@ -194,15 +194,15 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.invoiceCaptureOverview.split('/').last,
                 builder: (context, state) {
-                  final journey = state.extra as Journey?;
-                  if (journey != null) {
-                    return InvoiceCaptureOverviewScreen(journey: journey);
+                  final project = state.extra as Project?;
+                  if (project != null) {
+                    return InvoiceCaptureOverviewScreen(project: project);
                   } else {
                     return Scaffold(
                       appBar: AppBar(title: const Text('Error')),
                       body: const Center(
                         child: Text(
-                          'Journey data missing for invoice capture.',
+                          'Project data missing for invoice capture.',
                         ),
                       ),
                     );
@@ -212,8 +212,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             ],
           ),
           GoRoute(
-            path: AppRoutes.createJourney.split('/').last,
-            builder: (context, state) => const CreateJourneyScreen(),
+            path: AppRoutes.createProject.split('/').last,
+            builder: (context, state) => const ProjectCreateScreen(),
           ),
           GoRoute(
             path: AppRoutes.appSettings.split('/').last,
@@ -225,14 +225,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path:
-                '${AppRoutes.journeyDetail.split('/').last}/:journeyId/expenses',
+                '${AppRoutes.projectDetail.split('/').last}/:projectId/expenses',
             builder: (context, state) {
-              final journeyId = state.pathParameters['journeyId'];
-              if (journeyId != null) {
-                return ExpenseListScreen(journeyId: journeyId);
+              final projectId = state.pathParameters['projectId'];
+              if (projectId != null) {
+                return ProjectExpensesScreen(projectId: projectId);
               } else {
                 return const Scaffold(
-                  body: Center(child: Text('Missing journey ID')),
+                  body: Center(child: Text('Missing project ID')),
                 );
               }
             },

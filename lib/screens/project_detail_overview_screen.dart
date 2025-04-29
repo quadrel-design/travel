@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel/constants/app_routes.dart';
-import 'package:travel/models/journey.dart';
+import 'package:travel/models/project.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 // import 'package:travel/widgets/app_title.dart'; // Unused import
 
-class JourneyDetailOverviewScreen extends StatelessWidget {
-  final Journey journey;
+class ProjectDetailOverviewScreen extends StatelessWidget {
+  final Project project;
 
-  const JourneyDetailOverviewScreen({
+  const ProjectDetailOverviewScreen({
     super.key,
-    required this.journey,
+    required this.project,
   });
 
   // Helper function to build styled link cards
@@ -43,8 +43,8 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
 
   void _navigateToInvoiceCapture(BuildContext context) {
     final fullPath =
-        '/home/journey-detail/${journey.id}/invoice-capture-overview';
-    context.push(fullPath, extra: journey);
+        '/home/project-detail/${project.id}/invoice-capture-overview';
+    context.push(fullPath, extra: project);
   }
 
   @override
@@ -60,7 +60,7 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
           tooltip: MaterialLocalizations.of(context).backButtonTooltip,
           onPressed: () => context.go(AppRoutes.home),
         ),
-        title: Text(journey.title),
+        title: Text(project.title),
         centerTitle: true,
         // Consider matching AppBar style (e.g., white background) if desired
       ),
@@ -80,27 +80,27 @@ class JourneyDetailOverviewScreen extends StatelessWidget {
           children: [
             // Restore _buildOverviewLinkCard calls
             _buildOverviewLinkCard(context,
-                label: l10n.journeyDetailInfoLabel, // Use l10n
+                label: l10n.projectDetailInfoLabel, // Use l10n
                 onTap: () {
               // --- Construct path with ID for sub-route ---
-              context.push('${AppRoutes.journeyDetail}/${journey.id}/info',
-                  extra: journey);
+              context.push('${AppRoutes.projectDetail}/${project.id}/info',
+                  extra: project);
             }),
             _buildOverviewLinkCard(context,
-                label: l10n.journeyDetailExpensesLabel, // Use l10n
+                label: l10n.projectDetailExpensesLabel, // Use l10n
                 onTap: () {
               // This one was correct
-              context.push('${AppRoutes.journeyDetail}/${journey.id}/expenses');
+              context.push('${AppRoutes.projectDetail}/${project.id}/expenses');
             }),
             _buildOverviewLinkCard(context,
-                label: l10n.journeyDetailParticipantsLabel, // Use l10n
+                label: l10n.projectDetailParticipantsLabel, // Use l10n
                 onTap: () {
               // Navigate to Participants screen using GoRouter
               context.push(
-                  '${AppRoutes.journeyDetail}/${journey.id}/participants');
+                  '${AppRoutes.projectDetail}/${project.id}/participants');
             }),
             _buildOverviewLinkCard(context,
-                label: l10n.journeyDetailImagesLabel, // Use l10n
+                label: l10n.projectDetailImagesLabel, // Use l10n
                 onTap: () {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
               _navigateToInvoiceCapture(context);

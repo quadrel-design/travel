@@ -2,12 +2,12 @@
  * Invoice Capture Status Model
  *
  * This file defines the InvoiceCaptureStatus enum which represents the various 
- * processing states of journey images, particularly in the invoice capture
+ * processing states of project images, particularly in the invoice capture
  * workflow. It includes conversion methods between app-level statuses and
  * Firebase Function status strings.
  */
 
-/// Enum representing the processing status of a journey image.
+/// Enum representing the processing status of a project image.
 ///
 /// Used to track the current state of image processing in the invoice
 /// capture workflow, from initial state through OCR processing and analysis.

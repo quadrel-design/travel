@@ -27,7 +27,7 @@ class FirebaseFunctionsService {
   ///
   /// Parameters:
   ///  - [imageUrl]: The URL of the image to scan.
-  ///  - [journeyId]: The ID of the associated journey/invoice.
+  ///  - [projectId]: The ID of the associated project/invoice.
   ///  - [imageId]: The ID of the specific image document.
   ///  - [timeoutSeconds]: Optional timeout duration (defaults to 60s).
   ///
@@ -38,11 +38,11 @@ class FirebaseFunctionsService {
   ///    or returns an unexpected result.
   ///  - [TimeoutException]: If the call exceeds the specified timeout (wrapped by FunctionCallException).
   Future<Map<String, dynamic>> scanImage(
-      String imageUrl, String journeyId, String imageId,
+      String imageUrl, String projectId, String imageId,
       {int timeoutSeconds = _defaultTimeoutSeconds}) async {
     try {
       _logger.d('[FUNCTIONS] Preparing to scan image: $imageUrl');
-      _logger.d('[FUNCTIONS] Journey ID: $journeyId, Image ID: $imageId');
+      _logger.d('[FUNCTIONS] Project ID: $projectId, Image ID: $imageId');
 
       final callable = _functions.httpsCallable('scanImage');
       _logger.d(
@@ -50,7 +50,7 @@ class FirebaseFunctionsService {
 
       final resultFuture = callable.call<Map<String, dynamic>>({
         'imageUrl': imageUrl,
-        'invoiceId': journeyId,
+        'invoiceId': projectId,
         'imageId': imageId,
       });
 
@@ -120,7 +120,7 @@ class FirebaseFunctionsService {
   ///
   /// Parameters:
   ///  - [extractedText]: The text to analyze.
-  ///  - [invoiceId]: The ID of the associated invoice.
+  ///  - [projectId]: The ID of the associated project/invoice.
   ///  - [imageId]: The ID of the specific image document.
   ///  - [timeoutSeconds]: Optional timeout duration (defaults to 60s).
   ///
@@ -131,17 +131,17 @@ class FirebaseFunctionsService {
   ///    or returns an unexpected result.
   ///  - [TimeoutException]: If the call exceeds the specified timeout (wrapped by FunctionCallException).
   Future<Map<String, dynamic>> analyzeImage(
-      String extractedText, String invoiceId, String imageId,
+      String extractedText, String projectId, String imageId,
       {int timeoutSeconds = _defaultTimeoutSeconds}) async {
     try {
       _logger.d(
-          '[FUNCTIONS] Preparing to analyze text for invoice: $invoiceId, image: $imageId');
+          '[FUNCTIONS] Preparing to analyze text for project: $projectId, image: $imageId');
       final callable = _functions.httpsCallable('analyzeImage');
       _logger.d(
           '[FUNCTIONS] Calling analyzeImage function with timeout: \\${timeoutSeconds}s');
       final resultFuture = callable.call<Map<String, dynamic>>({
         'extractedText': extractedText,
-        'invoiceId': invoiceId,
+        'invoiceId': projectId,
         'imageId': imageId,
       });
       final HttpsCallableResult<Map<String, dynamic>> result =
