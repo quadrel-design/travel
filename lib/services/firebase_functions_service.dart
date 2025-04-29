@@ -115,4 +115,86 @@ class FirebaseFunctionsService {
       );
     }
   }
+
+  /// Calls the 'analyzeImage' Cloud Function.
+  ///
+  /// Parameters:
+  ///  - [extractedText]: The text to analyze.
+  ///  - [invoiceId]: The ID of the associated invoice.
+  ///  - [imageId]: The ID of the specific image document.
+  ///  - [timeoutSeconds]: Optional timeout duration (defaults to 60s).
+  ///
+  /// Returns: A [Map<String, dynamic>] containing the function's result data upon success.
+  ///
+  /// Throws:
+  ///  - [FunctionCallException]: If the Cloud Function call fails, times out,
+  ///    or returns an unexpected result.
+  ///  - [TimeoutException]: If the call exceeds the specified timeout (wrapped by FunctionCallException).
+  Future<Map<String, dynamic>> analyzeImage(
+      String extractedText, String invoiceId, String imageId,
+      {int timeoutSeconds = _defaultTimeoutSeconds}) async {
+    try {
+      _logger.d(
+          '[FUNCTIONS] Preparing to analyze text for invoice: $invoiceId, image: $imageId');
+      final callable = _functions.httpsCallable('analyzeImage');
+      _logger.d(
+          '[FUNCTIONS] Calling analyzeImage function with timeout: \\${timeoutSeconds}s');
+      final resultFuture = callable.call<Map<String, dynamic>>({
+        'extractedText': extractedText,
+        'invoiceId': invoiceId,
+        'imageId': imageId,
+      });
+      final HttpsCallableResult<Map<String, dynamic>> result =
+          await resultFuture.timeout(
+        Duration(seconds: timeoutSeconds),
+        onTimeout: () {
+          throw TimeoutException(
+              'Function call timed out after $timeoutSeconds seconds');
+        },
+      );
+      _logger.d('[FUNCTIONS] Raw result data: \\${result.data}');
+      final data = result.data;
+      if (!data.containsKey('success')) {
+        _logger.w(
+            '[FUNCTIONS] Function call successful, but response format is unexpected. Data: \\${data}');
+        throw FunctionCallException(
+          'Function response format unexpected',
+          functionName: 'analyzeImage',
+          originalException: 'Missing success field in response',
+        );
+      }
+      _logger.i(
+          '[FUNCTIONS] Analysis completed successfully with status: \\${data['status']}');
+      return data;
+    } on FirebaseFunctionsException catch (e, stackTrace) {
+      _logger.e('[FUNCTIONS] Firebase function error:',
+          error: e, stackTrace: stackTrace);
+      throw FunctionCallException(
+        e.message ?? 'Firebase function error',
+        functionName: 'analyzeImage',
+        code: e.code,
+        originalException: e,
+        stackTrace: stackTrace,
+      );
+    } on TimeoutException catch (e, stackTrace) {
+      _logger.e('[FUNCTIONS] Timeout calling analyzeImage:',
+          error: e, stackTrace: stackTrace);
+      throw FunctionCallException(
+        'Function call timed out after $timeoutSeconds seconds',
+        functionName: 'analyzeImage',
+        code: 'timeout',
+        originalException: e,
+        stackTrace: stackTrace,
+      );
+    } catch (e, stackTrace) {
+      _logger.e('[FUNCTIONS] Error analyzing image:',
+          error: e, stackTrace: stackTrace);
+      throw FunctionCallException(
+        e.toString(),
+        functionName: 'analyzeImage',
+        originalException: e,
+        stackTrace: stackTrace,
+      );
+    }
+  }
 }

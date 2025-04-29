@@ -44,6 +44,7 @@ class _InvoiceCaptureDetailViewState
   bool _isDeleting = false;
   bool _showAppBar = true;
   bool _showAnalysis = false;
+  bool _isAnalyzing = false;
   late Logger _logger;
 
   @override
@@ -482,8 +483,41 @@ class _InvoiceCaptureDetailViewState
         if (!_isDeleting)
           IconButton(
             icon: const Icon(Icons.analytics),
-            onPressed: () => setState(() => _showAnalysis = !_showAnalysis),
-            tooltip: 'Show Analysis',
+            onPressed: () async {
+              setState(() => _showAnalysis = false);
+              final images = widget.images;
+              final imageInfo = images[currentIndex];
+              final functionsService = ref.read(firebaseFunctionsProvider);
+              if (imageInfo.extractedText == null ||
+                  imageInfo.extractedText!.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text(
+                          'No extracted text to analyze. Please scan first.')),
+                );
+                return;
+              }
+              setState(() => _isAnalyzing = true);
+              try {
+                await functionsService.analyzeImage(
+                  imageInfo.extractedText!,
+                  widget.journeyId,
+                  imageInfo.id,
+                );
+                // Wait a moment for Firestore to update
+                await Future.delayed(const Duration(seconds: 1));
+                setState(() => _showAnalysis = true);
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                      content:
+                          Text('Error analyzing invoice: \\${e.toString()}')),
+                );
+              } finally {
+                setState(() => _isAnalyzing = false);
+              }
+            },
+            tooltip: 'Analyze Invoice',
           ),
         if (!_isDeleting)
           IconButton(

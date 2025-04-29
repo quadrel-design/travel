@@ -19,13 +19,14 @@ class InvoiceAnalysisPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     // Log data for debugging
     logger.d('INVOICE DATA DEBUG:');
-    logger.d('- id: ${imageInfo.id}');
-    logger.d('- status: ${imageInfo.status}');
-    logger.d('- location: ${imageInfo.location}');
-    logger.d('- lastProcessedAt: ${imageInfo.lastProcessedAt}');
-    logger.d('- isInvoiceGuess: ${imageInfo.isInvoiceGuess}');
+    logger.d('- id: \\${imageInfo.id}');
+    logger.d('- status: \\${imageInfo.status}');
+    logger.d('- location: \\${imageInfo.location}');
+    logger.d('- lastProcessedAt: \\${imageInfo.lastProcessedAt}');
+    logger.d('- isInvoiceGuess: \\${imageInfo.isInvoiceGuess}');
     logger.d(
-        '- extractedText: ${imageInfo.extractedText != null ? 'Available (${imageInfo.extractedText!.length} chars)' : 'Not available'}');
+        '- extractedText: \\${imageInfo.extractedText != null ? 'Available (\\${imageInfo.extractedText!.length} chars)' : 'Not available'}');
+    print('DEBUG: invoiceAnalysis = \\${imageInfo.invoiceAnalysis}');
 
     return Container(
       color: UIConstants.kPanelBackgroundColor,
@@ -40,7 +41,9 @@ class InvoiceAnalysisPanel extends StatelessWidget {
               _buildHeader(),
               const SizedBox(height: UIConstants.kSectionSpacing),
               _buildInvoiceStatus(),
-              if (imageInfo.extractedText != null &&
+              if (imageInfo.invoiceAnalysis != null)
+                _buildStructuredAnalysis(imageInfo.invoiceAnalysis!)
+              else if (imageInfo.extractedText != null &&
                   imageInfo.extractedText!.isNotEmpty)
                 _buildExtractedText(),
               if (imageInfo.location != null && imageInfo.location!.isNotEmpty)
@@ -155,6 +158,34 @@ class InvoiceAnalysisPanel extends StatelessWidget {
           imageInfo.lastProcessedAt!.toLocal().toString().split('.')[0],
           style: UIConstants.kPanelValueStyle.copyWith(fontSize: 14),
         ),
+        const SizedBox(height: UIConstants.kSectionSpacing),
+      ],
+    );
+  }
+
+  Widget _buildStructuredAnalysis(InvoiceAnalysis analysis) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Gemini Analysis:',
+          style: UIConstants.kPanelLabelStyle,
+        ),
+        const SizedBox(height: UIConstants.kElementSpacing),
+        if (analysis.totalAmount != null)
+          Text('Total Amount: \\${analysis.totalAmount}',
+              style: UIConstants.kPanelValueStyle),
+        if (analysis.currency != null)
+          Text('Currency: \\${analysis.currency}',
+              style: UIConstants.kPanelValueStyle),
+        if (analysis.merchantName != null)
+          Text('Merchant: \\${analysis.merchantName}',
+              style: UIConstants.kPanelValueStyle),
+        if (analysis.date != null)
+          Text('Date: \\${analysis.date}', style: UIConstants.kPanelValueStyle),
+        if (analysis.location != null)
+          Text('Location: \\${analysis.location}',
+              style: UIConstants.kPanelValueStyle),
         const SizedBox(height: UIConstants.kSectionSpacing),
       ],
     );

@@ -8,6 +8,7 @@
 
 import 'package:equatable/equatable.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 // Remove provider imports if they were added here
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:travel/providers/logging_provider.dart';
@@ -47,6 +48,9 @@ class InvoiceCaptureProcess extends Equatable {
   /// Text extracted by OCR, populated after successful detection
   final String? extractedText;
 
+  /// Structured analysis result from Gemini (if available)
+  final InvoiceAnalysis? invoiceAnalysis;
+
   /// Creates a new InvoiceCaptureProcess instance.
   const InvoiceCaptureProcess({
     required this.id,
@@ -59,6 +63,7 @@ class InvoiceCaptureProcess extends Equatable {
     this.localPath,
     this.status,
     this.extractedText,
+    this.invoiceAnalysis,
   });
 
   /// Creates a InvoiceCaptureProcess instance from a JSON map.
@@ -80,6 +85,25 @@ class InvoiceCaptureProcess extends Equatable {
         return null;
       }
 
+      InvoiceAnalysis? analysis;
+      if (json['invoiceAnalysis'] != null) {
+        if (json['invoiceAnalysis'] is String) {
+          try {
+            final decoded = jsonDecode(json['invoiceAnalysis']);
+            if (decoded is Map<String, dynamic>) {
+              analysis = InvoiceAnalysis.fromJson(decoded);
+            }
+          } catch (_) {
+            analysis = null;
+          }
+        } else if (json['invoiceAnalysis'] is Map<String, dynamic>) {
+          analysis = InvoiceAnalysis.fromJson(json['invoiceAnalysis']);
+        } else if (json['invoiceAnalysis'] is Map) {
+          analysis = InvoiceAnalysis.fromJson(
+              Map<String, dynamic>.from(json['invoiceAnalysis']));
+        }
+      }
+
       return InvoiceCaptureProcess(
         id: json['id'] as String? ?? '',
         url: json['url'] as String? ?? '',
@@ -89,6 +113,7 @@ class InvoiceCaptureProcess extends Equatable {
         location: json['location'] as String?,
         status: json['status'] as String?,
         extractedText: json['extractedText'] as String?,
+        invoiceAnalysis: analysis,
       );
     } catch (e) {
       // Log error details - in production, use a proper logger
@@ -114,6 +139,25 @@ class InvoiceCaptureProcess extends Equatable {
         }
       }
 
+      InvoiceAnalysis? analysis;
+      if (map['invoiceAnalysis'] != null) {
+        if (map['invoiceAnalysis'] is String) {
+          try {
+            final decoded = jsonDecode(map['invoiceAnalysis']);
+            if (decoded is Map<String, dynamic>) {
+              analysis = InvoiceAnalysis.fromJson(decoded);
+            }
+          } catch (_) {
+            analysis = null;
+          }
+        } else if (map['invoiceAnalysis'] is Map<String, dynamic>) {
+          analysis = InvoiceAnalysis.fromJson(map['invoiceAnalysis']);
+        } else if (map['invoiceAnalysis'] is Map) {
+          analysis = InvoiceAnalysis.fromJson(
+              Map<String, dynamic>.from(map['invoiceAnalysis']));
+        }
+      }
+
       return InvoiceCaptureProcess(
         id: map['id'] as String? ?? '',
         url: map['url'] as String? ?? '',
@@ -124,6 +168,7 @@ class InvoiceCaptureProcess extends Equatable {
         updatedAt: parseDate(map['updated_at'] as String?),
         status: map['status'] as String?,
         extractedText: map['extractedText'] as String?,
+        invoiceAnalysis: analysis,
       );
     } catch (e) {
       // Log error with proper logger in production
@@ -154,6 +199,7 @@ class InvoiceCaptureProcess extends Equatable {
       'location': location,
       'status': status,
       'extractedText': extractedText,
+      'invoiceAnalysis': invoiceAnalysis?.toJson(),
       // localPath is typically not saved to Firestore
     };
   }
@@ -173,11 +219,13 @@ class InvoiceCaptureProcess extends Equatable {
     String? localPath,
     String? status,
     String? extractedText,
+    InvoiceAnalysis? invoiceAnalysis,
     bool setLastProcessedAtNull = false,
     bool setUpdatedAtNull = false,
     bool setLocationNull = false,
     bool setStatusNull = false,
     bool setExtractedTextNull = false,
+    bool setInvoiceAnalysisNull = false,
   }) {
     return InvoiceCaptureProcess(
       id: id ?? this.id,
@@ -193,6 +241,9 @@ class InvoiceCaptureProcess extends Equatable {
       status: setStatusNull ? null : status ?? this.status,
       extractedText:
           setExtractedTextNull ? null : extractedText ?? this.extractedText,
+      invoiceAnalysis: setInvoiceAnalysisNull
+          ? null
+          : invoiceAnalysis ?? this.invoiceAnalysis,
     );
   }
 
@@ -208,6 +259,7 @@ class InvoiceCaptureProcess extends Equatable {
         localPath,
         status,
         extractedText,
+        invoiceAnalysis,
       ];
 
   /// Creates a string representation of this InvoiceCaptureProcess.
@@ -219,4 +271,42 @@ class InvoiceCaptureProcess extends Equatable {
         'isInvoiceGuess: $isInvoiceGuess, '
         'location: ${location != null})';
   }
+}
+
+class InvoiceAnalysis {
+  final double? totalAmount;
+  final String? currency;
+  final String? merchantName;
+  final String? date;
+  final String? location;
+
+  InvoiceAnalysis({
+    this.totalAmount,
+    this.currency,
+    this.merchantName,
+    this.date,
+    this.location,
+  });
+
+  factory InvoiceAnalysis.fromJson(Map<String, dynamic> json) {
+    return InvoiceAnalysis(
+      totalAmount: (json['totalAmount'] is num)
+          ? (json['totalAmount'] as num).toDouble()
+          : (json['totalAmount'] is String)
+              ? double.tryParse(json['totalAmount'])
+              : null,
+      currency: json['currency'] as String?,
+      merchantName: json['merchantName'] as String?,
+      date: json['date'] as String?,
+      location: json['location'] as String?,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+        'totalAmount': totalAmount,
+        'currency': currency,
+        'merchantName': merchantName,
+        'date': date,
+        'location': location,
+      };
 }
