@@ -85,7 +85,7 @@ export async function analyzeDetectedText(extractedText: string) {
           console.error("JSON parse error:", parseError);
           console.log("Attempting to fix malformed JSON response");
           const cleanedJson = jsonText
-            .replace(/[\u0000-\u001F\u007F-\u009F]/gu, "")
+            .replace(/[\u0000-\u001F\u007F-\u009F]/gu, "") // eslint-disable-line no-control-regex
             .replace(/[^\x20-\x7E]/g, "")
             .trim();
           try {
@@ -96,11 +96,11 @@ export async function analyzeDetectedText(extractedText: string) {
           }
         }
         if (typeof invoiceAnalysis.totalAmount === "string") {
-          const parsed = parseFloat(invoiceAnalysis.totalAmount);
-          if (!isNaN(parsed)) {
-            invoiceAnalysis.totalAmount = parsed;
+            const parsed = parseFloat(invoiceAnalysis.totalAmount);
+            if (!isNaN(parsed)) {
+              invoiceAnalysis.totalAmount = parsed;
+            }
           }
-        }
         const isInvoice = !!(invoiceAnalysis.totalAmount && invoiceAnalysis.currency);
         invoiceAnalysis.isInvoice = isInvoice;
         console.log("Analysis result determined invoice status:", isInvoice);
@@ -210,16 +210,18 @@ export const analyzeImage = onCall({
         const updateData: any = {
           status: finalStatus,
           isInvoice: analysisResult.isInvoice,
-          lastProcessedAt: FieldValue.serverTimestamp()
-        };
+          lastProcessedAt: FieldValue.serverTimestamp(),
+          extractedText
+        }; // eslint-disable-line @typescript-eslint/no-explicit-any
         if (analysisResult.success && analysisResult.invoiceAnalysis) {
           updateData.totalAmount = analysisResult.invoiceAnalysis.totalAmount;
           updateData.currency = analysisResult.invoiceAnalysis.currency;
           updateData.merchantName = analysisResult.invoiceAnalysis.merchantName;
           updateData.merchantLocation = analysisResult.invoiceAnalysis.location;
           updateData.invoiceDate = analysisResult.invoiceAnalysis.date;
-          updateData.invoiceAnalysis = analysisResult.invoiceAnalysis;
+          updateData.invoiceAnalysis = analysisResult.invoiceAnalysis; 
         }
+        console.log("Firestore updateData:", updateData, "Doc path:", docRef.path);
         await docRef.update(updateData);
         console.log(`Updated invoice analysis in Firestore. Final Status: ${finalStatus}`);
       } catch (dbError) {

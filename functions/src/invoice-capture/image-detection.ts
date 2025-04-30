@@ -156,14 +156,15 @@ export const detectImage = onCall({
     throw new HttpsError("invalid-argument", "invoiceId and imageId are required");
   }
 
+  const projectId = request.data.projectId;
+  if (!projectId) {
+    throw new HttpsError("invalid-argument", "projectId is required");
+  }
+
   const invoiceId = request.data.invoiceId;
   const imageId = request.data.imageId;
   console.log(`Processing image (ID: ${imageId}) for invoice (ID: ${invoiceId})`);
   
-  // Update status to ocr_running
-  await _updateImageStatus(userId, invoiceId, imageId, "ocr_running");
-  console.log("Status updated to ocr_running");
-
   // Log that we're starting image processing
   console.log("Starting image text detection");
   
@@ -231,7 +232,6 @@ export const detectImage = onCall({
         }
       } catch (urlError) {
         console.error("Error processing image URL:", urlError);
-        await _updateImageStatus(userId, invoiceId, imageId, "Error", urlError instanceof Error ? urlError.message : "Failed to process image URL");
         throw new HttpsError("internal", "Error processing image URL: " + (urlError instanceof Error ? urlError.message : "Unknown error"));
       }
     }
@@ -249,17 +249,20 @@ export const detectImage = onCall({
         console.log("Preparing to update Firestore document");
         const docRef = db.collection("users")
           .doc(userId)
+          .collection("projects")
+          .doc(projectId)
           .collection("invoices")
-          .doc(invoiceId)
-          .collection("images")
+          .doc("main")
+          .collection("invoice_images")
           .doc(imageId);
 
         const updateData: { [key: string]: any } = {
           confidence: detectResult.confidence || 0,
           textBlocks: detectResult.textBlocks || [],
-          status: detectResult.hasText ? "invoice" : "no invoice",
           lastProcessedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
           extractedText: detectResult.extractedText ?? "",
+          ocrText: detectResult.extractedText ?? ""
         };
 
         if (detectResult.error) {
@@ -270,23 +273,24 @@ export const detectImage = onCall({
         console.log("Updated invoice image document with OCR results. Status:", updateData.status);
       } catch (dbError) {
         console.error("Error updating Firestore invoice image:", dbError);
-        await _updateImageStatus(userId, invoiceId, imageId, "error", "Failed to update document after successful processing");
       }
       // ---- End: Update Invoice Image ----
     } else {
       // Handle failed OCR
       console.log("OCR process failed, updating status to error");
-      await _updateImageStatus(userId, invoiceId, imageId, "error", detectResult.error || "OCR process failed");
-      // Also clear extractedText on error
       const docRef = db.collection("users")
         .doc(userId)
+        .collection("projects")
+        .doc(projectId)
         .collection("invoices")
-        .doc(invoiceId)
-        .collection("images")
+        .doc("main")
+        .collection("invoice_images")
         .doc(imageId);
       await docRef.update({
         extractedText: "",
+        ocrText: "",
         lastProcessedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
         errorMessage: detectResult.error || "OCR process failed"
       });
     }
@@ -303,10 +307,6 @@ export const detectImage = onCall({
     // Handle errors from detectTextInImage or other processing
     console.error("Error during image processing stage:", error);
     
-    // Update status to Error in Firestore
-    await _updateImageStatus(userId, invoiceId, imageId, "Error", error instanceof Error ? error.message : "Unknown processing error");
-    console.log("====== DETECT IMAGE FAILED ======");
-    
     // Ensure HttpsErrors are thrown correctly
     if (error instanceof HttpsError) {
         throw error;
@@ -314,48 +314,6 @@ export const detectImage = onCall({
     throw new HttpsError("internal", "Error processing image: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 });
-
-// Helper function to update image status
-async function _updateImageStatus(userId: string, invoiceId: string, imageId: string, status: string, errorMessage?: string) {
-  console.log(`[_updateImageStatus] Updating status for image ${imageId} to ${status}`);
-  console.log(`[_updateImageStatus] Document path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
-  
-  try {
-    // First check if the document exists
-    const docRef = db.collection("users")
-      .doc(userId)
-      .collection("invoices")
-      .doc(invoiceId)
-      .collection("images")
-      .doc(imageId);
-    
-    const docSnap = await docRef.get();
-    if (!docSnap.exists) {
-      console.error(`[_updateImageStatus] ERROR: Document does not exist at path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
-      return;
-    }
-    
-    const updateData: { [key: string]: any } = {
-      status: status,
-      updatedAt: FieldValue.serverTimestamp()
-    };
-    
-    // Add error message if provided
-    if (errorMessage) {
-      updateData.errorMessage = errorMessage;
-    }
-    
-    console.log("[_updateImageStatus] Updating with data:", updateData);
-    
-    await docRef.update(updateData);
-    console.log(`[_updateImageStatus] Successfully updated image status to ${status}${errorMessage ? " with error message" : ""}`);
-  } catch (error) {
-    console.error("[_updateImageStatus] CRITICAL ERROR: Failed to update image status:", error);
-    console.error(`[_updateImageStatus] Document path: /users/${userId}/invoices/${invoiceId}/images/${imageId}`);
-    console.error(`[_updateImageStatus] Attempted status: ${status}`);
-    // We don't throw here to prevent cascading errors
-  }
-}
 
 // Helper function to update user costs
 async function _updateUserCosts(userId: string) {

@@ -1,6 +1,6 @@
 /**
  * Main entry point for Firebase Functions
- *
+ * 
  * This file exports all functions from specialized modules in the invoice-capture folder.
  */
 
@@ -33,12 +33,13 @@ dotenv.config();
 // export * from "./invoice-capture/image-detection";
 // export * from "./invoice-capture/invoice-capture";
 export * from "./invoice-capture/text-analysis";
+export { detectImage } from "./invoice-capture/image-detection";
 
-// --- Billing Functions ---
+// --- Billing Functions --- 
 // import * as functions from 'firebase-functions'; // Using v1 SDK - Removed as unused
 // Import v2 scheduler
 // import { onSchedule } from "firebase-functions/v2/scheduler";
-// --- Helper & Test Functions ---
+// --- Helper & Test Functions --- 
 
 // Export helper function for testing
 // import { detectTextInImage } from "./invoice-capture/image-detection";
