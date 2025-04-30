@@ -12,6 +12,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { ImageAnnotatorClient } from "@google-cloud/vision";
 import { app } from "../init";
 import axios from "axios";
+import { setInvoiceImageStatus } from "./invoice_image_status_handler";
 
 // Initialize Firestore
 const db = getFirestore(app);
@@ -169,6 +170,8 @@ export const detectImage = onCall({
   console.log("Starting image text detection");
   
   try {
+    // Set status to ocrInProgress at the start
+    await setInvoiceImageStatus(userId, projectId, imageId, "ocrInProgress");
     let detectResult;
     
     if (request.data.imageData) {
@@ -238,6 +241,12 @@ export const detectImage = onCall({
     
     // Update Firestore with the OCR results
     if (detectResult.success) {
+      // OCR finished successfully
+      if (detectResult.extractedText && detectResult.extractedText.trim().length > 0) {
+        await setInvoiceImageStatus(userId, projectId, imageId, "ocrFinished");
+      } else {
+        await setInvoiceImageStatus(userId, projectId, imageId, "ocrNoText");
+      }
       // ---- Start: Update User Costs ----
       console.log("Updating user costs");
       await _updateUserCosts(userId);
@@ -276,6 +285,8 @@ export const detectImage = onCall({
       }
       // ---- End: Update Invoice Image ----
     } else {
+      // OCR failed (technical error)
+      await setInvoiceImageStatus(userId, projectId, imageId, "ocrError");
       // Handle failed OCR
       console.log("OCR process failed, updating status to error");
       const docRef = db.collection("users")

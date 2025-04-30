@@ -30,10 +30,10 @@ dotenv.config();
 // export * from './migration/rename-projectss-to-invoices'; // Commented out if not present
 
 // Export functions from invoice-capture directory
-// export * from "./invoice-capture/image-detection";
+// export * from "./invoice-capture/invoice-image-detection";
 // export * from "./invoice-capture/invoice-capture";
 export * from "./invoice-capture/text-analysis";
-export { detectImage } from "./invoice-capture/image-detection";
+export { detectImage } from "./invoice-capture/invoice-image-detection";
 
 // --- Billing Functions --- 
 // import * as functions from 'firebase-functions'; // Using v1 SDK - Removed as unused
@@ -42,5 +42,5 @@ export { detectImage } from "./invoice-capture/image-detection";
 // --- Helper & Test Functions --- 
 
 // Export helper function for testing
-// import { detectTextInImage } from "./invoice-capture/image-detection";
+// import { detectTextInImage } from "./invoice-capture/invoice-image-detection";
 // import { analyzeDetectedText } from "./invoice-capture/text-analysis";
