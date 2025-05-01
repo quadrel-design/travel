@@ -12,7 +12,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:travel/providers/logging_provider.dart';
 
 import '../models/project.dart';
-import '../models/invoice_capture_process.dart';
+import '../models/invoice_image_process.dart';
 
 class ProjectDetailScreen extends ConsumerWidget {
   final Project project;
@@ -105,7 +105,7 @@ class ProjectDetailScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 16),
                       imagesStream.when(
-                        data: (List<InvoiceCaptureProcess> images) {
+                        data: (List<InvoiceImageProcess> images) {
                           if (images.isEmpty) {
                             return Center(
                               child: Text(l10n.noImagesYet),
@@ -182,30 +182,6 @@ class ProjectDetailScreen extends ConsumerWidget {
                                                   const Center(
                                                       child: Icon(Icons.error)),
                                             ),
-                                            if (image.status != null)
-                                              Positioned(
-                                                top: 8,
-                                                right: 8,
-                                                child: Container(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                    horizontal: 8,
-                                                    vertical: 4,
-                                                  ),
-                                                  decoration: BoxDecoration(
-                                                    color: theme.colorScheme
-                                                        .primaryContainer,
-                                                    borderRadius:
-                                                        BorderRadius.circular(
-                                                            12),
-                                                  ),
-                                                  child: Text(
-                                                    image.status!,
-                                                    style: theme
-                                                        .textTheme.labelSmall,
-                                                  ),
-                                                ),
-                                              ),
                                             Positioned(
                                               bottom: 8,
                                               right: 8,
@@ -273,7 +249,7 @@ class ProjectDetailScreen extends ConsumerWidget {
   }
 
   void _scanImage(
-      BuildContext context, WidgetRef ref, InvoiceCaptureProcess image) async {
+      BuildContext context, WidgetRef ref, InvoiceImageProcess image) async {
     try {
       final logger = ref.read(loggerProvider);
       logger.d("🔍 Starting OCR scan for image ${image.id}...");

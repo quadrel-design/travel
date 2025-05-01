@@ -17,15 +17,12 @@ import 'dart:convert';
 ///
 /// This model stores information about images including their storage path,
 /// extracted data from OCR processing, and status information.
-class InvoiceCaptureProcess {
+class InvoiceImageProcess {
   /// Unique identifier for the image
   final String id;
 
   /// Public URL for accessing the image
   final String url;
-
-  /// Processing status of the image (e.g., "Ready", "Processing", "NoText", "Text", "Invoice")
-  final String status;
 
   /// Path to the image in storage
   final String imagePath;
@@ -49,10 +46,9 @@ class InvoiceCaptureProcess {
   final DateTime? uploadedAt;
 
   /// Creates a new InvoiceCaptureProcess instance.
-  const InvoiceCaptureProcess({
+  const InvoiceImageProcess({
     required this.id,
     required this.url,
-    required this.status,
     required this.imagePath,
     this.extractedText,
     this.invoiceAnalysis,
@@ -67,7 +63,7 @@ class InvoiceCaptureProcess {
   /// This method handles Firestore Timestamp objects and safely parses numeric values.
   /// Throws an exception if critical data is missing or malformed, but includes
   /// try-catch handling to provide better error messages.
-  factory InvoiceCaptureProcess.fromJson(Map<String, dynamic> json) {
+  factory InvoiceImageProcess.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic value) {
       if (value == null) return null;
       if (value is DateTime) return value;
@@ -77,10 +73,9 @@ class InvoiceCaptureProcess {
     }
 
     try {
-      return InvoiceCaptureProcess(
+      return InvoiceImageProcess(
         id: json['id'] ?? '',
         url: json['url'] ?? '',
-        status: json['status'] ?? '',
         imagePath: json['imagePath'] ?? json['image_path'] ?? '',
         extractedText: json['extractedText'],
         invoiceAnalysis: json['invoiceAnalysis'],
@@ -105,7 +100,6 @@ class InvoiceCaptureProcess {
     return {
       'id': id,
       'url': url,
-      'status': status,
       'imagePath': imagePath,
       'extractedText': extractedText,
       'invoiceAnalysis': invoiceAnalysis,
@@ -121,14 +115,12 @@ class InvoiceCaptureProcess {
   /// Useful for debugging and logging.
   @override
   String toString() {
-    return 'InvoiceCaptureProcess(id: $id, status: $status, '
-        'extractedText: ${extractedText != null})';
+    return 'InvoiceCaptureProcess(id: $id, extractedText: ${extractedText != null})';
   }
 
-  InvoiceCaptureProcess copyWith({
+  InvoiceImageProcess copyWith({
     String? id,
     String? url,
-    String? status,
     String? imagePath,
     String? extractedText,
     Map<String, dynamic>? invoiceAnalysis,
@@ -137,10 +129,9 @@ class InvoiceCaptureProcess {
     bool? isInvoiceGuess,
     DateTime? uploadedAt,
   }) {
-    return InvoiceCaptureProcess(
+    return InvoiceImageProcess(
       id: id ?? this.id,
       url: url ?? this.url,
-      status: status ?? this.status,
       imagePath: imagePath ?? this.imagePath,
       extractedText: extractedText ?? this.extractedText,
       invoiceAnalysis: invoiceAnalysis ?? this.invoiceAnalysis,

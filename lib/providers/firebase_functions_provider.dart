@@ -9,6 +9,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/firebase_functions_service.dart';
 import 'logging_provider.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 /// Provides a Firebase Functions service throughout the application.
 ///
@@ -25,5 +26,6 @@ import 'logging_provider.dart';
 final firebaseFunctionsProvider = Provider<FirebaseFunctionsService>((ref) {
   return FirebaseFunctionsService(
     logger: ref.watch(loggerProvider),
+    functions: FirebaseFunctions.instanceFor(region: 'us-central1'),
   );
 });

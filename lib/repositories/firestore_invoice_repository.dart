@@ -3,7 +3,6 @@
 /// Provides a concrete implementation of the InvoiceRepository interface using
 /// Firebase Firestore for database operations and Firebase Storage for image handling.
 library;
-// ignore_for_file: unused_field
 
 import 'dart:async';
 import 'dart:typed_data'; // Add this import for Uint8List
@@ -14,8 +13,6 @@ import 'package:uuid/uuid.dart';
 import 'package:image/image.dart' as image_lib;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-// Removing unused http import
-// import 'package:http/http.dart' as http;
 // Conditionally import html only for web platform
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -27,7 +24,7 @@ import 'package:logger/logger.dart';
 // import 'dart:html' if (dart.library.html) 'package:flutter/foundation.dart'
 //     as html;
 
-import '../models/invoice_capture_process.dart';
+import '../models/invoice_image_process.dart';
 import '../models/project.dart';
 import 'invoice_repository.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
@@ -292,15 +289,16 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
 
   // --- Project Image Methods ---
   @override
-  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(
+  Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
       String projectId, String invoiceId) {
     try {
       final userId = _getCurrentUserId();
-      if (projectId.isEmpty || invoiceId.isEmpty) {
-        return Stream<List<InvoiceCaptureProcess>>.value([]);
+      if (projectId.isEmpty) {
+        return Stream<List<InvoiceImageProcess>>.value([]);
       }
+      // Always use 'main' as the invoiceId
       final imagesCollection =
-          _getInvoiceImagesCollection(userId, projectId, invoiceId)
+          _getInvoiceImagesCollection(userId, projectId, 'main')
               .orderBy('uploadedAt', descending: true);
       return imagesCollection.snapshots().map((snapshot) {
         print(
@@ -320,8 +318,8 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
                       '[REPO DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
                   return null;
                 }
-                final info = InvoiceCaptureProcess.fromJson(data);
-                print('[REPO DEBUG] Parsed InvoiceCaptureProcess: \\${info}');
+                final info = InvoiceImageProcess.fromJson(data);
+                print('[REPO DEBUG] Parsed InvoiceImageProcess: \\${info}');
                 return info.url.isNotEmpty && info.imagePath.isNotEmpty
                     ? info
                     : null;
@@ -331,7 +329,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
               }
             })
             .where((info) => info != null)
-            .cast<InvoiceCaptureProcess>()
+            .cast<InvoiceImageProcess>()
             .toList();
       }).handleError((error, stackTrace) {
         print('[REPO DEBUG] Error in image stream: \\${error}');
@@ -339,7 +337,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
             'Failed to fetch images', error, stackTrace);
       });
     } catch (e, stackTrace) {
-      return Stream<List<InvoiceCaptureProcess>>.error(DatabaseFetchException(
+      return Stream<List<InvoiceImageProcess>>.error(DatabaseFetchException(
           'Failed to create image stream', e, stackTrace));
     }
   }
@@ -418,7 +416,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   }
 
   @override
-  Future<InvoiceCaptureProcess> uploadInvoiceImage(
+  Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
     Uint8List imageBytes,
     String fileName,
@@ -431,10 +429,13 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         'users/$userId/projects/$projectId/invoices/main/invoice_images/$storageFileName';
 
     try {
-      // Compress image
-      final compressedImage = await _compressImage(imageBytes);
+      print('[UPLOAD] Skipping compression, uploading original image bytes...');
+      // Skip compression and upload original image bytes
+      final originalImage = imageBytes;
+      print('[UPLOAD] Original image size: \\${originalImage.length} bytes');
 
       // Upload to storage
+      print('[UPLOAD] Uploading to storage: $storagePath');
       final storageRef = _storage.ref().child(storagePath);
       final metadata = SettableMetadata(
         contentType: 'image/jpeg',
@@ -446,45 +447,53 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           'uploadedAt': DateTime.now().toIso8601String(),
         },
       );
+      await storageRef.putData(originalImage, metadata);
+      print('[UPLOAD] Upload to storage complete.');
 
-      // Upload based on platform
-      if (kIsWeb) {
-        // For web platform, use putData instead
-        await storageRef.putData(compressedImage, metadata);
-      } else {
-        await storageRef.putData(compressedImage, metadata);
+      // Always generate a fresh download URL after upload
+      print('[UPLOAD] Getting download URL...');
+      String? downloadUrl;
+      for (int i = 0; i < 3; i++) {
+        try {
+          downloadUrl = await storageRef.getDownloadURL();
+          if (downloadUrl != null) break;
+        } catch (e) {
+          print('[UPLOAD] Attempt \\${i + 1} to get download URL failed: $e');
+        }
+        await Future.delayed(Duration(seconds: 1));
       }
-
-      // Get download URL
-      final downloadUrl =
-          await _getImageDownloadUrl(userId, projectId, storageFileName);
+      if (downloadUrl == null) {
+        print('[UPLOAD ERROR] Download URL is null after retries!');
+        throw FirestoreException(message: 'Download URL is null after upload');
+      }
+      print('[UPLOAD] Download URL: $downloadUrl');
 
       // Create image info object
       final now = DateTime.now();
-      final imageInfo = InvoiceCaptureProcess(
+      final imageInfo = InvoiceImageProcess(
         id: imageId,
         url: downloadUrl,
         imagePath: storagePath,
-        isInvoiceGuess: false,
-        status: 'ready', // Set initial status to ready for scan
       );
+      print('[UPLOAD] Created InvoiceImageProcess: $imageInfo');
 
       // Store in Firestore
+      print('[UPLOAD] Writing document to Firestore...');
       final docData = {
         ...imageInfo.toJson(),
         'uploadedAt': FieldValue.serverTimestamp(),
         'createdAt': now.toIso8601String(),
         'updatedAt': now.toIso8601String(),
         'storageRef': storagePath,
-        'status': 'ready', // Ensure status is set in Firestore
       };
-
       await _getInvoiceImagesCollection(userId, projectId, 'main')
           .doc(imageId)
-          .set(docData);
-
+          .set(docData, SetOptions(merge: true));
+      print('[UPLOAD] Firestore document written. Upload complete!');
       return imageInfo;
     } catch (e, stackTrace) {
+      print('[UPLOAD ERROR] Exception during uploadInvoiceImage: $e');
+      print('[UPLOAD ERROR] Stack trace: $stackTrace');
       _logger.e('Error uploading image', error: e, stackTrace: stackTrace);
       throw FirestoreException(message: 'Failed to upload image', error: e);
     }
@@ -494,24 +503,20 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   Future<void> deleteInvoiceImage(String projectId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
-
       // Get the image document to find the storage path
-      final imageDoc =
-          await _getInvoiceImagesCollection(userId, projectId, imageId)
-              .doc(imageId)
-              .get();
-
-      if (!imageDoc.exists) {
+      final imageDoc = _getInvoiceImagesCollection(userId, projectId, 'main')
+          .doc(imageId)
+          .get();
+      final docSnapshot = await imageDoc;
+      if (!docSnapshot.exists) {
         throw DatabaseOperationException(
             'Image not found', null, StackTrace.current);
       }
-
       // Delete from storage first
-      final imageInfo = InvoiceCaptureProcess.fromJson(imageDoc.data()!);
+      final imageInfo = InvoiceImageProcess.fromJson(docSnapshot.data()!);
       await _storage.ref().child(imageInfo.imagePath).delete();
-
       // Then delete from Firestore
-      await _getInvoiceImagesCollection(userId, projectId, imageId)
+      await _getInvoiceImagesCollection(userId, projectId, 'main')
           .doc(imageId)
           .delete();
     } catch (e, stackTrace) {
@@ -524,18 +529,13 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     String projectId,
     String imageId, {
     bool? isInvoice,
-    String? status,
   }) async {
     try {
       final userId = _getCurrentUserId();
-
       final data = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
-        if (isInvoice != null) 'is_invoice_guess': isInvoice,
-        if (status != null) 'status': status,
       };
-
-      await _getInvoiceImagesCollection(userId, projectId, imageId)
+      await _getInvoiceImagesCollection(userId, projectId, 'main')
           .doc(imageId)
           .update(data);
     } catch (e, stackTrace) {

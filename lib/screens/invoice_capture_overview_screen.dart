@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/models/project.dart';
-import '../models/invoice_capture_process.dart';
-import '../models/invoice_capture_status.dart';
+import '../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
@@ -16,13 +15,6 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
-
-InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
-  if (imageInfo.status != null) {
-    return InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
-  }
-  return InvoiceCaptureStatus.ready;
-}
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
@@ -80,6 +72,7 @@ class _InvoiceCaptureOverviewScreenState
 
   @override
   Widget build(BuildContext context) {
+    print('🔥 InvoiceCaptureOverviewScreen build called');
     final l10n = AppLocalizations.of(context)!;
 
     final projectImagesAsyncValue =
@@ -98,51 +91,45 @@ class _InvoiceCaptureOverviewScreenState
     );
   }
 
-  Widget _buildImageTile(
-      BuildContext context, InvoiceCaptureProcess imageInfo) {
+  Widget _buildImageTile(BuildContext context, InvoiceImageProcess imageInfo) {
     if (imageInfo.url.isEmpty) {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
 
-    return FutureBuilder<Uint8List?>(
-      future: FirebaseStorage.instance.refFromURL(imageInfo.url).getData(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data == null) {
-          _logger.e('[INVOICE_CAPTURE] Error loading image via getData:',
-              error: snapshot.error);
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, color: Colors.redAccent),
-                SizedBox(height: 4),
-                Text('Error', style: TextStyle(fontSize: 10)),
-              ],
-            ),
-          );
-        }
-
-        return Image.memory(
-          snapshot.data!,
-          fit: BoxFit.cover,
+    // Use Image.network for web compatibility
+    return Image.network(
+      imageInfo.url,
+      fit: BoxFit.cover,
+      errorBuilder: (context, error, stackTrace) {
+        _logger.e('[INVOICE_CAPTURE] Error loading image via Image.network:',
+            error: error);
+        return const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.error_outline, color: Colors.redAccent),
+              SizedBox(height: 4),
+              Text('Error', style: TextStyle(fontSize: 10)),
+            ],
+          ),
         );
+      },
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return const Center(child: CircularProgressIndicator());
       },
     );
   }
 
   Widget _buildBody(BuildContext context,
-      AsyncValue<List<InvoiceCaptureProcess>> projectImagesAsyncValue) {
+      AsyncValue<List<InvoiceImageProcess>> projectImagesAsyncValue) {
     return projectImagesAsyncValue.when(
       data: (images) {
         _logger.d(
             '[INVOICE_CAPTURE] Received \\${images.length} images from stream');
         print('[UI] Images received: \\${images.length}');
         for (final img in images) {
-          print(
-              '[UI] Image: id=\\${img.id}, url=\\${img.url}, status=\\${img.status}');
+          print('[UI] Image: id=\${img.id}, url=\${img.url}');
         }
 
         if (images.isEmpty) {
@@ -161,59 +148,24 @@ class _InvoiceCaptureOverviewScreenState
             final imageInfo = images[index];
 
             Widget trailingWidget;
-            switch (imageInfo.status) {
-              case 'invoice':
-              case 'no invoice':
-              case 'analysis_complete':
-              case 'analysis_failed':
-                trailingWidget = IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.white),
-                  onPressed: () => _deleteImage(context, imageInfo),
-                  tooltip: 'Delete Invoice',
-                  iconSize: 20,
-                );
-                break;
-              case 'ocr_running':
-              case 'analysis_running':
-                trailingWidget = const Padding(
-                  padding: EdgeInsets.all(10.0),
-                  child: SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2.0, color: Colors.white),
-                  ),
-                );
-                break;
-              case 'ready':
-              case 'uploading':
-                trailingWidget = IconButton(
-                  icon: const Icon(Icons.document_scanner, color: Colors.white),
-                  onPressed: () => _scanImage(context, ref, imageInfo),
-                  tooltip: 'Scan Invoice',
-                  iconSize: 20,
-                );
-                break;
-              default:
-                trailingWidget = IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.white),
-                  onPressed: () => _deleteImage(context, imageInfo),
-                  tooltip: 'Delete Invoice',
-                  iconSize: 20,
-                );
-                break;
-            }
+            trailingWidget = IconButton(
+              icon: const Icon(Icons.delete, color: Colors.white),
+              onPressed: () => _deleteImage(context, imageInfo),
+              tooltip: 'Delete Invoice',
+              iconSize: 20,
+            );
 
             return GridTile(
               child: GestureDetector(
                 onTap: () {
+                  print(
+                      'Navigating to InvoiceCaptureDetailView for project: \\${widget.project.id}');
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: widget.project.id,
                         initialIndex: index,
-                        images: images,
                       ),
                     ),
                   );
@@ -256,7 +208,7 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Future<void> _deleteImage(
-      BuildContext context, InvoiceCaptureProcess imageInfo) async {
+      BuildContext context, InvoiceImageProcess imageInfo) async {
     final repo = ref.read(projectRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
@@ -351,7 +303,7 @@ class _InvoiceCaptureOverviewScreenState
 
   // Helper function to call the OCR scan function in invoice_capture_screen.dart
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
-      InvoiceCaptureProcess imageInfo) async {
+      InvoiceImageProcess imageInfo) async {
     // Use the utility class to scan the image
     await InvoiceScanUtil.scanImage(context, ref, widget.project.id, imageInfo);
   }

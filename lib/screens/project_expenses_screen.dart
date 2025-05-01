@@ -15,8 +15,6 @@ class ProjectExpensesScreen extends StatefulWidget {
 
 class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
   bool _isLoading = true;
-  // Make _expenses final and initialize empty
-  // The list will be replaced by the fetched data later
   List<Expense> _expenses = [];
   String? _error;
   // late Future<List<Expense>> _expensesFuture; // Remove unused field
@@ -24,26 +22,22 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchExpenses(); // Call fetch directly
+    _fetchExpenses();
   }
 
   Future<void> _fetchExpenses() async {
-    if (!mounted) return; // Check if mounted at the beginning
+    if (!mounted) return;
     setState(() {
       _isLoading = true;
       _error = null;
     });
     try {
-      // TODO: Migrate to Firebase/Firestore
-      // Simulate fetching data
-      await Future.delayed(
-          const Duration(milliseconds: 500)); // Simulate network delay
-      // Replace with actual fetch logic from Firebase
-      final fetchedExpenses = <Expense>[]; // Placeholder for fetched data
+      await Future.delayed(const Duration(milliseconds: 500));
+      final fetchedExpenses = <Expense>[];
 
-      if (!mounted) return; // Check again after await
+      if (!mounted) return;
       setState(() {
-        _expenses = fetchedExpenses; // Assign fetched data
+        _expenses = fetchedExpenses;
         _isLoading = false;
       });
     } catch (e) {
@@ -84,23 +78,18 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
 
     if (!mounted) return;
     setState(() {
-      _isLoading = true; // Show loading indicator
+      _isLoading = true;
     });
 
     try {
-      // TODO: Migrate delete expense logic to Firebase
-      // Simulate deletion
       await Future.delayed(const Duration(milliseconds: 300));
-      // Replace with actual Firebase delete logic
-
-      // Remove the item locally after successful simulated deletion
       final updatedExpenses = List<Expense>.from(_expenses);
       updatedExpenses.removeWhere((exp) => exp.id == expenseId);
 
       if (!mounted) return;
       setState(() {
-        _expenses = updatedExpenses; // Update the list
-        _isLoading = false; // Hide loading indicator
+        _expenses = updatedExpenses;
+        _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
@@ -108,7 +97,7 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
         SnackBar(content: Text('Failed to delete expense: $e')),
       );
       setState(() {
-        _isLoading = false; // Hide loading on error
+        _isLoading = false;
       });
     }
   }
@@ -155,7 +144,7 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _fetchExpenses, // Keep refresh button
+            onPressed: _fetchExpenses,
           ),
           // Add button is temporarily removed as _addExpense is removed
           // IconButton(
@@ -264,7 +253,6 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter who paid';
                   }
-                  // TODO: Add validation if user IDs have a specific format
                   return null;
                 },
                 onSaved: (value) => _paidBy = value!,
@@ -276,11 +264,7 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                   if (value == null || value.isEmpty) {
                     return 'Please enter who shared the expense';
                   }
-                  // Basic check for comma separation, can be enhanced
-                  if (!value.contains(',') && value.isNotEmpty) {
-                    // Allow single entry without comma
-                  }
-                  // TODO: Add validation for individual IDs if needed
+                  if (!value.contains(',') && value.isNotEmpty) {}
                   return null;
                 },
                 onSaved: (value) => _sharedWithString = value!,
@@ -324,7 +308,6 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
           onPressed: () {
             if (_formKey.currentState!.validate()) {
               _formKey.currentState!.save();
-              // Process sharedWith string into List<String>
               final sharedWithList = _sharedWithString
                   .split(',')
                   .map((e) => e.trim())
@@ -332,9 +315,8 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
                   .toList();
 
               final newExpense = Expense(
-                id: 'temp-${DateTime.now().millisecondsSinceEpoch}', // Temporary ID
-                projectId:
-                    '', // Will be set by the caller in _addExpense (needs migration)
+                id: 'temp-${DateTime.now().millisecondsSinceEpoch}',
+                projectId: '',
                 title: _title,
                 description: _description.isNotEmpty ? _description : null,
                 amount: _amount,

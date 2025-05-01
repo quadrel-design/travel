@@ -5,8 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
 import 'package:logger/logger.dart';
-import '../models/invoice_capture_process.dart';
-import '../models/invoice_capture_status.dart';
+import '../models/invoice_image_process.dart';
 import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
@@ -24,12 +23,10 @@ class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
     super.key,
     this.initialIndex = 0,
     required this.projectId,
-    required this.images,
   });
 
   final int initialIndex;
   final String projectId;
-  final List<InvoiceCaptureProcess> images;
 
   @override
   ConsumerState<InvoiceCaptureDetailView> createState() {
@@ -70,26 +67,11 @@ class _InvoiceCaptureDetailViewState
     _logger.i('Initiating scan for image ID: $imageId');
     ref.read(provider.notifier).initiateScan(imageId);
 
-    // Show OCR Started chip
-    final repository = ref.read(projectRepositoryProvider);
-    await repository.updateImageWithOcrResults(
-      widget.projectId,
-      imageId,
-      isInvoice: false,
-      status: 'ocr_running',
-    );
-
     // Timer for OCR timeout
     Timer? timeoutTimer;
     timeoutTimer = Timer(const Duration(seconds: 60), () {
       if (mounted) {
         _logger.e('[INVOICE_CAPTURE] OCR timed out after 60 seconds');
-        repository.updateImageWithOcrResults(
-          widget.projectId,
-          imageId,
-          isInvoice: false,
-          status: 'Error',
-        );
         ref.read(provider.notifier).setScanError(imageId, "OCR timed out");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('OCR process timed out')),
@@ -158,14 +140,6 @@ class _InvoiceCaptureDetailViewState
       _logger.e('[INVOICE_CAPTURE] Error during scan process:',
           error: e, stackTrace: stackTrace);
 
-      // Update status to Error
-      await repository.updateImageWithOcrResults(
-        widget.projectId,
-        imageId,
-        isInvoice: false,
-        status: 'Error',
-      );
-
       ref.read(provider.notifier).setScanError(imageId, e.toString());
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -176,28 +150,8 @@ class _InvoiceCaptureDetailViewState
 
   /// Show appropriate message based on scan result
   void _showScanResultMessage(Map<String, dynamic> result) {
-    final status = result['status'] as String? ?? 'Unknown';
-    _logger.d('Image status from scan: $status');
-
-    String message;
-    switch (status) {
-      case 'NoText':
-        message = 'No text found in the image';
-        break;
-      case 'Text':
-        message = 'Text found in the image';
-        break;
-      case 'Invoice':
-        message = 'Invoice detected and analyzed';
-        _logger.i('Invoice detected! Analysis: ${result['invoiceAnalysis']}');
-        break;
-      default:
-        message = 'Scan completed with status: $status';
-        break;
-    }
-
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
+      const SnackBar(content: Text('Scan completed.')),
     );
   }
 
@@ -206,7 +160,6 @@ class _InvoiceCaptureDetailViewState
       Map<String, dynamic> result, String imageId) async {
     // Store the OCR results using the repository
     final repository = ref.read(projectRepositoryProvider);
-    final status = result['status'] as String? ?? 'Text';
 
     // Extract invoice analysis data if available
     Map<String, dynamic>? invoiceAnalysis;
@@ -218,7 +171,7 @@ class _InvoiceCaptureDetailViewState
 
     // Only validate location if we have invoice analysis
     String? validatedLocation;
-    if (status == 'Invoice' && invoiceAnalysis?['location'] != null) {
+    if (invoiceAnalysis?['location'] != null) {
       final locationService = ref.read(locationServiceProvider);
       final placeId =
           await locationService.findPlaceId(invoiceAnalysis!['location']);
@@ -232,19 +185,18 @@ class _InvoiceCaptureDetailViewState
     }
 
     // Determine if it's an invoice
-    bool isInvoice = status == 'Invoice';
+    bool isInvoice = false;
     if (invoiceAnalysis != null && invoiceAnalysis['isInvoice'] is bool) {
       isInvoice = invoiceAnalysis['isInvoice'];
     }
 
-    _logger.i('Updating image with status: $status, isInvoice: $isInvoice');
+    _logger.i('Updating image with status: $isInvoice');
 
     // Update the repository with all the processed data
     await repository.updateImageWithOcrResults(
       widget.projectId,
       imageId,
       isInvoice: isInvoice,
-      status: status,
     );
 
     // Note: Store validatedLocation in a log for now since the repository doesn't support it
@@ -253,7 +205,7 @@ class _InvoiceCaptureDetailViewState
       // TODO: Add support for storing location in the repository
     }
 
-    _logger.i('OCR results stored for image $imageId with status: $status');
+    _logger.i('OCR results stored for image $imageId with status: $isInvoice');
   }
 
   /// Validate if an image URL is valid and accessible
@@ -272,7 +224,7 @@ class _InvoiceCaptureDetailViewState
   }
 
   /// Build the image view component
-  Widget _buildImageView(InvoiceCaptureProcess imageInfo) {
+  Widget _buildImageView(InvoiceImageProcess imageInfo) {
     if (imageInfo.url.isEmpty) {
       _logger
           .w('[INVOICE_CAPTURE] ImageInfo ID ${imageInfo.id} has empty URL.');
@@ -291,7 +243,7 @@ class _InvoiceCaptureDetailViewState
     return _buildMobileImageView(imageInfo);
   }
 
-  Widget _buildWebImageView(InvoiceCaptureProcess imageInfo) {
+  Widget _buildWebImageView(InvoiceImageProcess imageInfo) {
     return FutureBuilder<String>(
       future: _getValidImageUrl(imageInfo),
       builder: (context, snapshot) {
@@ -307,11 +259,11 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildMobileImageView(InvoiceCaptureProcess imageInfo) {
+  Widget _buildMobileImageView(InvoiceImageProcess imageInfo) {
     return _buildPhotoView(imageInfo.url, false);
   }
 
-  Future<String> _getValidImageUrl(InvoiceCaptureProcess imageInfo) async {
+  Future<String> _getValidImageUrl(InvoiceImageProcess imageInfo) async {
     try {
       final user = FirebaseAuth.instance.currentUser;
       final token = await user?.getIdToken(true);
@@ -395,13 +347,11 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildAnalysisPanel(InvoiceCaptureProcess imageInfo) {
+  Widget _buildAnalysisPanel(InvoiceImageProcess imageInfo) {
     if (!_showAnalysis) return const SizedBox.shrink();
 
     // Check if there's any data to show
-    final bool hasData = imageInfo.status != null ||
-        imageInfo.location != null ||
-        imageInfo.lastProcessedAt != null;
+    final bool hasData = imageInfo.extractedText != null;
 
     if (!hasData) {
       return const Center(
@@ -421,16 +371,17 @@ class _InvoiceCaptureDetailViewState
 
   @override
   Widget build(BuildContext context) {
-    final images = widget.images;
+    print('InvoiceCaptureDetailView build called');
     final provider = invoiceCaptureProvider(
         (projectId: widget.projectId, invoiceId: 'main'));
     final state = ref.watch(provider);
+    final images = state.images;
 
     // Debug logging: print all images received
     _logger.d('[INVOICE_CAPTURE] UI received ${images.length} images:');
     for (final img in images) {
       _logger.d(
-          '[INVOICE_CAPTURE] Image: id=${img.id}, url=${img.url}, status=${img.status}, imagePath=${img.imagePath}');
+          '[INVOICE_CAPTURE] Image: id=${img.id}, url=${img.url}, imagePath=${img.imagePath}');
     }
 
     // Handle case when images are removed
@@ -454,7 +405,7 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  PreferredSizeWidget? _buildAppBar(List<InvoiceCaptureProcess> images) {
+  PreferredSizeWidget? _buildAppBar(List<InvoiceImageProcess> images) {
     if (!_showAppBar) return null;
 
     return AppBar(
@@ -471,38 +422,24 @@ class _InvoiceCaptureDetailViewState
           IconButton(
             icon: const Icon(Icons.analytics),
             onPressed: () async {
+              print('Analyze button pressed!');
               setState(() => _showAnalysis = false);
-              final images = widget.images;
               final imageInfo = images[currentIndex];
               final functionsService = ref.read(firebaseFunctionsProvider);
-              if (imageInfo.extractedText == null ||
-                  imageInfo.extractedText!.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text(
-                          'No extracted text to analyze. Please scan first.')),
-                );
-                return;
-              }
-              setState(() => _isAnalyzing = true);
-              try {
-                await functionsService.analyzeImage(
-                  imageInfo.extractedText!,
-                  widget.projectId,
-                  imageInfo.id,
-                );
-                // Wait a moment for Firestore to update
-                await Future.delayed(const Duration(seconds: 1));
-                setState(() => _showAnalysis = true);
-              } catch (e) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                      content:
-                          Text('Error analyzing invoice: \\${e.toString()}')),
-                );
-              } finally {
-                setState(() => _isAnalyzing = false);
-              }
+              // Debug print for function call parameters
+              print('Calling analyzeImage with:');
+              print('  projectId: \\${widget.projectId}');
+              print('  invoiceId: main');
+              print('  imageId: \\${imageInfo.id}');
+              print('  extractedText: \\${imageInfo.extractedText}');
+              await functionsService.analyzeImage(
+                imageInfo.extractedText ?? '',
+                widget.projectId, // projectId
+                imageInfo.id, // imageId
+              );
+              // Wait a moment for Firestore to update
+              await Future.delayed(const Duration(seconds: 1));
+              setState(() => _showAnalysis = true);
             },
             tooltip: 'Analyze Invoice',
           ),
@@ -516,7 +453,7 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildBody(List<InvoiceCaptureProcess> images) {
+  Widget _buildBody(List<InvoiceImageProcess> images) {
     if (images.isEmpty) {
       return const Center(child: Text('No images available'));
     }
@@ -562,92 +499,17 @@ class _InvoiceCaptureDetailViewState
     );
   }
 
-  Widget _buildStatusChip(InvoiceCaptureProcess imageInfo) {
-    final status = InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
+  Widget _buildStatusChip(InvoiceImageProcess imageInfo) {
+    // Remove: final status = InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
 
-    if (imageInfo.status == 'ocr_running') {
-      // Show OCR started chip
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.blue.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SizedBox(
-              width: 12,
-              height: 12,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.0,
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              ),
-            ),
-            SizedBox(width: 8),
-            Text(
-              'OCR Started',
-              style:
-                  TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-      );
-    } else if (status == InvoiceCaptureStatus.invoice) {
-      // Show Invoice chip
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-        decoration: BoxDecoration(
-          color: Colors.green.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: const Text(
-          'Invoice',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-        ),
-      );
-    } else if (status == InvoiceCaptureStatus.error) {
-      // Show Error chip with retry button
-      return GestureDetector(
-        onTap: () => _showErrorDetails(imageInfo),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            color: Colors.red.withOpacity(0.7),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.error_outline,
-                color: Colors.white,
-                size: 16,
-              ),
-              SizedBox(width: 4),
-              Text(
-                'Error',
-                style:
-                    TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(width: 4),
-              Icon(
-                Icons.refresh,
-                color: Colors.white,
-                size: 14,
-              ),
-            ],
-          ),
-        ),
-      );
-    }
+    // Remove all code that checks or displays imageInfo.status or InvoiceCaptureStatus.
 
     // Return empty container if no status to show
     return const SizedBox.shrink();
   }
 
   // Show error details and retry option
-  void _showErrorDetails(InvoiceCaptureProcess imageInfo) {
+  void _showErrorDetails(InvoiceImageProcess imageInfo) {
     showDialog(
       context: context,
       builder: (BuildContext context) {
@@ -705,7 +567,10 @@ class _InvoiceCaptureDetailViewState
 
   Future<void> _handleDelete() async {
     final repository = ref.read(projectRepositoryProvider);
-    final images = widget.images;
+    final provider = invoiceCaptureProvider(
+        (projectId: widget.projectId, invoiceId: 'main'));
+    final state = ref.read(provider);
+    final images = state.images;
 
     if (!mounted) return;
     if (_isDeleting || images.isEmpty || currentIndex >= images.length) return;

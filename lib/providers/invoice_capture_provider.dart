@@ -14,7 +14,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:equatable/equatable.dart';
 import 'package:logger/logger.dart';
-import 'package:travel/models/invoice_capture_process.dart';
+import 'package:travel/models/invoice_image_process.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:travel/providers/repository_providers.dart';
 
@@ -26,7 +26,7 @@ import 'package:travel/providers/repository_providers.dart';
 /// - General errors that might occur during the process
 class InvoiceCaptureState extends Equatable {
   /// List of images associated with the project
-  final List<InvoiceCaptureProcess> images;
+  final List<InvoiceImageProcess> images;
 
   /// Map of image IDs to error messages for scan operations
   final Map<String, String?> scanError;
@@ -44,7 +44,7 @@ class InvoiceCaptureState extends Equatable {
   ///
   /// The [clearGeneralError] flag can be used to reset the generalError field to null.
   InvoiceCaptureState copyWith({
-    List<InvoiceCaptureProcess>? images,
+    List<InvoiceImageProcess>? images,
     Map<String, String?>? scanError,
     String? generalError,
     bool clearGeneralError = false,
@@ -77,7 +77,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   final String _projectId;
   final String _invoiceId;
   final Ref _ref;
-  StreamSubscription<List<InvoiceCaptureProcess>>? _imageStreamSubscription;
+  StreamSubscription<List<InvoiceImageProcess>>? _imageStreamSubscription;
 
   /// Creates a new InvoiceCaptureNotifier for the specified project and invoice.
   ///

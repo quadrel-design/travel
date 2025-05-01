@@ -1,16 +1,16 @@
 [
   {
-    "origin": ["*", "http://localhost:*", "http://127.0.0.1:*"],
-    "method": ["GET", "HEAD", "PUT", "POST", "DELETE"],
-    "responseHeader": [
-      "Content-Type",
-      "Content-Length",
-      "Content-Disposition",
-      "Access-Control-Allow-Origin",
-      "Cache-Control",
-      "Access-Control-Allow-Methods",
-      "Access-Control-Allow-Headers"
+    "origin": [
+      "http://localhost:5000",
+      "http://localhost:3000",
+      "http://localhost:8080",
+      "http://127.0.0.1:5000",
+      "http://127.0.0.1:8080",
+      "http://127.0.0.1:3000",
+      "http://localhost:61736"
     ],
-    "maxAgeSeconds": 3600
+    "method": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Authorization", "x-goog-meta-*"]
   }
-] 
+]

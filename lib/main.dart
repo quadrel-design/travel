@@ -35,6 +35,18 @@ import 'package:travel/screens/project_expenses_screen.dart';
 import 'package:travel/screens/user_management_screen.dart';
 import 'models/project.dart';
 
+void printFirebaseConfig() {
+  final options = Firebase.app().options;
+  print('--- FIREBASE CONFIG ---');
+  print('Project ID: \\${options.projectId}');
+  print('Storage Bucket: \\${options.storageBucket}');
+  print('API Key: \\${options.apiKey}');
+  print('App ID: \\${options.appId}');
+  print('Auth Domain: \\${options.authDomain}');
+  print('Messaging Sender ID: \\${options.messagingSenderId}');
+  print('-----------------------');
+}
+
 // --- Provider for Firebase Initialization ---
 final firebaseInitializationProvider = FutureProvider<FirebaseApp>((ref) async {
   print('DEBUG: firebaseInitializationProvider executing...');
@@ -43,10 +55,10 @@ final firebaseInitializationProvider = FutureProvider<FirebaseApp>((ref) async {
   );
   // Log that the Dart await completed
   print(
-    'DEBUG: firebaseInitializationProvider COMPLETED (Dart await returned).',
-  );
+      'DEBUG: firebaseInitializationProvider COMPLETED (Dart await returned).');
 
-  // TEMPORARY TEST REMOVED
+  // Print Firebase config after initialization
+  printFirebaseConfig();
 
   print('DEBUG: firebaseInitializationProvider returning app.');
   return app;

@@ -2,8 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
-import '../models/invoice_capture_process.dart';
-import '../models/invoice_capture_status.dart';
+import '../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:travel/widgets/image_status_chip.dart';
@@ -11,13 +10,6 @@ import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
-
-InvoiceCaptureStatus determineImageStatus(InvoiceCaptureProcess imageInfo) {
-  if (imageInfo.status != null) {
-    return InvoiceCaptureStatus.fromFirebaseStatus(imageInfo.status);
-  }
-  return InvoiceCaptureStatus.ready;
-}
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
@@ -52,7 +44,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildImageTile(
-      BuildContext context, WidgetRef ref, InvoiceCaptureProcess imageInfo) {
+      BuildContext context, WidgetRef ref, InvoiceImageProcess imageInfo) {
     if (imageInfo.url.isEmpty) {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
@@ -96,7 +88,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   }
 
   Widget _buildBody(BuildContext context, WidgetRef ref,
-      AsyncValue<List<InvoiceCaptureProcess>> projectImagesAsyncValue) {
+      AsyncValue<List<InvoiceImageProcess>> projectImagesAsyncValue) {
     return projectImagesAsyncValue.when(
       data: (images) {
         ref.read(loggerProvider).d(
@@ -119,19 +111,10 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
             return GridTile(
               footer: GridTileBar(
                 backgroundColor: Colors.black45,
-                title: ImageStatusChip(imageInfo: imageInfo),
+                title: Container(),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (imageInfo.status == 'ready' ||
-                        imageInfo.status == 'uploading')
-                      IconButton(
-                        icon: const Icon(Icons.document_scanner,
-                            color: Colors.white),
-                        onPressed: () => _scanImage(context, ref, imageInfo),
-                        tooltip: 'Scan Invoice',
-                        iconSize: 20,
-                      ),
                     IconButton(
                       icon: const Icon(Icons.delete, color: Colors.white),
                       onPressed: () => _deleteImage(context, ref, imageInfo),
@@ -149,7 +132,6 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: projectId,
                         initialIndex: index,
-                        images: images,
                       ),
                     ),
                   );
@@ -175,7 +157,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _deleteImage(BuildContext context, WidgetRef ref,
-      InvoiceCaptureProcess imageInfo) async {
+      InvoiceImageProcess imageInfo) async {
     final repo = ref.read(projectRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
@@ -207,19 +189,8 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
         imageInfo.id,
       );
       ref.read(loggerProvider).i("🗑️ Invoice deleted successfully");
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invoice deleted successfully.')),
-        );
-      }
     } catch (e) {
       ref.read(loggerProvider).e("🗑️ Error deleting invoice", error: e);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error deleting invoice: $e')),
-        );
-      }
     }
   }
 
@@ -250,29 +221,13 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
       ref
           .read(loggerProvider)
           .d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
-
-      if (context.mounted) {
-        ref.read(loggerProvider).d("📸 Showing success message");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Invoice uploaded! Click Scan to process.')),
-        );
-      }
     } catch (e) {
       ref.read(loggerProvider).e("📸 ERROR DURING UPLOAD: $e", error: e);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error uploading invoice: $e'),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
     }
   }
 
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
-      InvoiceCaptureProcess imageInfo) async {
+      InvoiceImageProcess imageInfo) async {
     await InvoiceScanUtil.scanImage(context, ref, projectId, imageInfo);
   }
 }

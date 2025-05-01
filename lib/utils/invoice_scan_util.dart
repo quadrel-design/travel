@@ -1,95 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:travel/models/invoice_capture_process.dart';
+import 'package:travel/models/invoice_image_process.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'dart:math' as math;
+import 'package:travel/models/invoice_image_status.dart';
 
 /// Utility class for invoice OCR scanning that can be shared across screens
 class InvoiceScanUtil {
-  /// Updates the OCR results directly in Firestore as a fallback
-  static Future<void> manuallyUpdateOcrResults(
-      BuildContext context,
-      WidgetRef ref,
-      String projectId,
-      String imageId,
-      Map<String, dynamic> resultData) async {
-    final logger = ref.read(loggerProvider);
-    try {
-      final userId = FirebaseAuth.instance.currentUser!.uid;
-      logger.d("📝 Manually updating OCR results for image $imageId");
-      logger.d("📝 Raw result data: $resultData");
-
-      final docRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(userId)
-          .collection('invoices')
-          .doc(projectId)
-          .collection('images')
-          .doc(imageId);
-
-      // Extract key data from the result - check various possible field names
-      // The Cloud Function might use different field names than our database expects
-      final status = resultData['status'] as String? ?? 'unknown';
-
-      // Check field names in priority order based on Cloud Function response structure:
-      // 1. extractedText - This is now what the Cloud Function uses
-      // 2. detectedText - This might be used in older versions
-      // 3. text - Alternative name that might be used
-      // 4. fullText - Alternative name that might be used
-      String? extractedText = resultData['extractedText'] as String?;
-
-      // If primary field is empty, check alternatives
-      if (extractedText == null || extractedText.isEmpty) {
-        extractedText = resultData['detectedText'] as String?;
-      }
-      if (extractedText == null || extractedText.isEmpty) {
-        extractedText = resultData['text'] as String?;
-      }
-      if (extractedText == null || extractedText.isEmpty) {
-        extractedText = resultData['fullText'] as String?;
-      }
-
-      // Log all fields to help diagnose what's in the response
-      logger.d("📝 All result data keys: ${resultData.keys.join(', ')}");
-      logger
-          .d("📝 extractedText found: ${extractedText != null ? 'YES' : 'NO'}");
-
-      // Handle confidence field which might be in different formats
-      final double confidence;
-      if (resultData['confidence'] is double) {
-        confidence = resultData['confidence'] as double;
-      } else if (resultData['confidence'] is int) {
-        confidence = (resultData['confidence'] as int).toDouble();
-      } else if (resultData['confidence'] is String) {
-        confidence = double.tryParse(resultData['confidence'] as String) ?? 0.0;
-      } else {
-        confidence = 0.0;
-      }
-
-      // Create update data
-      final updateData = {
-        'status': status,
-        'extractedText': extractedText ?? '',
-        'confidence': confidence,
-        'updatedAt': FieldValue.serverTimestamp(),
-        'manuallyUpdated': true // Flag to indicate this was updated by client
-      };
-
-      logger.d(
-          "📝 Update data: Status=$status, textLength=${extractedText?.length ?? 0}, confidence=$confidence");
-
-      await docRef.update(updateData);
-      logger.i("📝 Manual OCR results update successful");
-    } catch (e) {
-      logger.e("📝 Manual OCR update failed", error: e);
-    }
-  }
-
   static Future<void> scanImage(BuildContext context, WidgetRef ref,
-      String projectId, InvoiceCaptureProcess imageInfo) async {
+      String projectId, InvoiceImageProcess imageInfo) async {
     final logger = ref.read(loggerProvider);
     try {
       logger.d("🔍 Starting OCR scan for image ${imageInfo.id}...");
@@ -104,48 +26,16 @@ class InvoiceScanUtil {
         );
       }
 
-      // First update status to ocr_running
-      try {
-        final userId = FirebaseAuth.instance.currentUser!.uid;
-        logger.d("🔍 User ID: $userId");
-
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('invoices')
-            .doc(projectId)
-            .collection('images')
-            .doc(imageInfo.id);
-
-        logger.d(
-            "🔍 Updating document at path: /users/$userId/invoices/$projectId/images/${imageInfo.id}");
-
-        await docRef.update({
-          'status': 'ocr_running',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-
-        logger.d("🔍 Status updated to ocr_running");
-
-        // Verify the update worked
-        final updatedDoc = await docRef.get();
-        logger.d("🔍 Verified document exists: ${updatedDoc.exists}");
-        if (updatedDoc.exists) {
-          logger.d("🔍 Current status: ${updatedDoc.data()?['status']}");
-        }
-      } catch (updateError) {
-        logger.e("🔍 Error updating status to ocr_running", error: updateError);
-        // Continue even if this fails
-      }
-
       // Call the OCR function
       logger.d("🔍 Calling Firebase Cloud Function 'detectImage'");
-      final functions = FirebaseFunctions.instance;
+      print('Apply to image-detect...');
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final callable = functions.httpsCallable('detectImage');
 
       final params = {
         'imageUrl': imageInfo.url,
-        'invoiceId': projectId,
+        'projectId': projectId,
+        'invoiceId': 'main',
         'imageId': imageInfo.id,
       };
       print(
@@ -195,13 +85,6 @@ class InvoiceScanUtil {
               "🔍 Contains 'fullText' field: ${text.isNotEmpty ? '${text.substring(0, math.min(50, text.length))}...' : 'empty'}");
         }
 
-        // Check for status field
-        if (resultMap.containsKey('status')) {
-          logger.d("🔍 Status field: ${resultMap['status']}");
-        } else {
-          logger.w("🔍 Result does not contain 'status' field");
-        }
-
         // Check for confidence field
         if (resultMap.containsKey('confidence')) {
           logger.d("🔍 Confidence: ${resultMap['confidence']}");
@@ -219,84 +102,13 @@ class InvoiceScanUtil {
         }
       }
 
-      // Check if the database was updated
-      try {
-        final userId = FirebaseAuth.instance.currentUser!.uid;
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(userId)
-            .collection('invoices')
-            .doc(projectId)
-            .collection('images')
-            .doc(imageInfo.id);
-
-        final updatedDoc = await docRef.get();
-        final currentStatus = updatedDoc.data()?['status'];
-        final hasExtractedText =
-            updatedDoc.data()?.containsKey('extractedText') ?? false;
-        final extractedTextValue = updatedDoc.data()?['extractedText'];
-
-        logger.d("🔍 After OCR - Document status: $currentStatus");
-        logger.d("🔍 After OCR - Has extractedText field: $hasExtractedText");
-        if (hasExtractedText) {
-          logger.d(
-              "🔍 extractedText is ${extractedTextValue == null ? 'null' : 'not null'} with type: ${extractedTextValue?.runtimeType}");
-          if (extractedTextValue != null &&
-              extractedTextValue is String &&
-              extractedTextValue.isNotEmpty) {
-            final text = extractedTextValue;
-            logger.d(
-                "🔍 extractedText sample: ${text.substring(0, math.min(50, text.length))}...");
-          } else {
-            logger.w("🔍 extractedText exists but is empty or null");
-          }
-        }
-
-        if (currentStatus == 'ocr_running' ||
-            !hasExtractedText ||
-            extractedTextValue == null) {
-          logger.w(
-              "🔍 WARNING: Cloud Function did not update the document properly");
-
-          // Manually update the document with OCR results
-          if (result.data is Map) {
-            await InvoiceScanUtil.manuallyUpdateOcrResults(context, ref,
-                projectId, imageInfo.id, result.data as Map<String, dynamic>);
-          } else {
-            // Try to convert non-map data to a map
-            final fallbackMap = <String, dynamic>{
-              'status': 'unknown',
-              'extractedText': result.data?.toString() ?? '',
-              'confidence': 0.0
-            };
-            await InvoiceScanUtil.manuallyUpdateOcrResults(
-                context, ref, projectId, imageInfo.id, fallbackMap);
-          }
-        } else {
-          logger
-              .i("🔍 Document was successfully updated by the Cloud Function");
-        }
-      } catch (verifyError) {
-        logger.e("🔍 Error verifying document update after OCR",
-            error: verifyError);
-
-        // Still try to manually update if verification failed
-        if (result.data is Map) {
-          await InvoiceScanUtil.manuallyUpdateOcrResults(context, ref,
-              projectId, imageInfo.id, result.data as Map<String, dynamic>);
-        } else {
-          await InvoiceScanUtil.manuallyUpdateOcrResults(
-              context, ref, projectId, imageInfo.id, {'status': 'unknown'});
-        }
-      }
-
       // Show appropriate message based on result
       if (context.mounted) {
         String message;
 
         if (result.data is Map<String, dynamic>) {
           final resultMap = result.data as Map<String, dynamic>;
-          final status = resultMap['status'] as String? ?? 'unknown';
+          final status = resultMap['status'] as String? ?? 'uploaded';
 
           if (status == 'invoice') {
             message = 'OCR completed: Text detected!';
@@ -323,24 +135,6 @@ class InvoiceScanUtil {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Error starting OCR: $e')),
         );
-      }
-
-      // Try to reset status on error
-      try {
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(FirebaseAuth.instance.currentUser!.uid)
-            .collection('invoices')
-            .doc(projectId)
-            .collection('images')
-            .doc(imageInfo.id);
-
-        await docRef.update({
-          'status': 'ready',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {
-        // Ignore errors when resetting status
       }
     }
   }

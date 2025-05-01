@@ -10,7 +10,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 // import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:logger/logger.dart'; // Import Logger
-import '../models/invoice_capture_process.dart';
+import '../models/invoice_image_process.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
 import '../models/project.dart';
 
@@ -23,7 +23,7 @@ abstract class InvoiceRepository {
   Stream<Project?> getProjectStream(String projectId);
 
   /// Gets a stream of images for a specific invoice in a project
-  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(
+  Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
       String projectId, String invoiceId);
 
   /// Adds a new project
@@ -40,14 +40,13 @@ abstract class InvoiceRepository {
     String projectId,
     String imageId, {
     bool? isInvoice,
-    String? status,
   });
 
   /// Deletes a project image
   Future<void> deleteInvoiceImage(String projectId, String imageId);
 
   /// Uploads a project image
-  Future<InvoiceCaptureProcess> uploadInvoiceImage(
+  Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
     Uint8List fileBytes,
     String fileName,
@@ -201,7 +200,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Stream<List<InvoiceCaptureProcess>> getInvoiceImagesStream(
+  Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
       String projectId, String invoiceId) {
     final userId = _getCurrentUserId();
     print('[STREAM] Using userId: $userId');
@@ -226,7 +225,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
                 final data = doc.data();
                 print('Firestore image doc: $data');
                 final info =
-                    InvoiceCaptureProcess.fromJson(data).copyWith(id: doc.id);
+                    InvoiceImageProcess.fromJson(data).copyWith(id: doc.id);
                 print('Parsed image info: $info');
                 return info;
               } catch (e, stackTrace) {
@@ -236,7 +235,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
               }
             })
             .where((item) => item != null)
-            .cast<InvoiceCaptureProcess>()
+            .cast<InvoiceImageProcess>()
             .toList();
       }).handleError((error, stackTrace) {
         _logger.e(
@@ -321,7 +320,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<InvoiceCaptureProcess> uploadInvoiceImage(
+  Future<InvoiceImageProcess> uploadInvoiceImage(
       String projectId, Uint8List fileBytes, String fileName) async {
     final userId = _getCurrentUserId(); // Use helper
     print('[UPLOAD] Using userId: $userId');
@@ -344,13 +343,11 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       final downloadUrl = await uploadTask.ref.getDownloadURL();
       _logger.i('Image uploaded successfully: $downloadUrl');
 
-      // Use correct constructor parameters for InvoiceCaptureProcess
-      final imageInfo = InvoiceCaptureProcess(
+      // Use correct constructor parameters for InvoiceImageProcess
+      final imageInfo = InvoiceImageProcess(
         id: imageId,
         url: downloadUrl,
         imagePath: imagePath,
-        status: 'ready', // Use lowercase for consistency
-        isInvoiceGuess: false,
         lastProcessedAt: now,
         location: null,
         invoiceAnalysis: null,
@@ -371,10 +368,10 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(invoiceId)
           .collection('invoice_images')
           .doc(imageId)
-          .set(docData);
+          .set(docData, SetOptions(merge: true));
 
       _logger.i('Image metadata added to Firestore with ID: $imageId');
-      // Return the InvoiceCaptureProcess object with the new ID
+      // Return the InvoiceImageProcess object with the new ID
       return imageInfo;
     } catch (e, s) {
       _logger.e('Unknown error uploading image', error: e, stackTrace: s);
@@ -409,7 +406,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
         );
       }
 
-      final imageInfo = InvoiceCaptureProcess.fromJson(imageDoc.data()!);
+      final imageInfo = InvoiceImageProcess.fromJson(imageDoc.data()!);
 
       // Delete from storage first
       final storageRef = _storage.ref().child(imageInfo.imagePath);
@@ -444,7 +441,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
     String projectId,
     String imageId, {
     bool? isInvoice,
-    String? status,
   }) async {
     try {
       final userId = _getCurrentUserId();
@@ -454,9 +450,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       final data = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
       };
-
-      if (isInvoice != null) data['is_invoice_guess'] = isInvoice;
-      if (status != null) data['status'] = status;
 
       await _firestore
           .collection('users')

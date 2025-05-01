@@ -13,7 +13,6 @@
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/repositories/auth_repository.dart';
-import 'package:travel/models/invoice_capture_process.dart';
 
 // Import Firebase services
 import 'package:firebase_auth/firebase_auth.dart';
@@ -21,13 +20,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 import '../providers/logging_provider.dart';
-import 'package:travel/repositories/invoice_repository.dart';
 import 'package:travel/repositories/firestore_invoice_repository.dart';
 import 'package:travel/repositories/firebase_auth_repository.dart';
 import 'package:travel/repositories/project_repository.dart';
 import 'package:travel/models/project.dart';
 import 'package:travel/models/expense.dart';
 import 'package:travel/repositories/expense_repository.dart';
+import 'package:travel/models/invoice_image_process.dart';
 
 /// Provider for accessing the Firestore database instance.
 ///
@@ -95,7 +94,7 @@ final userInvoicesStreamProvider =
 /// Parameters:
 ///   - params: A map containing 'projectId' and 'invoiceId'
 final invoiceImagesStreamProvider = StreamProvider.autoDispose
-    .family<List<InvoiceCaptureProcess>, Map<String, String>>((ref, params) {
+    .family<List<InvoiceImageProcess>, Map<String, String>>((ref, params) {
   final repository = ref.watch(invoiceRepositoryProvider);
   final logger = ref.watch(loggerProvider);
   final projectId = params['projectId']!;

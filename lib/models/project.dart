@@ -6,7 +6,6 @@
  * It includes serialization methods for JSON and Firestore compatibility.
  */
 
-// import 'dart:convert'; // Unused import
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
 

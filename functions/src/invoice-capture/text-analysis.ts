@@ -8,6 +8,7 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { config } from "firebase-functions";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { app } from "../init";
 import { GoogleGenerativeAI } from "@google/generative-ai";
@@ -15,15 +16,27 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 // Firestore database reference
 const db = getFirestore(app);
 
-// Restore Gemini API key and client setup
-const geminiApiKey = process.env.FUNCTIONS_CONFIG ? 
-  JSON.parse(process.env.FUNCTIONS_CONFIG).gemini?.api_key || 
-  JSON.parse(process.env.FUNCTIONS_CONFIG).gemini?.key : 
-  process.env.GEMINI_API_KEY || "";
+// Use Firebase Functions config or .env for Gemini API key
+const geminiApiKey = config().gemini?.api_key || process.env.GEMINI_API_KEY || "";
 
 console.log("Gemini API Key configured:", !!geminiApiKey);
+console.log("Gemini API Key value:", geminiApiKey);
 
 const genAI = new GoogleGenerativeAI(geminiApiKey);
+
+// Define a type for the Firestore update data
+type InvoiceUpdateData = {
+  status: string;
+  isInvoice: boolean;
+  lastProcessedAt: FirebaseFirestore.FieldValue;
+  extractedText: string;
+  totalAmount?: number;
+  currency?: string;
+  merchantName?: string;
+  merchantLocation?: string;
+  invoiceDate?: string;
+  invoiceAnalysis?: object;
+};
 
 /**
  * Analyzes detected text using the Gemini API to extract invoice information.
@@ -151,6 +164,7 @@ export async function analyzeDetectedText(extractedText: string) {
  * @param {CallableRequest} request The request object.
  * @param {object} request.data The data passed to the function:
  * @param {string} request.data.extractedText The text to analyze.
+ * @param {string} [request.data.projectId] Optional: The ID of the project.
  * @param {string} [request.data.invoiceId] Optional: The ID of the parent invoice document.
  * @param {string} [request.data.imageId] Optional: The ID of the image document to update.
  * @param {object} request.auth Authentication information for the calling user.
@@ -163,27 +177,29 @@ export const analyzeImage = onCall({
   enforceAppCheck: false,
   timeoutSeconds: 120,
 }, async (request) => {
-  console.log("analyzeImage function called with data:", request.data);
-  if (!request.data.invoiceId || !request.data.imageId) {
-    console.error("Missing invoiceId or imageId in request:", request.data);
-    throw new HttpsError("invalid-argument", "invoiceId and imageId are required");
+  console.log("[DEBUG] request.data:", request.data);
+  const { projectId, invoiceId, imageId, extractedText } = request.data || {};
+  console.log("[DEBUG] projectId:", projectId);
+  console.log("[DEBUG] invoiceId:", invoiceId);
+  console.log("[DEBUG] imageId:", imageId);
+  console.log("[DEBUG] extractedText:", extractedText);
+  if (!projectId || !invoiceId || !imageId) {
+    console.error("Missing projectId, invoiceId or imageId in request:", request.data);
+    throw new HttpsError("invalid-argument", "projectId, invoiceId and imageId are required");
   }
   if (!request.auth) {
     console.error("Authentication error: User not authenticated");
     throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
-  const { extractedText, invoiceId, imageId } = request.data;
-  if (!extractedText) {
-    console.error("Invalid request: No extracted text provided");
-    throw new HttpsError("invalid-argument", "Must provide extracted text for analysis");
-  }
   let docRef: FirebaseFirestore.DocumentReference | null = null;
-  if (invoiceId && imageId && request.auth?.uid) {
+  if (projectId && invoiceId && imageId && request.auth?.uid) {
       docRef = db.collection("users")
           .doc(request.auth.uid)
+          .collection("projects")
+          .doc(projectId)
           .collection("invoices")
           .doc(invoiceId)
-          .collection("images")
+          .collection("invoice_images")
           .doc(imageId);
   }
   try {
@@ -207,19 +223,25 @@ export const analyzeImage = onCall({
             finalStatus = "analysis_failed";
           }
         }
-        const updateData: any = {
+        const updateData: InvoiceUpdateData = {
           status: finalStatus,
           isInvoice: analysisResult.isInvoice,
           lastProcessedAt: FieldValue.serverTimestamp(),
           extractedText
-        }; // eslint-disable-line @typescript-eslint/no-explicit-any
+        };
         if (analysisResult.success && analysisResult.invoiceAnalysis) {
           updateData.totalAmount = analysisResult.invoiceAnalysis.totalAmount;
           updateData.currency = analysisResult.invoiceAnalysis.currency;
           updateData.merchantName = analysisResult.invoiceAnalysis.merchantName;
           updateData.merchantLocation = analysisResult.invoiceAnalysis.location;
           updateData.invoiceDate = analysisResult.invoiceAnalysis.date;
-          updateData.invoiceAnalysis = analysisResult.invoiceAnalysis; 
+          updateData.invoiceAnalysis = analysisResult.invoiceAnalysis;
+          console.log("[DEBUG] Writing invoiceAnalysis to Firestore:", updateData);
+        } else {
+          console.warn("[DEBUG] Skipping Firestore update for invoiceAnalysis. Reason:", {
+            success: analysisResult.success,
+            invoiceAnalysis: analysisResult.invoiceAnalysis
+          });
         }
         console.log("Firestore updateData:", updateData, "Doc path:", docRef.path);
         await docRef.update(updateData);

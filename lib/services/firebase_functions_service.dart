@@ -44,14 +44,15 @@ class FirebaseFunctionsService {
       _logger.d('[FUNCTIONS] Preparing to scan image: $imageUrl');
       _logger.d('[FUNCTIONS] Project ID: $projectId, Image ID: $imageId');
 
-      final callable = _functions.httpsCallable('scanImage');
+      final callable = _functions.httpsCallable('detectImage');
       _logger.d(
-          '[FUNCTIONS] Calling scanImage function with timeout: ${timeoutSeconds}s');
+          '[FUNCTIONS] Calling detectImage function with timeout: \\${timeoutSeconds}s');
 
       final resultFuture = callable.call<Map<String, dynamic>>({
-        'imageUrl': imageUrl,
-        'invoiceId': projectId,
+        'projectId': projectId,
+        'invoiceId': 'main',
         'imageId': imageId,
+        'imageUrl': imageUrl,
       });
 
       // Add timeout to prevent indefinite waiting
@@ -64,42 +65,38 @@ class FirebaseFunctionsService {
         },
       );
 
-      _logger.d('[FUNCTIONS] Raw result data: ${result.data}');
+      _logger.d('[FUNCTIONS] Raw result data: \\${result.data}');
 
       final data = result.data;
 
-      // Ensure we have a valid status
-      if (!data.containsKey('success') ||
-          data['success'] != true ||
-          !data.containsKey('status')) {
+      // Ensure we have a valid success
+      if (!data.containsKey('success') || data['success'] != true) {
         _logger.w(
             '[FUNCTIONS] Function call successful, but response format is unexpected. Data: $data');
         throw FunctionCallException(
           'Function response format unexpected',
-          functionName: 'scanImage',
-          originalException: 'Missing success or status fields in response',
+          functionName: 'detectImage',
+          originalException: 'Missing success field in response',
         );
       }
 
-      _logger.i(
-          '[FUNCTIONS] Scan completed successfully with status: ${data['status']}');
       return data;
     } on FirebaseFunctionsException catch (e, stackTrace) {
       _logger.e('[FUNCTIONS] Firebase function error:',
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         e.message ?? 'Firebase function error',
-        functionName: 'scanImage',
+        functionName: 'detectImage',
         code: e.code,
         originalException: e,
         stackTrace: stackTrace,
       );
     } on TimeoutException catch (e, stackTrace) {
-      _logger.e('[FUNCTIONS] Timeout calling scanImage:',
+      _logger.e('[FUNCTIONS] Timeout calling detectImage:',
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         'Function call timed out after $timeoutSeconds seconds',
-        functionName: 'scanImage',
+        functionName: 'detectImage',
         code: 'timeout',
         originalException: e,
         stackTrace: stackTrace,
@@ -109,7 +106,7 @@ class FirebaseFunctionsService {
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         e.toString(),
-        functionName: 'scanImage',
+        functionName: 'detectImage',
         originalException: e,
         stackTrace: stackTrace,
       );
@@ -141,7 +138,8 @@ class FirebaseFunctionsService {
           '[FUNCTIONS] Calling analyzeImage function with timeout: \\${timeoutSeconds}s');
       final resultFuture = callable.call<Map<String, dynamic>>({
         'extractedText': extractedText,
-        'invoiceId': projectId,
+        'projectId': projectId,
+        'invoiceId': 'main',
         'imageId': imageId,
       });
       final HttpsCallableResult<Map<String, dynamic>> result =
@@ -156,7 +154,7 @@ class FirebaseFunctionsService {
       final data = result.data;
       if (!data.containsKey('success')) {
         _logger.w(
-            '[FUNCTIONS] Function call successful, but response format is unexpected. Data: \\${data}');
+            '[FUNCTIONS] Function call successful, but response format is unexpected. Data: \\$data');
         throw FunctionCallException(
           'Function response format unexpected',
           functionName: 'analyzeImage',

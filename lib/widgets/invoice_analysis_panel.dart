@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/invoice_capture_process.dart';
+import '../models/invoice_image_process.dart';
 import '../constants/ui_constants.dart';
 import 'package:logger/logger.dart';
 
 class InvoiceAnalysisPanel extends StatelessWidget {
-  final InvoiceCaptureProcess imageInfo;
+  final InvoiceImageProcess imageInfo;
   final VoidCallback onClose;
   final Logger logger;
 
@@ -19,11 +19,11 @@ class InvoiceAnalysisPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     // Log data for debugging
     logger.d('INVOICE DATA DEBUG:');
-    logger.d('- id: \\${imageInfo.id}');
-    logger.d('- status: \\${imageInfo.status}');
-    logger.d('- location: \\${imageInfo.location}');
-    logger.d('- lastProcessedAt: \\${imageInfo.lastProcessedAt}');
-    logger.d('- isInvoiceGuess: \\${imageInfo.isInvoiceGuess}');
+    logger.d('- id: ${imageInfo.id}');
+    // logger.d('- status: ${imageInfo.status}');
+    logger.d('- location: ${imageInfo.location}');
+    logger.d('- lastProcessedAt: ${imageInfo.lastProcessedAt}');
+    logger.d('- isInvoiceGuess: ${imageInfo.isInvoiceGuess}');
     logger.d(
         '- extractedText: \\${imageInfo.extractedText != null ? 'Available (\\${imageInfo.extractedText!.length} chars)' : 'Not available'}');
     print('DEBUG: invoiceAnalysis = \\${imageInfo.invoiceAnalysis}');
@@ -44,9 +44,18 @@ class InvoiceAnalysisPanel extends StatelessWidget {
               if (imageInfo.invoiceAnalysis != null)
                 _buildStructuredAnalysis(
                     InvoiceAnalysis.fromJson(imageInfo.invoiceAnalysis!))
-              else if (imageInfo.extractedText != null &&
-                  imageInfo.extractedText!.isNotEmpty)
-                _buildExtractedText(),
+              else
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8.0),
+                  child: Text(
+                    'No Gemini analysis available for this image.',
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
               if (imageInfo.location != null && imageInfo.location!.isNotEmpty)
                 _buildLocation(),
               if (imageInfo.lastProcessedAt != null) _buildProcessedDate(),
@@ -84,13 +93,9 @@ class InvoiceAnalysisPanel extends StatelessWidget {
         ),
         const SizedBox(height: UIConstants.kElementSpacing),
         Text(
-          imageInfo.status == 'invoice'
-              ? 'Invoice'
-              : (imageInfo.status ?? 'Unknown'),
+          'Unknown',
           style: TextStyle(
-            color: imageInfo.status == 'invoice'
-                ? UIConstants.kPanelHighlightColor
-                : UIConstants.kPanelWarningColor,
+            color: UIConstants.kPanelWarningColor,
             fontSize: 16,
             fontWeight: FontWeight.bold,
           ),
