@@ -166,3 +166,19 @@ final userProjectsStreamProvider = Provider<AsyncValue<List<Project>>>(
     (ref) => ref.watch(userInvoicesStreamProvider));
 final projectStreamProvider = Provider.family<AsyncValue<Project?>, String>(
     (ref, id) => ref.watch(invoiceStreamProvider(id)));
+
+/// Stream provider for all images associated with a project (not a specific invoice).
+///
+/// This provider delivers a real-time stream of all images for a specific project.
+/// The stream automatically updates when images are added, modified, or removed.
+///
+/// Parameters:
+///   - projectId: The ID of the project
+final projectImagesStreamProvider = StreamProvider.autoDispose
+    .family<List<InvoiceImageProcess>, String>((ref, projectId) {
+  final repository = ref.watch(invoiceRepositoryProvider);
+  final logger = ref.watch(loggerProvider);
+  logger.d(
+      '[PROVIDER] projectImagesStreamProvider executing for projectId: $projectId');
+  return repository.getProjectImagesStream(projectId);
+});

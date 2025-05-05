@@ -18,6 +18,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
+import 'package:async/async.dart';
 
 // Conditionally import dart:html for web platform only
 // ignore: avoid_web_libraries_in_flutter
@@ -382,10 +383,10 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     }
   }
 
-  Future<String> _getImageDownloadUrl(
-      String userId, String projectId, String fileName) async {
+  Future<String> _getImageDownloadUrl(String userId, String projectId,
+      String invoiceId, String fileName) async {
     final storagePath =
-        'users/$userId/projects/$projectId/invoices/main/invoice_images/$fileName';
+        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
     final ref = _storage.ref().child(storagePath);
 
     try {
@@ -542,5 +543,54 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
             .doc('latest')
             .get();
     return analysisDoc.exists ? analysisDoc.data() : null;
+  }
+
+  /// Returns a stream of all invoice images for all invoices in a project.
+  Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId) {
+    try {
+      final userId = _getCurrentUserId();
+      _logger.d(
+          '[DEBUG] getProjectImagesStream: userId=$userId, projectId=$projectId');
+      final invoicesCollection = _getInvoicesCollection(userId, projectId);
+      // Listen to all invoices, then merge all invoice_images streams
+      return invoicesCollection.snapshots().asyncExpand((invoicesSnapshot) {
+        final streams = invoicesSnapshot.docs.map((invoiceDoc) {
+          final invoiceId = invoiceDoc.id;
+          final imagesCollection =
+              invoicesCollection.doc(invoiceId).collection('invoice_images');
+          return imagesCollection.snapshots().map((imagesSnapshot) {
+            return imagesSnapshot.docs
+                .map((doc) {
+                  try {
+                    final data = doc.data();
+                    data['id'] = doc.id;
+                    if (!data.containsKey('url') ||
+                        !data.containsKey('imagePath')) {
+                      _logger.w(
+                          '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
+                      return null;
+                    }
+                    return InvoiceImageProcess.fromJson(data);
+                  } catch (e) {
+                    _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
+                    return null;
+                  }
+                })
+                .whereType<InvoiceImageProcess>()
+                .toList();
+          });
+        }).toList();
+        if (streams.isEmpty) {
+          return Stream.value(<InvoiceImageProcess>[]);
+        }
+        return StreamGroup.merge<List<InvoiceImageProcess>>(streams);
+      }).handleError((error, stackTrace) {
+        throw DatabaseFetchException(
+            'Failed to fetch project images', error, stackTrace);
+      });
+    } catch (e, stackTrace) {
+      return Stream<List<InvoiceImageProcess>>.error(DatabaseFetchException(
+          'Failed to create project image stream', e, stackTrace));
+    }
   }
 }

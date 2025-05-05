@@ -44,7 +44,7 @@ async function main() {
   try {
     const result = await analyzeInvoice({
       projectId: "sYoHqiwIJEx1du1KsnpM",
-      invoiceId: "main",
+      invoiceId: "YOUR_INVOICE_ID", // Replace with a real invoiceId for testing
       imageId: "8aa08e0d-28cd-4f1f-b0fc-865b116af086",
       extractedText:
         "[Company Name] [Street Address] [City, ST ZIP] Phone: (000) 000-0000 BILL TO [Name] [Company Name] [Street Address] [City, ST ZIP] [Phone] [Email Address] INVOICE INVOICE # [123456] DATE 5/1/2014 Thank you for your business! TOTAL $ 551.56 Invoice Template 2014 Vertex42.com If you have any questions about this invoice, please contact [Name, Phone, email@address.com]"

@@ -55,6 +55,9 @@ abstract class InvoiceRepository {
     Uint8List fileBytes,
     String fileName,
   );
+
+  /// Returns a stream of all invoice images for all invoices in a project.
+  Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId);
 }
 
 class ProjectRepositoryImpl implements InvoiceRepository {
@@ -335,8 +338,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
     final imageId = DateTime.now().millisecondsSinceEpoch.toString();
     final now = DateTime.now();
 
-    // Use 'main' as the invoiceId for both storage and Firestore
-    const invoiceId = 'main';
     final imagePath =
         'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
     final imageRef = _storage.ref().child(imagePath);
@@ -598,6 +599,45 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           error: error, stackTrace: stackTrace);
       throw DatabaseFetchException(
           'Failed to fetch projects: \\${error.toString()}', error, stackTrace);
+    });
+  }
+
+  @override
+  Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId) {
+    final userId = _getCurrentUserId();
+    _logger.d('Setting up stream for project images: $projectId');
+    final invoicesCollection =
+        _getProjectsCollection(userId).doc(projectId).collection('invoices');
+    return invoicesCollection.snapshots().asyncMap((invoicesSnapshot) async {
+      final allImages = <InvoiceImageProcess>[];
+      for (final invoiceDoc in invoicesSnapshot.docs) {
+        final invoiceId = invoiceDoc.id;
+        final imagesCollection =
+            invoicesCollection.doc(invoiceId).collection('invoice_images');
+        final imagesSnapshot = await imagesCollection.get();
+        for (final doc in imagesSnapshot.docs) {
+          try {
+            final data = doc.data();
+            data['id'] = doc.id;
+            if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+              _logger.w(
+                  '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
+              continue;
+            }
+            allImages.add(InvoiceImageProcess.fromJson(data));
+          } catch (e) {
+            _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
+          }
+        }
+      }
+      return allImages;
+    }).handleError((error, stackTrace) {
+      _logger.e('[PROJECT] Error getting project images:',
+          error: error, stackTrace: stackTrace);
+      throw DatabaseFetchException(
+          'Failed to fetch project images: \\${error.toString()}',
+          error,
+          stackTrace);
     });
   }
 }

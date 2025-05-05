@@ -40,9 +40,9 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
     );
   }
 
-  void _navigateToInvoiceCapture(BuildContext context) {
+  void _navigateToInvoiceCapture(BuildContext context, String invoiceId) {
     final fullPath =
-        '/home/project-detail/${project.id}/invoice-capture-overview';
+        '/home/project-detail/${project.id}/invoice-capture-overview?invoiceId=$invoiceId';
     context.push(fullPath, extra: project);
   }
 
@@ -102,7 +102,10 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
                 label: l10n.projectDetailImagesLabel, // Use l10n
                 onTap: () {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              _navigateToInvoiceCapture(context);
+              // Navigate to the invoice capture overview for the project (no invoiceId yet)
+              context.push(
+                  '/home/project-detail/${project.id}/invoice-capture-overview',
+                  extra: project);
             }),
           ],
         ),

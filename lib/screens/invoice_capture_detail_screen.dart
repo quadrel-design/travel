@@ -9,6 +9,7 @@ import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
+import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
@@ -40,6 +41,14 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
         onPressed: () => _pickAndUploadImage(context, ref),
         heroTag: 'upload',
         child: const Icon(Icons.add_a_photo),
+      ),
+      bottomNavigationBar: InvoiceDetailBottomBar(
+        onUpload: () => _pickAndUploadImage(context, ref),
+        onScan: null, // TODO: connect scan logic
+        onInfo: null, // TODO: connect info logic
+        onFavorite: null, // TODO: connect favorite logic
+        onSettings: null, // TODO: connect settings logic
+        onDelete: null, // TODO: connect delete logic
       ),
     );
   }

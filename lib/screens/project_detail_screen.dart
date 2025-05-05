@@ -16,9 +16,11 @@ import '../models/invoice_image_process.dart';
 
 class ProjectDetailScreen extends ConsumerWidget {
   final Project project;
+  final String invoiceId;
   final _dateFormat = DateFormat('dd/MM/yyyy');
 
-  ProjectDetailScreen({super.key, required this.project});
+  ProjectDetailScreen(
+      {super.key, required this.project, required this.invoiceId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -28,9 +30,6 @@ class ProjectDetailScreen extends ConsumerWidget {
     // Watch the project stream for real-time updates
     final projectStream = ref.watch(projectStreamProvider(project.id));
 
-    // TODO: Pass the correct invoiceId here. For now, use a variable or constant.
-    final String invoiceId =
-        'main'; // Replace with actual invoiceId logic as needed
     final imagesStream = ref.watch(
       invoiceImagesStreamProvider(
           {'projectId': project.id, 'invoiceId': invoiceId}),
@@ -199,7 +198,10 @@ class ProjectDetailScreen extends ConsumerWidget {
                                                       size: 20,
                                                       color: Colors.white),
                                                   onPressed: () => _scanImage(
-                                                      context, ref, image),
+                                                      context,
+                                                      ref,
+                                                      image,
+                                                      invoiceId),
                                                   tooltip: 'Scan Invoice',
                                                 ),
                                               ),
@@ -250,8 +252,8 @@ class ProjectDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _scanImage(
-      BuildContext context, WidgetRef ref, InvoiceImageProcess image) async {
+  void _scanImage(BuildContext context, WidgetRef ref,
+      InvoiceImageProcess image, String invoiceId) async {
     try {
       final logger = ref.read(loggerProvider);
       logger.d("🔍 Starting OCR scan for image ${image.id}...");
@@ -261,9 +263,11 @@ class ProjectDetailScreen extends ConsumerWidget {
         final docRef = FirebaseFirestore.instance
             .collection('users')
             .doc(FirebaseAuth.instance.currentUser!.uid)
-            .collection('invoices')
+            .collection('projects')
             .doc(project.id)
-            .collection('images')
+            .collection('invoices')
+            .doc(invoiceId)
+            .collection('invoice_images')
             .doc(image.id);
 
         await docRef.update({
@@ -283,7 +287,7 @@ class ProjectDetailScreen extends ConsumerWidget {
 
       await callable.call({
         'imageUrl': image.url,
-        'invoiceId': project.id,
+        'invoiceId': invoiceId,
         'imageId': image.id,
       });
 
@@ -309,9 +313,11 @@ class ProjectDetailScreen extends ConsumerWidget {
         final docRef = FirebaseFirestore.instance
             .collection('users')
             .doc(FirebaseAuth.instance.currentUser!.uid)
-            .collection('invoices')
+            .collection('projects')
             .doc(project.id)
-            .collection('images')
+            .collection('invoices')
+            .doc(invoiceId)
+            .collection('invoice_images')
             .doc(image.id);
 
         await docRef.update({

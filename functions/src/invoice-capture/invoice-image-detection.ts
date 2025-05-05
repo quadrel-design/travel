@@ -128,16 +128,18 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer):
  * Updates the invoice image document in Firestore with OCR results.
  * @param userId User ID
  * @param projectId Project ID
+ * @param invoiceId Invoice ID
  * @param imageId Image ID
  * @param updateData Data to update
  */
-async function updateInvoiceImageFirestore(userId: string, projectId: string, imageId: string, updateData: Record<string, any>) {
+async function updateInvoiceImageFirestore(userId: string, projectId: string, invoiceId: string, imageId: string, updateData: Record<string, any>) {
+  if (!invoiceId) throw new Error('invoiceId is required');
   const docRef = db.collection("users")
     .doc(userId)
     .collection("projects")
     .doc(projectId)
     .collection("invoices")
-    .doc("main")
+    .doc(invoiceId)
     .collection("invoice_images")
     .doc(imageId);
   await docRef.update(updateData);
@@ -195,7 +197,7 @@ export const ocrInvoice = functions.region("us-central1").https.onCall(async (da
   
   try {
     // Set status to ocrInProgress at the start
-    await setInvoiceImageStatus(userId, projectId, imageId, "ocrInProgress");
+    await setInvoiceImageStatus(userId, projectId, invoiceId, imageId, "ocrInProgress");
     let detectResult;
     
     if (data.imageData) {
@@ -266,9 +268,9 @@ export const ocrInvoice = functions.region("us-central1").https.onCall(async (da
     if (detectResult.success) {
       // OCR finished successfully
       if (detectResult.extractedText && detectResult.extractedText.trim().length > 0) {
-        await setInvoiceImageStatus(userId, projectId, imageId, "ocrFinished");
+        await setInvoiceImageStatus(userId, projectId, invoiceId, imageId, "ocrFinished");
       } else {
-        await setInvoiceImageStatus(userId, projectId, imageId, "ocrNoText");
+        await setInvoiceImageStatus(userId, projectId, invoiceId, imageId, "ocrNoText");
       }
       // ---- Start: Update User Costs ----
       console.log("Updating user costs");
@@ -291,7 +293,7 @@ export const ocrInvoice = functions.region("us-central1").https.onCall(async (da
           updateData.errorMessage = detectResult.error;
         }
 
-        await updateInvoiceImageFirestore(userId, projectId, imageId, updateData);
+        await updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, updateData);
         console.log("Updated invoice image document with OCR results. Status:", updateData.status);
       } catch (dbError) {
         console.error("Error updating Firestore invoice image:", dbError);
@@ -299,7 +301,7 @@ export const ocrInvoice = functions.region("us-central1").https.onCall(async (da
       // ---- End: Update Invoice Image ----
     } else {
       // OCR failed (technical error)
-      await setInvoiceImageStatus(userId, projectId, imageId, "ocrError");
+      await setInvoiceImageStatus(userId, projectId, invoiceId, imageId, "ocrError");
       // Handle failed OCR
       console.log("OCR process failed, updating status to error");
       const updateData: { [key: string]: any } = {
@@ -308,7 +310,7 @@ export const ocrInvoice = functions.region("us-central1").https.onCall(async (da
         updatedAt: FieldValue.serverTimestamp(),
         errorMessage: detectResult.error || "OCR process failed"
       };
-      await updateInvoiceImageFirestore(userId, projectId, imageId, updateData);
+      await updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, updateData);
     }
     
     // Log processing result

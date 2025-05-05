@@ -6,16 +6,18 @@ const db = getFirestore();
 export async function setInvoiceImageStatus(
   userId: string,
   projectId: string,
+  invoiceId: string,
   imageId: string,
   newStatus: InvoiceImageStatus
 ) {
+  if (!invoiceId) throw new Error('invoiceId is required');
   const docRef = db
     .collection("users")
     .doc(userId)
     .collection("projects")
     .doc(projectId)
     .collection("invoices")
-    .doc("main")
+    .doc(invoiceId)
     .collection("invoice_images")
     .doc(imageId);
 

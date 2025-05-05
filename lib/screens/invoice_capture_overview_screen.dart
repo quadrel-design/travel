@@ -13,6 +13,7 @@ import 'package:travel/providers/logging_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
@@ -27,7 +28,6 @@ class _InvoiceCaptureOverviewScreenState
     extends ConsumerState<InvoiceCaptureOverviewScreen> {
   late final Logger _logger;
   late final Map<String, String> _invoiceImagesProviderParams;
-  final String invoiceId = 'main';
 
   @override
   void initState() {
@@ -35,7 +35,6 @@ class _InvoiceCaptureOverviewScreenState
     _logger = ref.read(loggerProvider);
     _invoiceImagesProviderParams = {
       'projectId': widget.project.id,
-      'invoiceId': invoiceId,
     };
   }
 
@@ -75,7 +74,7 @@ class _InvoiceCaptureOverviewScreenState
     final l10n = AppLocalizations.of(context)!;
 
     final projectImagesAsyncValue =
-        ref.watch(invoiceImagesStreamProvider(_invoiceImagesProviderParams));
+        ref.watch(projectImagesStreamProvider(widget.project.id));
 
     return Scaffold(
       appBar: AppBar(
@@ -164,7 +163,7 @@ class _InvoiceCaptureOverviewScreenState
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: widget.project.id,
-                        invoiceId: invoiceId,
+                        invoiceId: imageInfo.id,
                         initialIndex: index,
                       ),
                     ),
@@ -237,7 +236,7 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         widget.project.id,
-        invoiceId,
+        imageInfo.id,
         imageInfo.id,
       );
       _logger.i("🗑️ Invoice deleted successfully");
@@ -257,6 +256,23 @@ class _InvoiceCaptureOverviewScreenState
     }
   }
 
+  Future<String> _createInvoiceAndGetId() async {
+    final firestore = FirebaseFirestore.instance;
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) throw Exception('User not authenticated');
+    final invoicesCollection = firestore
+        .collection('users')
+        .doc(userId)
+        .collection('projects')
+        .doc(widget.project.id)
+        .collection('invoices');
+    final newInvoiceDoc = await invoicesCollection.add({
+      'createdAt': FieldValue.serverTimestamp(),
+      // Add any other default fields for a new invoice here
+    });
+    return newInvoiceDoc.id;
+  }
+
   Future<void> _pickAndUploadImage(BuildContext context) async {
     final repo = ref.read(projectRepositoryProvider);
     final picker = ImagePicker();
@@ -272,14 +288,19 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("📸 Reading file bytes");
       final fileBytes = await pickedFile.readAsBytes();
       final fileName = p.basename(pickedFile.path);
-      _logger.d("📸 File: $fileName, size: ${fileBytes.length} bytes");
+      _logger.d("📸 File: $fileName, size: \\${fileBytes.length} bytes");
+
+      // Always create a new invoice and use its ID
+      final invoiceId = await _createInvoiceAndGetId();
+      _logger.d("📸 Created new invoice with ID: $invoiceId");
 
       _logger.d("📸 Starting repository upload...");
       final uploadResult = await repo.uploadInvoiceImage(
           widget.project.id, invoiceId, fileBytes, fileName);
 
       _logger.i("📸 Repository upload completed successfully");
-      _logger.d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
+      _logger
+          .d("📸 Upload result: \\${uploadResult.id} - \\${uploadResult.url}");
 
       // No longer automatically starting OCR
       if (context.mounted) {
@@ -307,6 +328,6 @@ class _InvoiceCaptureOverviewScreenState
       InvoiceImageProcess imageInfo) async {
     // Use the utility class to scan the image
     await InvoiceScanUtil.scanImage(
-        context, ref, widget.project.id, invoiceId, imageInfo);
+        context, ref, widget.project.id, imageInfo.id, imageInfo);
   }
 }
