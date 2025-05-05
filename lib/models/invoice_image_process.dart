@@ -6,9 +6,7 @@
  * such as text, invoice data, and processing status.
  */
 
-import 'package:equatable/equatable.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert';
 // Remove provider imports if they were added here
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:travel/providers/logging_provider.dart';
@@ -28,7 +26,7 @@ class InvoiceImageProcess {
   final String imagePath;
 
   /// Text extracted by OCR, populated after successful detection
-  final String? extractedText;
+  final String? ocrText;
 
   /// Structured analysis result from Gemini (if available)
   final Map<String, dynamic>? invoiceAnalysis;
@@ -50,7 +48,7 @@ class InvoiceImageProcess {
     required this.id,
     required this.url,
     required this.imagePath,
-    this.extractedText,
+    this.ocrText,
     this.invoiceAnalysis,
     this.lastProcessedAt,
     this.location,
@@ -77,7 +75,7 @@ class InvoiceImageProcess {
         id: json['id'] ?? '',
         url: json['url'] ?? '',
         imagePath: json['imagePath'] ?? json['image_path'] ?? '',
-        extractedText: json['extractedText'],
+        ocrText: json['ocrText'],
         invoiceAnalysis: json['invoiceAnalysis'],
         lastProcessedAt: parseDate(json['lastProcessedAt']),
         location: json['location'],
@@ -101,7 +99,7 @@ class InvoiceImageProcess {
       'id': id,
       'url': url,
       'imagePath': imagePath,
-      'extractedText': extractedText,
+      'ocrText': ocrText,
       'invoiceAnalysis': invoiceAnalysis,
       'lastProcessedAt': lastProcessedAt?.toIso8601String(),
       'location': location,
@@ -115,14 +113,14 @@ class InvoiceImageProcess {
   /// Useful for debugging and logging.
   @override
   String toString() {
-    return 'InvoiceCaptureProcess(id: $id, extractedText: ${extractedText != null})';
+    return 'InvoiceCaptureProcess(id: $id, ocrText: ${ocrText != null})';
   }
 
   InvoiceImageProcess copyWith({
     String? id,
     String? url,
     String? imagePath,
-    String? extractedText,
+    String? ocrText,
     Map<String, dynamic>? invoiceAnalysis,
     DateTime? lastProcessedAt,
     String? location,
@@ -133,7 +131,7 @@ class InvoiceImageProcess {
       id: id ?? this.id,
       url: url ?? this.url,
       imagePath: imagePath ?? this.imagePath,
-      extractedText: extractedText ?? this.extractedText,
+      ocrText: ocrText ?? this.ocrText,
       invoiceAnalysis: invoiceAnalysis ?? this.invoiceAnalysis,
       lastProcessedAt: lastProcessedAt ?? this.lastProcessedAt,
       location: location ?? this.location,

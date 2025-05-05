@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
@@ -13,7 +12,6 @@ import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
@@ -29,6 +27,7 @@ class _InvoiceCaptureOverviewScreenState
     extends ConsumerState<InvoiceCaptureOverviewScreen> {
   late final Logger _logger;
   late final Map<String, String> _invoiceImagesProviderParams;
+  final String invoiceId = 'main';
 
   @override
   void initState() {
@@ -36,7 +35,7 @@ class _InvoiceCaptureOverviewScreenState
     _logger = ref.read(loggerProvider);
     _invoiceImagesProviderParams = {
       'projectId': widget.project.id,
-      'invoiceId': 'main',
+      'invoiceId': invoiceId,
     };
   }
 
@@ -165,6 +164,7 @@ class _InvoiceCaptureOverviewScreenState
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: widget.project.id,
+                        invoiceId: invoiceId,
                         initialIndex: index,
                       ),
                     ),
@@ -237,6 +237,7 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         widget.project.id,
+        invoiceId,
         imageInfo.id,
       );
       _logger.i("🗑️ Invoice deleted successfully");
@@ -274,8 +275,8 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("📸 File: $fileName, size: ${fileBytes.length} bytes");
 
       _logger.d("📸 Starting repository upload...");
-      final uploadResult =
-          await repo.uploadInvoiceImage(widget.project.id, fileBytes, fileName);
+      final uploadResult = await repo.uploadInvoiceImage(
+          widget.project.id, invoiceId, fileBytes, fileName);
 
       _logger.i("📸 Repository upload completed successfully");
       _logger.d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
@@ -305,6 +306,7 @@ class _InvoiceCaptureOverviewScreenState
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
       InvoiceImageProcess imageInfo) async {
     // Use the utility class to scan the image
-    await InvoiceScanUtil.scanImage(context, ref, widget.project.id, imageInfo);
+    await InvoiceScanUtil.scanImage(
+        context, ref, widget.project.id, invoiceId, imageInfo);
   }
 }

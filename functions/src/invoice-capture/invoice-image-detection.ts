@@ -1,7 +1,11 @@
 /**
- * Handles text detection (OCR) using the Google Cloud Vision API.
- * Provides a helper function `detectTextInImage` and a callable Cloud Function `ocrInvoice`
- * to process images, update user costs, and store results in Firestore.
+ * Invoice Image Detection Cloud Functions
+ * --------------------------------------
+ * This module provides OCR (text detection) for invoice images using Google Cloud Vision API.
+ * - Exports a callable function `ocrInvoice` for OCR and Firestore updates.
+ * - Exports a helper `detectTextInImage` for direct OCR logic.
+ *
+ * Optimized for modularity, error handling, and clear documentation.
  */
 // Load environment variables from .env file (useful for local development)
 import * as dotenv from "dotenv";
@@ -35,21 +39,34 @@ const VISION_API_PRICE_PER_UNIT_FALLBACK = 0.00025;
 // const OCR_COST_IN_CREDITS = 1;
 
 /**
- * Performs OCR on an image using Google Cloud Vision API.
- * Extracts the full detected text, confidence, and individual text blocks with bounding boxes.
- * 
- * @param {string} imageUrl The URL of the image to process (used if imageBuffer is not provided).
- * @param {Buffer} [imageBuffer] Optional buffer containing the image data.
- * @returns {Promise<object>} A promise resolving to an object containing detection results:
- *  - success: boolean
- *  - hasText: boolean
- *  - extractedText: string (full text)
- *  - confidence: number (confidence of full text)
- *  - textBlocks: Array<object> (individual blocks with text, confidence, boundingBox)
- *  - status: string ("NoText", "PendingAnalysis", "Error")
- *  - error?: string (if an error occurred)
+ * OCR result structure for invoice image detection.
  */
-export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) {
+export interface OcrResult {
+  success: boolean;
+  hasText: boolean;
+  extractedText: string;
+  confidence: number;
+  textBlocks: Array<{
+    text: string;
+    confidence: number;
+    boundingBox?: {
+      left: number;
+      top: number;
+      right: number;
+      bottom: number;
+    };
+  }>;
+  status: string;
+  error?: string;
+}
+
+/**
+ * Performs OCR on an image using Google Cloud Vision API.
+ * @param imageUrl The URL of the image to process (used if imageBuffer is not provided).
+ * @param imageBuffer Optional buffer containing the image data.
+ * @returns OCR result object.
+ */
+export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer): Promise<OcrResult> {
   try {
     // Step 1: Perform OCR on the image
     const [result] = await vision.textDetection(imageBuffer || imageUrl);
@@ -61,6 +78,7 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
         hasText: false,
         extractedText: "",
         confidence: 0,
+        textBlocks: [],
         status: "no invoice"
       };
     }
@@ -99,6 +117,7 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
       hasText: false,
       extractedText: "",
       confidence: 0,
+      textBlocks: [],
       status: "Error",
       error: error instanceof Error ? error.message : "Unknown error occurred",
     };
@@ -106,26 +125,36 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
 }
 
 /**
+ * Updates the invoice image document in Firestore with OCR results.
+ * @param userId User ID
+ * @param projectId Project ID
+ * @param imageId Image ID
+ * @param updateData Data to update
+ */
+async function updateInvoiceImageFirestore(userId: string, projectId: string, imageId: string, updateData: Record<string, any>) {
+  const docRef = db.collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("invoices")
+    .doc("main")
+    .collection("invoice_images")
+    .doc(imageId);
+  await docRef.update(updateData);
+}
+
+/**
  * Callable Cloud Function to orchestrate image text detection.
  * - Authenticates the user.
  * - Validates input data (image URL or base64 data, invoiceId, imageId).
  * - Calls `detectTextInImage` to perform OCR.
- * - If successful, updates estimated user costs in Firestore based on fetched or fallback pricing.
- * - Updates the corresponding invoice image document in Firestore with OCR results.
- * 
- * @param {CallableRequest} request The request object.
- * @param {object} request.data The data passed to the function:
- * @param {string} [request.data.imageUrl] URL of the image to process.
- * @param {string} [request.data.imageData] Base64 encoded image data.
- * @param {string} request.data.invoiceId The ID of the parent invoice document.
- * @param {string} request.data.imageId The ID of the image document to update.
- * @param {object} request.auth Authentication information for the calling user.
- * @param {string} request.auth.uid The UID of the authenticated user.
- * 
- * @returns {Promise<object>} A promise resolving to the result object from `detectTextInImage`.
- * @throws {HttpsError} Throws HttpsError on authentication, validation, or processing errors.
+ * - Updates Firestore and user costs.
+ * @param data Request data: { imageUrl?, imageData?, projectId, invoiceId, imageId }
+ * @param context Callable context (must be authenticated)
+ * @returns OCR result object (see OcrResult)
+ * @throws HttpsError on authentication, validation, or processing errors.
  */
-export const ocrInvoice = functions.region('us-central1').https.onCall(async (data: any, context: any) => {
+export const ocrInvoice = functions.region("us-central1").https.onCall(async (data: any, context: any) => {
   console.log("====== DETECT IMAGE CALLED ======");
   console.log("ocrInvoice function called with data:", {
     hasImageUrl: !!data.imageUrl,
@@ -250,21 +279,11 @@ export const ocrInvoice = functions.region('us-central1').https.onCall(async (da
       // ---- Start: Update Invoice Image ----
       try {
         console.log("Preparing to update Firestore document");
-        const docRef = db.collection("users")
-          .doc(userId)
-          .collection("projects")
-          .doc(projectId)
-          .collection("invoices")
-          .doc("main")
-          .collection("invoice_images")
-          .doc(imageId);
-
         const updateData: { [key: string]: any } = {
           confidence: detectResult.confidence || 0,
           textBlocks: detectResult.textBlocks || [],
           lastProcessedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
-          extractedText: detectResult.extractedText ?? "",
           ocrText: detectResult.extractedText ?? ""
         };
 
@@ -272,7 +291,7 @@ export const ocrInvoice = functions.region('us-central1').https.onCall(async (da
           updateData.errorMessage = detectResult.error;
         }
 
-        await docRef.update(updateData);
+        await updateInvoiceImageFirestore(userId, projectId, imageId, updateData);
         console.log("Updated invoice image document with OCR results. Status:", updateData.status);
       } catch (dbError) {
         console.error("Error updating Firestore invoice image:", dbError);
@@ -283,21 +302,13 @@ export const ocrInvoice = functions.region('us-central1').https.onCall(async (da
       await setInvoiceImageStatus(userId, projectId, imageId, "ocrError");
       // Handle failed OCR
       console.log("OCR process failed, updating status to error");
-      const docRef = db.collection("users")
-        .doc(userId)
-        .collection("projects")
-        .doc(projectId)
-        .collection("invoices")
-        .doc("main")
-        .collection("invoice_images")
-        .doc(imageId);
-      await docRef.update({
-        extractedText: "",
+      const updateData: { [key: string]: any } = {
         ocrText: "",
         lastProcessedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         errorMessage: detectResult.error || "OCR process failed"
-      });
+      };
+      await updateInvoiceImageFirestore(userId, projectId, imageId, updateData);
     }
     
     // Log processing result

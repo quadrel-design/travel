@@ -25,7 +25,7 @@ class InvoiceAnalysisPanel extends StatelessWidget {
     logger.d('- lastProcessedAt: ${imageInfo.lastProcessedAt}');
     logger.d('- isInvoiceGuess: ${imageInfo.isInvoiceGuess}');
     logger.d(
-        '- extractedText: \\${imageInfo.extractedText != null ? 'Available (\\${imageInfo.extractedText!.length} chars)' : 'Not available'}');
+        '- ocrText: \\${imageInfo.ocrText != null ? 'Available (\\${imageInfo.ocrText!.length} chars)' : 'Not available'}');
     print('DEBUG: invoiceAnalysis = \\${imageInfo.invoiceAnalysis}');
 
     return Container(
@@ -45,8 +45,8 @@ class InvoiceAnalysisPanel extends StatelessWidget {
                 _buildStructuredAnalysis(
                     InvoiceAnalysis.fromJson(imageInfo.invoiceAnalysis!))
               else
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8.0),
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 8.0),
                   child: Text(
                     'No Gemini analysis available for this image.',
                     style: TextStyle(
@@ -84,14 +84,14 @@ class InvoiceAnalysisPanel extends StatelessWidget {
   }
 
   Widget _buildInvoiceStatus() {
-    return Column(
+    return const Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Invoice Status:',
           style: UIConstants.kPanelLabelStyle,
         ),
-        const SizedBox(height: UIConstants.kElementSpacing),
+        SizedBox(height: UIConstants.kElementSpacing),
         Text(
           'Unknown',
           style: TextStyle(
@@ -100,7 +100,7 @@ class InvoiceAnalysisPanel extends StatelessWidget {
             fontWeight: FontWeight.bold,
           ),
         ),
-        const SizedBox(height: UIConstants.kSectionSpacing),
+        SizedBox(height: UIConstants.kSectionSpacing),
       ],
     );
   }
@@ -123,7 +123,7 @@ class InvoiceAnalysisPanel extends StatelessWidget {
           ),
           child: SingleChildScrollView(
             child: Text(
-              imageInfo.extractedText!,
+              imageInfo.ocrText!,
               style: UIConstants.kPanelValueStyle,
             ),
           ),

@@ -5,7 +5,6 @@ import 'package:travel/providers/repository_providers.dart';
 import '../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:travel/widgets/image_status_chip.dart';
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -13,14 +12,16 @@ import 'package:travel/utils/invoice_scan_util.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
+  final String invoiceId;
 
-  const InvoiceCaptureDetailScreen({super.key, required this.projectId});
+  const InvoiceCaptureDetailScreen(
+      {super.key, required this.projectId, required this.invoiceId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectImagesAsyncValue = ref.watch(invoiceImagesStreamProvider({
       'projectId': projectId,
-      'invoiceId': 'main', // Use 'main' as the default invoiceId
+      'invoiceId': invoiceId,
     }));
 
     final projectAsyncValue = ref.watch(projectStreamProvider(projectId));
@@ -76,7 +77,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
               ElevatedButton(
                 onPressed: () => ref.invalidate(invoiceImagesStreamProvider({
                   'projectId': projectId,
-                  'invoiceId': 'main', // Use 'main' as the default invoiceId
+                  'invoiceId': invoiceId,
                 })),
                 child: const Text('Retry', style: TextStyle(fontSize: 10)),
               ),
@@ -131,6 +132,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: projectId,
+                        invoiceId: invoiceId,
                         initialIndex: index,
                       ),
                     ),
@@ -186,6 +188,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
       ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         projectId,
+        invoiceId,
         imageInfo.id,
       );
       ref.read(loggerProvider).i("🗑️ Invoice deleted successfully");
@@ -214,8 +217,8 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
           .d("📸 File: $fileName, size: ${fileBytes.length} bytes");
 
       ref.read(loggerProvider).d("📸 Starting repository upload...");
-      final uploadResult =
-          await repo.uploadInvoiceImage(projectId, fileBytes, fileName);
+      final uploadResult = await repo.uploadInvoiceImage(
+          projectId, invoiceId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
       ref
@@ -228,6 +231,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
       InvoiceImageProcess imageInfo) async {
-    await InvoiceScanUtil.scanImage(context, ref, projectId, imageInfo);
+    await InvoiceScanUtil.scanImage(
+        context, ref, projectId, invoiceId, imageInfo);
   }
 }

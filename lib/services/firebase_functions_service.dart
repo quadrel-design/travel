@@ -28,6 +28,7 @@ class FirebaseFunctionsService {
   /// Parameters:
   ///  - [imageUrl]: The URL of the image to scan.
   ///  - [projectId]: The ID of the associated project/invoice.
+  ///  - [invoiceId]: The ID of the specific invoice.
   ///  - [imageId]: The ID of the specific image document.
   ///  - [timeoutSeconds]: Optional timeout duration (defaults to 60s).
   ///
@@ -38,11 +39,12 @@ class FirebaseFunctionsService {
   ///    or returns an unexpected result.
   ///  - [TimeoutException]: If the call exceeds the specified timeout (wrapped by FunctionCallException).
   Future<Map<String, dynamic>> scanImage(
-      String imageUrl, String projectId, String imageId,
+      String imageUrl, String projectId, String invoiceId, String imageId,
       {int timeoutSeconds = _defaultTimeoutSeconds}) async {
     try {
       _logger.d('[FUNCTIONS] Preparing to scan image: $imageUrl');
-      _logger.d('[FUNCTIONS] Project ID: $projectId, Image ID: $imageId');
+      _logger.d(
+          '[FUNCTIONS] Project ID: $projectId, Invoice ID: $invoiceId, Image ID: $imageId');
 
       final callable = _functions.httpsCallable('ocrInvoice');
       _logger.d(
@@ -50,7 +52,7 @@ class FirebaseFunctionsService {
 
       final resultFuture = callable.call<Map<String, dynamic>>({
         'projectId': projectId,
-        'invoiceId': 'main',
+        'invoiceId': invoiceId,
         'imageId': imageId,
         'imageUrl': imageUrl,
       });
@@ -116,8 +118,9 @@ class FirebaseFunctionsService {
   /// Calls the 'analyzeImage' Cloud Function.
   ///
   /// Parameters:
-  ///  - [extractedText]: The text to analyze.
+  ///  - [ocrText]: The text to analyze.
   ///  - [projectId]: The ID of the associated project/invoice.
+  ///  - [invoiceId]: The ID of the specific invoice.
   ///  - [imageId]: The ID of the specific image document.
   ///  - [timeoutSeconds]: Optional timeout duration (defaults to 60s).
   ///
@@ -128,18 +131,18 @@ class FirebaseFunctionsService {
   ///    or returns an unexpected result.
   ///  - [TimeoutException]: If the call exceeds the specified timeout (wrapped by FunctionCallException).
   Future<Map<String, dynamic>> analyzeImage(
-      String extractedText, String projectId, String imageId,
+      String ocrText, String projectId, String invoiceId, String imageId,
       {int timeoutSeconds = _defaultTimeoutSeconds}) async {
     try {
       _logger.d(
-          '[FUNCTIONS] Preparing to analyze text for project: $projectId, image: $imageId');
+          '[FUNCTIONS] Preparing to analyze text for project: $projectId, invoice: $invoiceId, image: $imageId');
       final callable = _functions.httpsCallable('analyzeInvoice');
       _logger.d(
           '[FUNCTIONS] Calling analyzeInvoice function with timeout: \\${timeoutSeconds}s');
       final resultFuture = callable.call<Map<String, dynamic>>({
-        'extractedText': extractedText,
+        'ocrText': ocrText,
         'projectId': projectId,
-        'invoiceId': 'main',
+        'invoiceId': invoiceId,
         'imageId': imageId,
       });
       final HttpsCallableResult<Map<String, dynamic>> result =

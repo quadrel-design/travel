@@ -38,16 +38,20 @@ abstract class InvoiceRepository {
   /// Updates image info with OCR results
   Future<void> updateImageWithOcrResults(
     String projectId,
+    String invoiceId,
     String imageId, {
     bool? isInvoice,
+    Map<String, dynamic>? invoiceAnalysis,
   });
 
   /// Deletes a project image
-  Future<void> deleteInvoiceImage(String projectId, String imageId);
+  Future<void> deleteInvoiceImage(
+      String projectId, String invoiceId, String imageId);
 
   /// Uploads a project image
   Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
+    String invoiceId,
     Uint8List fileBytes,
     String fileName,
   );
@@ -320,8 +324,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<InvoiceImageProcess> uploadInvoiceImage(
-      String projectId, Uint8List fileBytes, String fileName) async {
+  Future<InvoiceImageProcess> uploadInvoiceImage(String projectId,
+      String invoiceId, Uint8List fileBytes, String fileName) async {
     final userId = _getCurrentUserId(); // Use helper
     print('[UPLOAD] Using userId: $userId');
     _logger
@@ -381,7 +385,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<void> deleteInvoiceImage(String projectId, String imageId) async {
+  Future<void> deleteInvoiceImage(
+      String projectId, String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
       _logger.d('Deleting image $imageId from project $projectId');
@@ -439,8 +444,10 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   @override
   Future<void> updateImageWithOcrResults(
     String projectId,
+    String invoiceId,
     String imageId, {
     bool? isInvoice,
+    Map<String, dynamic>? invoiceAnalysis,
   }) async {
     try {
       final userId = _getCurrentUserId();

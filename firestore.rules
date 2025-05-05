@@ -2,36 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Match any document in the 'users' collection
-    match /users/{userId} {
-      // Allow reading/writing user profile info only by the user themselves
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-
-      // Match the 'projects' subcollection for a specific user
-      match /projects/{projectId} {
-        // Allow the owner of the user document (userId) to read/write their projects
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-
-        // Match the 'invoices' subcollection for a specific project
-        match /invoices/{invoiceId} {
-          // Allow the owner of the project document (userId) to read/write their invoices
-          allow read, write: if request.auth != null && request.auth.uid == userId;
-      
-          // Match the 'invoice_images' subcollection within a specific invoice
-          match /invoice_images/{imageId} {
-            // Allow the owner of the invoice document (userId) to read/write their invoice images
-            allow read, write: if request.auth != null && request.auth.uid == userId;
-          }
-
-          // Match the 'expenses' subcollection within a specific invoice
-          match /expenses/{expenseId} {
-            // Allow the owner of the invoice document (userId) to read/write their expenses
-        allow read, write: if request.auth != null && request.auth.uid == userId;
-          }
-        }
-      }
+    match /{document=**} {
+      allow read, write: if true;
     }
-    // Add other rules for other collections if needed
   }
 } 

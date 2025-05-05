@@ -23,10 +23,12 @@ class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
     super.key,
     this.initialIndex = 0,
     required this.projectId,
+    required this.invoiceId,
   });
 
   final int initialIndex;
   final String projectId;
+  final String invoiceId;
 
   @override
   ConsumerState<InvoiceCaptureDetailView> createState() {
@@ -41,8 +43,9 @@ class _InvoiceCaptureDetailViewState
   bool _isDeleting = false;
   bool _showAppBar = true;
   bool _showAnalysis = false;
-  bool _isAnalyzing = false;
+  final bool _isAnalyzing = false;
   late Logger _logger;
+  late String invoiceId;
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _InvoiceCaptureDetailViewState
     currentIndex = widget.initialIndex;
     pageController = PageController(initialPage: widget.initialIndex);
     _logger = ref.read(loggerProvider);
+    invoiceId = widget.invoiceId;
   }
 
   @override
@@ -62,7 +66,7 @@ class _InvoiceCaptureDetailViewState
   Future<void> _handleScan(String imageId, String? imageUrl) async {
     if (!mounted) return;
     final provider = invoiceCaptureProvider(
-        (projectId: widget.projectId, invoiceId: 'main'));
+        (projectId: widget.projectId, invoiceId: invoiceId));
 
     _logger.i('Initiating scan for image ID: $imageId');
     ref.read(provider.notifier).initiateScan(imageId);
@@ -115,6 +119,7 @@ class _InvoiceCaptureDetailViewState
       final result = await functionsService.scanImage(
         urlToDownload,
         widget.projectId,
+        invoiceId,
         imageId,
       );
 
@@ -194,6 +199,7 @@ class _InvoiceCaptureDetailViewState
 
     // Update the repository with all the processed data
     await repository.updateImageWithOcrResults(
+      widget.projectId,
       widget.projectId,
       imageId,
       isInvoice: isInvoice,
@@ -351,7 +357,7 @@ class _InvoiceCaptureDetailViewState
     if (!_showAnalysis) return const SizedBox.shrink();
 
     // Check if there's any data to show
-    final bool hasData = imageInfo.extractedText != null;
+    final bool hasData = imageInfo.ocrText != null;
 
     if (!hasData) {
       return const Center(
@@ -373,7 +379,7 @@ class _InvoiceCaptureDetailViewState
   Widget build(BuildContext context) {
     print('InvoiceCaptureDetailView build called');
     final provider = invoiceCaptureProvider(
-        (projectId: widget.projectId, invoiceId: 'main'));
+        (projectId: widget.projectId, invoiceId: invoiceId));
     final state = ref.watch(provider);
     final images = state.images;
 
@@ -429,12 +435,13 @@ class _InvoiceCaptureDetailViewState
               // Debug print for function call parameters
               print('Calling analyzeImage with:');
               print('  projectId: \\${widget.projectId}');
-              print('  invoiceId: main');
+              print('  invoiceId: $invoiceId');
               print('  imageId: \\${imageInfo.id}');
-              print('  extractedText: \\${imageInfo.extractedText}');
+              print('  ocrText: \\${imageInfo.ocrText}');
               await functionsService.analyzeImage(
-                imageInfo.extractedText ?? '',
+                imageInfo.ocrText ?? '',
                 widget.projectId, // projectId
+                invoiceId, // invoiceId
                 imageInfo.id, // imageId
               );
               // Wait a moment for Firestore to update
@@ -568,7 +575,7 @@ class _InvoiceCaptureDetailViewState
   Future<void> _handleDelete() async {
     final repository = ref.read(projectRepositoryProvider);
     final provider = invoiceCaptureProvider(
-        (projectId: widget.projectId, invoiceId: 'main'));
+        (projectId: widget.projectId, invoiceId: invoiceId));
     final state = ref.read(provider);
     final images = state.images;
 
@@ -602,7 +609,8 @@ class _InvoiceCaptureDetailViewState
     try {
       await repository.deleteInvoiceImage(
         widget.projectId,
-        images[currentIndex].id,
+        widget.projectId,
+        imageIdToDelete,
       );
       _logger.i(
           'Repository delete successful for image ID: $imageIdToDelete, filename: $fileName');

@@ -28,10 +28,12 @@ class ProjectDetailScreen extends ConsumerWidget {
     // Watch the project stream for real-time updates
     final projectStream = ref.watch(projectStreamProvider(project.id));
 
-    // Watch the project images stream (requires both projectId and invoiceId)
+    // TODO: Pass the correct invoiceId here. For now, use a variable or constant.
+    final String invoiceId =
+        'main'; // Replace with actual invoiceId logic as needed
     final imagesStream = ref.watch(
       invoiceImagesStreamProvider(
-          {'projectId': project.id, 'invoiceId': 'main'}),
+          {'projectId': project.id, 'invoiceId': invoiceId}),
     );
 
     return Scaffold(

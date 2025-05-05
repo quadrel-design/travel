@@ -293,46 +293,45 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       String projectId, String invoiceId) {
     try {
       final userId = _getCurrentUserId();
-      if (projectId.isEmpty) {
+      _logger.d(
+          '[DEBUG] getInvoiceImagesStream: userId=$userId, projectId=$projectId, invoiceId=$invoiceId');
+      if (projectId.isEmpty || invoiceId.isEmpty) {
         return Stream<List<InvoiceImageProcess>>.value([]);
       }
-      // Always use 'main' as the invoiceId
       final imagesCollection =
-          _getInvoiceImagesCollection(userId, projectId, 'main')
+          _getInvoiceImagesCollection(userId, projectId, invoiceId)
               .orderBy('uploadedAt', descending: true);
-      return imagesCollection.snapshots().map((snapshot) {
-        print(
-            '[REPO DEBUG] Firestore snapshot docs count: \\${snapshot.docs.length}');
+      return imagesCollection.snapshots().asyncMap((snapshot) async {
+        _logger.d('[DEBUG] Firestore returned ${snapshot.docs.length} docs');
         for (final doc in snapshot.docs) {
-          print('[REPO DEBUG] Raw doc data: \\${doc.data()}');
+          _logger
+              .d('[DEBUG] Raw Firestore doc: id=${doc.id}, data=${doc.data()}');
         }
-        return snapshot.docs
-            .map((doc) {
-              try {
-                final data = doc.data();
-                print('[REPO DEBUG] Parsing doc: \\${doc.id} data: \\${data}');
-                data['id'] = doc.id;
-                if (!data.containsKey('url') ||
-                    !data.containsKey('imagePath')) {
-                  print(
-                      '[REPO DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
-                  return null;
-                }
-                final info = InvoiceImageProcess.fromJson(data);
-                print('[REPO DEBUG] Parsed InvoiceImageProcess: \\${info}');
-                return info.url.isNotEmpty && info.imagePath.isNotEmpty
-                    ? info
-                    : null;
-              } catch (e) {
-                print('[REPO DEBUG] Error parsing doc \\${doc.id}: \\${e}');
-                return null;
-              }
-            })
+        final futures = snapshot.docs.map((doc) async {
+          try {
+            final data = doc.data();
+            data['id'] = doc.id;
+            if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+              _logger.w(
+                  '[DEBUG] Skipping doc ${doc.id} due to missing url or imagePath');
+              return null;
+            }
+            // Fetch latest analysis
+            final analysis =
+                await _getLatestAnalysis(userId, projectId, invoiceId, doc.id);
+            data['invoiceAnalysis'] = analysis?['invoiceAnalysis'];
+            return InvoiceImageProcess.fromJson(data);
+          } catch (e) {
+            _logger.e('[DEBUG] Error parsing doc ${doc.id}: $e');
+            return null;
+          }
+        });
+        final results = await Future.wait(futures);
+        return results
             .where((info) => info != null)
             .cast<InvoiceImageProcess>()
             .toList();
       }).handleError((error, stackTrace) {
-        print('[REPO DEBUG] Error in image stream: \\${error}');
         throw DatabaseFetchException(
             'Failed to fetch images', error, stackTrace);
       });
@@ -418,6 +417,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   @override
   Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
+    String invoiceId,
     Uint8List imageBytes,
     String fileName,
   ) async {
@@ -426,59 +426,39 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final storageFileName = '${timestamp}_$fileName';
     final storagePath =
-        'users/$userId/projects/$projectId/invoices/main/invoice_images/$storageFileName';
-
+        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$storageFileName';
     try {
-      print('[UPLOAD] Skipping compression, uploading original image bytes...');
-      // Skip compression and upload original image bytes
-      final originalImage = imageBytes;
-      print('[UPLOAD] Original image size: \\${originalImage.length} bytes');
-
-      // Upload to storage
-      print('[UPLOAD] Uploading to storage: $storagePath');
       final storageRef = _storage.ref().child(storagePath);
       final metadata = SettableMetadata(
         contentType: 'image/jpeg',
         customMetadata: {
           'userId': userId,
           'projectId': projectId,
+          'invoiceId': invoiceId,
           'imageId': imageId,
           'originalFileName': fileName,
           'uploadedAt': DateTime.now().toIso8601String(),
         },
       );
-      await storageRef.putData(originalImage, metadata);
-      print('[UPLOAD] Upload to storage complete.');
-
-      // Always generate a fresh download URL after upload
-      print('[UPLOAD] Getting download URL...');
+      await storageRef.putData(imageBytes, metadata);
       String? downloadUrl;
       for (int i = 0; i < 3; i++) {
         try {
           downloadUrl = await storageRef.getDownloadURL();
-          if (downloadUrl != null) break;
+          break;
         } catch (e) {
-          print('[UPLOAD] Attempt \\${i + 1} to get download URL failed: $e');
+          await Future.delayed(const Duration(seconds: 1));
         }
-        await Future.delayed(Duration(seconds: 1));
       }
       if (downloadUrl == null) {
-        print('[UPLOAD ERROR] Download URL is null after retries!');
         throw FirestoreException(message: 'Download URL is null after upload');
       }
-      print('[UPLOAD] Download URL: $downloadUrl');
-
-      // Create image info object
       final now = DateTime.now();
       final imageInfo = InvoiceImageProcess(
         id: imageId,
         url: downloadUrl,
         imagePath: storagePath,
       );
-      print('[UPLOAD] Created InvoiceImageProcess: $imageInfo');
-
-      // Store in Firestore
-      print('[UPLOAD] Writing document to Firestore...');
       final docData = {
         ...imageInfo.toJson(),
         'uploadedAt': FieldValue.serverTimestamp(),
@@ -486,37 +466,32 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         'updatedAt': now.toIso8601String(),
         'storageRef': storagePath,
       };
-      await _getInvoiceImagesCollection(userId, projectId, 'main')
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .set(docData, SetOptions(merge: true));
-      print('[UPLOAD] Firestore document written. Upload complete!');
       return imageInfo;
     } catch (e, stackTrace) {
-      print('[UPLOAD ERROR] Exception during uploadInvoiceImage: $e');
-      print('[UPLOAD ERROR] Stack trace: $stackTrace');
       _logger.e('Error uploading image', error: e, stackTrace: stackTrace);
       throw FirestoreException(message: 'Failed to upload image', error: e);
     }
   }
 
   @override
-  Future<void> deleteInvoiceImage(String projectId, String imageId) async {
+  Future<void> deleteInvoiceImage(
+      String projectId, String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
-      // Get the image document to find the storage path
-      final imageDoc = _getInvoiceImagesCollection(userId, projectId, 'main')
-          .doc(imageId)
-          .get();
-      final docSnapshot = await imageDoc;
-      if (!docSnapshot.exists) {
+      final imageDoc =
+          await _getInvoiceImagesCollection(userId, projectId, invoiceId)
+              .doc(imageId)
+              .get();
+      if (!imageDoc.exists) {
         throw DatabaseOperationException(
             'Image not found', null, StackTrace.current);
       }
-      // Delete from storage first
-      final imageInfo = InvoiceImageProcess.fromJson(docSnapshot.data()!);
+      final imageInfo = InvoiceImageProcess.fromJson(imageDoc.data()!);
       await _storage.ref().child(imageInfo.imagePath).delete();
-      // Then delete from Firestore
-      await _getInvoiceImagesCollection(userId, projectId, 'main')
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .delete();
     } catch (e, stackTrace) {
@@ -527,20 +502,45 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   @override
   Future<void> updateImageWithOcrResults(
     String projectId,
+    String invoiceId,
     String imageId, {
     bool? isInvoice,
+    Map<String, dynamic>? invoiceAnalysis,
   }) async {
     try {
       final userId = _getCurrentUserId();
       final data = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      await _getInvoiceImagesCollection(userId, projectId, 'main')
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .update(data);
+      // Store the latest analysis in the analyses/latest doc
+      if (invoiceAnalysis != null) {
+        await _getInvoiceImagesCollection(userId, projectId, invoiceId)
+            .doc(imageId)
+            .collection('analyses')
+            .doc('latest')
+            .set({
+          'invoiceAnalysis': invoiceAnalysis,
+          'updatedAt': FieldValue.serverTimestamp()
+        }, SetOptions(merge: true));
+      }
     } catch (e, stackTrace) {
       throw DatabaseOperationException(
           'Failed to update OCR results', e, stackTrace);
     }
+  }
+
+  // Helper to get the latest analysis for an image
+  Future<Map<String, dynamic>?> _getLatestAnalysis(
+      String userId, String projectId, String invoiceId, String imageId) async {
+    final analysisDoc =
+        await _getInvoiceImagesCollection(userId, projectId, invoiceId)
+            .doc(imageId)
+            .collection('analyses')
+            .doc('latest')
+            .get();
+    return analysisDoc.exists ? analysisDoc.data() : null;
   }
 }

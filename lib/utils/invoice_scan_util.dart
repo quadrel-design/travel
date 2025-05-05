@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/models/invoice_image_process.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'dart:math' as math;
-import 'package:travel/models/invoice_image_status.dart';
 
 /// Utility class for invoice OCR scanning that can be shared across screens
 class InvoiceScanUtil {
   static Future<void> scanImage(BuildContext context, WidgetRef ref,
-      String projectId, InvoiceImageProcess imageInfo) async {
+      String projectId, String invoiceId, InvoiceImageProcess imageInfo) async {
     final logger = ref.read(loggerProvider);
     try {
       logger.d("🔍 Starting OCR scan for image ${imageInfo.id}...");
       logger.d("🔍 Image URL: ${imageInfo.url}");
       logger.d("🔍 Project ID: $projectId");
+      logger.d("🔍 Invoice ID: $invoiceId");
       logger.d("🔍 Image ID: ${imageInfo.id}");
 
       // Immediately show feedback to user
@@ -35,11 +33,11 @@ class InvoiceScanUtil {
       final params = {
         'imageUrl': imageInfo.url,
         'projectId': projectId,
-        'invoiceId': 'main',
+        'invoiceId': invoiceId,
         'imageId': imageInfo.id,
       };
       print(
-          'Calling detectImage with invoiceId: $projectId, imageId: ${imageInfo.id}, imageUrl: ${imageInfo.url}');
+          'Calling detectImage with invoiceId: $invoiceId, imageId: ${imageInfo.id}, imageUrl: ${imageInfo.url}');
       logger.d("🔍 Function parameters: $params");
 
       final result = await callable.call(params);
@@ -65,10 +63,10 @@ class InvoiceScanUtil {
         });
 
         // Check for text content under different possible field names
-        if (resultMap.containsKey('extractedText')) {
-          final text = resultMap['extractedText']?.toString() ?? '';
+        if (resultMap.containsKey('ocrText')) {
+          final text = resultMap['ocrText']?.toString() ?? '';
           logger.d(
-              "🔍 Contains 'extractedText' field: ${text.isNotEmpty ? '${text.substring(0, math.min(50, text.length))}...' : 'empty'}");
+              "🔍 Contains 'ocrText' field: ${text.isNotEmpty ? '${text.substring(0, math.min(50, text.length))}...' : 'empty'}");
         } else if (resultMap.containsKey('detectedText')) {
           final text = resultMap['detectedText']?.toString() ?? '';
           logger.d(

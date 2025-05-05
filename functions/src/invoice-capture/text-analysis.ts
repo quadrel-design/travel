@@ -1,4 +1,14 @@
 /**
+ * Invoice Text Analysis Cloud Functions
+ * ------------------------------------
+ * This module provides invoice text analysis using the Google Gemini API.
+ * - Exports a callable function `analyzeInvoice` for text analysis and Firestore updates.
+ * - Exports a helper `analyzeDetectedText` for direct Gemini analysis logic.
+ *
+ * Optimized for modularity, error handling, and clear documentation.
+ */
+
+/**
  * Analyzes text using the Google Gemini API to identify potential invoices and
  * extract structured data like total amount, currency, date, merchant name, etc.
  * Provides a helper `analyzeDetectedText` and a callable `analyzeImage` function.
@@ -29,7 +39,7 @@ type InvoiceUpdateData = {
   status: string;
   isInvoice: boolean;
   lastProcessedAt: FirebaseFirestore.FieldValue;
-  extractedText: string;
+  ocrText: string;
   totalAmount?: number;
   currency?: string;
   merchantName?: string;
@@ -39,19 +49,34 @@ type InvoiceUpdateData = {
 };
 
 /**
- * Analyzes detected text using the Gemini API to extract invoice information.
- * Attempts to parse the response as JSON, cleans it if necessary, and determines
- * if the text represents an invoice based on extracted fields.
- * 
- * @param {string} extractedText The raw text extracted from an image.
- * @returns {Promise<object>} A promise resolving to an object containing:
- *  - success: boolean
- *  - status: string ("Invoice", "Text", "Error")
- *  - isInvoice: boolean
- *  - invoiceAnalysis?: object (Extracted invoice data if successful)
- *  - error?: string (If an error occurred)
+ * Invoice analysis structure for Gemini results.
  */
-export async function analyzeDetectedText(extractedText: string) {
+export interface InvoiceAnalysis {
+  totalAmount?: number;
+  currency?: string;
+  merchantName?: string;
+  location?: string;
+  date?: string;
+  [key: string]: any;
+}
+
+/**
+ * Analysis result structure for invoice text analysis.
+ */
+export interface AnalysisResult {
+  success: boolean;
+  status: string;
+  isInvoice: boolean;
+  invoiceAnalysis?: InvoiceAnalysis;
+  error?: string;
+}
+
+/**
+ * Performs invoice text analysis using the Gemini API.
+ * @param ocrText The raw text extracted from an image.
+ * @returns Analysis result object.
+ */
+export async function analyzeDetectedText(ocrText: string): Promise<AnalysisResult> {
   try {
     if (!geminiApiKey) {
       console.warn("No Gemini API key available. Skipping analysis and returning Text status.");
@@ -78,10 +103,10 @@ export async function analyzeDetectedText(extractedText: string) {
       - location: the location or address
       
       Text to analyze:
-      ${extractedText}
+      ${ocrText}
       
       Respond ONLY with the JSON object, no additional text.`;
-    console.log("Sending text to Gemini for analysis, length:", extractedText.length);
+    console.log("Sending text to Gemini for analysis, length:", ocrText.length);
     try {
       const result = await model.generateContent(prompt);
       const response = await result.response;
@@ -154,32 +179,43 @@ export async function analyzeDetectedText(extractedText: string) {
 }
 
 /**
+ * Updates the invoice image document in Firestore with analysis results.
+ * @param userId User ID
+ * @param projectId Project ID
+ * @param invoiceId Invoice ID
+ * @param imageId Image ID
+ * @param updateData Data to update
+ */
+async function updateInvoiceImageAnalysisFirestore(userId: string, projectId: string, invoiceId: string, imageId: string, updateData: Record<string, any>) {
+  const docRef = db.collection("users")
+    .doc(userId)
+    .collection("projects")
+    .doc(projectId)
+    .collection("invoices")
+    .doc(invoiceId)
+    .collection("invoice_images")
+    .doc(imageId);
+  await docRef.update(updateData);
+}
+
+/**
  * Callable Cloud Function to analyze detected text and optionally update Firestore.
  * - Authenticates the user.
- * - Validates input `extractedText`.
+ * - Validates input `ocrText`.
  * - Calls `analyzeDetectedText` to perform the analysis.
- * - If `invoiceId` and `imageId` are provided, updates the corresponding Firestore
- *   document with the analysis results (status, isInvoice, extracted fields).
- * 
- * @param {CallableRequest} request The request object.
- * @param {object} request.data The data passed to the function:
- * @param {string} request.data.extractedText The text to analyze.
- * @param {string} [request.data.projectId] Optional: The ID of the project.
- * @param {string} [request.data.invoiceId] Optional: The ID of the parent invoice document.
- * @param {string} [request.data.imageId] Optional: The ID of the image document to update.
- * @param {object} request.auth Authentication information for the calling user.
- * @param {string} request.auth.uid The UID of the authenticated user.
- * 
- * @returns {Promise<object>} A promise resolving to the result object from `analyzeDetectedText`.
- * @throws {HttpsError} Throws HttpsError on authentication, validation, or processing errors.
+ * - Updates Firestore with the analysis results.
+ * @param data Request data: { ocrText, projectId, invoiceId, imageId }
+ * @param context Callable context (must be authenticated)
+ * @returns Analysis result object (see AnalysisResult)
+ * @throws HttpsError on authentication, validation, or processing errors.
  */
-export const analyzeInvoice = functions.region('us-central1').https.onCall(async (data: any, context: any) => {
+export const analyzeInvoice = functions.region("us-central1").https.onCall(async (data: any, context: any) => {
   console.log("[DEBUG] data:", data);
-  const { projectId, invoiceId, imageId, extractedText } = data;
+  const { projectId, invoiceId, imageId, ocrText } = data;
   console.log("[DEBUG] projectId:", projectId);
   console.log("[DEBUG] invoiceId:", invoiceId);
   console.log("[DEBUG] imageId:", imageId);
-  console.log("[DEBUG] extractedText:", extractedText);
+  console.log("[DEBUG] ocrText:", ocrText);
   if (!projectId || !invoiceId || !imageId) {
     console.error("Missing projectId, invoiceId or imageId in data:", data);
     throw new functions.https.HttpsError("invalid-argument", "projectId, invoiceId and imageId are required");
@@ -208,7 +244,7 @@ export const analyzeInvoice = functions.region('us-central1').https.onCall(async
         console.error("Error setting status to analysis_running:", preUpdateError);
       }
     }
-    const analysisResult = await analyzeDetectedText(extractedText);
+    const analysisResult = await analyzeDetectedText(ocrText);
     console.log("Text analysis result:", analysisResult);
     if (docRef) {
       try {
@@ -224,16 +260,23 @@ export const analyzeInvoice = functions.region('us-central1').https.onCall(async
           status: finalStatus,
           isInvoice: analysisResult.isInvoice,
           lastProcessedAt: FieldValue.serverTimestamp(),
-          extractedText
+          ocrText
         };
         if (analysisResult.success && analysisResult.invoiceAnalysis) {
-          updateData.totalAmount = analysisResult.invoiceAnalysis.totalAmount;
-          updateData.currency = analysisResult.invoiceAnalysis.currency;
-          updateData.merchantName = analysisResult.invoiceAnalysis.merchantName;
-          updateData.merchantLocation = analysisResult.invoiceAnalysis.location;
-          updateData.invoiceDate = analysisResult.invoiceAnalysis.date;
-          updateData.invoiceAnalysis = analysisResult.invoiceAnalysis;
-          console.log("[DEBUG] Writing invoiceAnalysis to Firestore:", updateData);
+          const ia = analysisResult.invoiceAnalysis as InvoiceAnalysis;
+          updateData.totalAmount = ia.totalAmount;
+          updateData.currency = ia.currency;
+          updateData.merchantName = ia.merchantName;
+          updateData.merchantLocation = ia.location;
+          updateData.invoiceDate = ia.date;
+          // Do NOT add invoiceAnalysis to updateData
+          // Write analysis to subcollection instead:
+          const analysisDocRef = docRef.collection("analyses").doc("latest");
+          await analysisDocRef.set({
+            invoiceAnalysis: ia,
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+          console.log("[DEBUG] Wrote latest Gemini analysis to analyses/latest");
         } else {
           console.warn("[DEBUG] Skipping Firestore update for invoiceAnalysis. Reason:", {
             success: analysisResult.success,
@@ -241,23 +284,15 @@ export const analyzeInvoice = functions.region('us-central1').https.onCall(async
           });
         }
         console.log("Firestore updateData:", updateData, "Doc path:", docRef.path);
-        await docRef.update(updateData);
+        await updateInvoiceImageAnalysisFirestore(context.auth.uid, projectId, invoiceId, imageId, updateData);
         console.log(`Updated invoice analysis in Firestore. Final Status: ${finalStatus}`);
       } catch (dbError) {
-        console.error("Error updating Firestore in analyzeImage function:", dbError);
+        console.error("Error updating Firestore with analysis results:", dbError);
       }
     }
     return analysisResult;
   } catch (error) {
-    console.error("Error in analyzeImage function:", error);
-    if (docRef) {
-      try {
-        await docRef.update({ status: "analysis_failed" });
-        console.log("Set status to analysis_failed due to function error");
-      } catch (finalErrorUpdate) {
-          console.error("Failed to update status to analysis_failed on error:", finalErrorUpdate);
-      }
-    }
-    throw new functions.https.HttpsError("internal", "Error analyzing text: " + (error instanceof Error ? error.message : "Unknown error"));
+    console.error("Error in analyzeInvoice function:", error);
+    throw new functions.https.HttpsError("internal", "Error analyzing invoice text: " + (error instanceof Error ? error.message : "Unknown error"));
   }
-}); 
+});
