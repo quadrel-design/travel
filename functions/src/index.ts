@@ -33,7 +33,7 @@ dotenv.config();
 // export * from "./invoice-capture/invoice-image-detection";
 // export * from "./invoice-capture/invoice-capture";
 export * from "./invoice-capture/text-analysis";
-export { detectImage } from "./invoice-capture/invoice-image-detection";
+export { ocrInvoice } from "./invoice-capture/invoice-image-detection";
 
 // --- Billing Functions --- 
 // import * as functions from 'firebase-functions'; // Using v1 SDK - Removed as unused

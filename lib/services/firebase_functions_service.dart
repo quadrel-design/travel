@@ -44,9 +44,9 @@ class FirebaseFunctionsService {
       _logger.d('[FUNCTIONS] Preparing to scan image: $imageUrl');
       _logger.d('[FUNCTIONS] Project ID: $projectId, Image ID: $imageId');
 
-      final callable = _functions.httpsCallable('detectImage');
+      final callable = _functions.httpsCallable('ocrInvoice');
       _logger.d(
-          '[FUNCTIONS] Calling detectImage function with timeout: \\${timeoutSeconds}s');
+          '[FUNCTIONS] Calling ocrInvoice function with timeout: \\${timeoutSeconds}s');
 
       final resultFuture = callable.call<Map<String, dynamic>>({
         'projectId': projectId,
@@ -75,7 +75,7 @@ class FirebaseFunctionsService {
             '[FUNCTIONS] Function call successful, but response format is unexpected. Data: $data');
         throw FunctionCallException(
           'Function response format unexpected',
-          functionName: 'detectImage',
+          functionName: 'ocrInvoice',
           originalException: 'Missing success field in response',
         );
       }
@@ -86,17 +86,17 @@ class FirebaseFunctionsService {
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         e.message ?? 'Firebase function error',
-        functionName: 'detectImage',
+        functionName: 'ocrInvoice',
         code: e.code,
         originalException: e,
         stackTrace: stackTrace,
       );
     } on TimeoutException catch (e, stackTrace) {
-      _logger.e('[FUNCTIONS] Timeout calling detectImage:',
+      _logger.e('[FUNCTIONS] Timeout calling ocrInvoice:',
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         'Function call timed out after $timeoutSeconds seconds',
-        functionName: 'detectImage',
+        functionName: 'ocrInvoice',
         code: 'timeout',
         originalException: e,
         stackTrace: stackTrace,
@@ -106,7 +106,7 @@ class FirebaseFunctionsService {
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         e.toString(),
-        functionName: 'detectImage',
+        functionName: 'ocrInvoice',
         originalException: e,
         stackTrace: stackTrace,
       );
@@ -133,9 +133,9 @@ class FirebaseFunctionsService {
     try {
       _logger.d(
           '[FUNCTIONS] Preparing to analyze text for project: $projectId, image: $imageId');
-      final callable = _functions.httpsCallable('analyzeImage');
+      final callable = _functions.httpsCallable('analyzeInvoice');
       _logger.d(
-          '[FUNCTIONS] Calling analyzeImage function with timeout: \\${timeoutSeconds}s');
+          '[FUNCTIONS] Calling analyzeInvoice function with timeout: \\${timeoutSeconds}s');
       final resultFuture = callable.call<Map<String, dynamic>>({
         'extractedText': extractedText,
         'projectId': projectId,
@@ -157,7 +157,7 @@ class FirebaseFunctionsService {
             '[FUNCTIONS] Function call successful, but response format is unexpected. Data: \\$data');
         throw FunctionCallException(
           'Function response format unexpected',
-          functionName: 'analyzeImage',
+          functionName: 'analyzeInvoice',
           originalException: 'Missing success field in response',
         );
       }
@@ -169,17 +169,17 @@ class FirebaseFunctionsService {
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         e.message ?? 'Firebase function error',
-        functionName: 'analyzeImage',
+        functionName: 'analyzeInvoice',
         code: e.code,
         originalException: e,
         stackTrace: stackTrace,
       );
     } on TimeoutException catch (e, stackTrace) {
-      _logger.e('[FUNCTIONS] Timeout calling analyzeImage:',
+      _logger.e('[FUNCTIONS] Timeout calling analyzeInvoice:',
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         'Function call timed out after $timeoutSeconds seconds',
-        functionName: 'analyzeImage',
+        functionName: 'analyzeInvoice',
         code: 'timeout',
         originalException: e,
         stackTrace: stackTrace,
@@ -189,7 +189,7 @@ class FirebaseFunctionsService {
           error: e, stackTrace: stackTrace);
       throw FunctionCallException(
         e.toString(),
-        functionName: 'analyzeImage',
+        functionName: 'analyzeInvoice',
         originalException: e,
         stackTrace: stackTrace,
       );

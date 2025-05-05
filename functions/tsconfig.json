@@ -4,6 +4,7 @@
     "noImplicitReturns": true,
     "noUnusedLocals": true,
     "outDir": "lib",
+    "rootDir": "src",
     "sourceMap": true,
     "strict": false,
     "noImplicitAny": false,
@@ -14,6 +15,7 @@
   },
   "compileOnSave": true,
   "include": [
-    "src"
+    "src",
+    "src/invoice-capture/test-analyzeImage.ts"
   ]
 }

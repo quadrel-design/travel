@@ -7,11 +7,11 @@
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { config } from "firebase-functions";
+import * as functions from "firebase-functions/v1";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { app } from "../init";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { config } from "firebase-functions";
 
 // Firestore database reference
 const db = getFirestore(app);
@@ -173,28 +173,25 @@ export async function analyzeDetectedText(extractedText: string) {
  * @returns {Promise<object>} A promise resolving to the result object from `analyzeDetectedText`.
  * @throws {HttpsError} Throws HttpsError on authentication, validation, or processing errors.
  */
-export const analyzeImage = onCall({
-  enforceAppCheck: false,
-  timeoutSeconds: 120,
-}, async (request) => {
-  console.log("[DEBUG] request.data:", request.data);
-  const { projectId, invoiceId, imageId, extractedText } = request.data || {};
+export const analyzeInvoice = functions.region('us-central1').https.onCall(async (data: any, context: any) => {
+  console.log("[DEBUG] data:", data);
+  const { projectId, invoiceId, imageId, extractedText } = data;
   console.log("[DEBUG] projectId:", projectId);
   console.log("[DEBUG] invoiceId:", invoiceId);
   console.log("[DEBUG] imageId:", imageId);
   console.log("[DEBUG] extractedText:", extractedText);
   if (!projectId || !invoiceId || !imageId) {
-    console.error("Missing projectId, invoiceId or imageId in request:", request.data);
-    throw new HttpsError("invalid-argument", "projectId, invoiceId and imageId are required");
+    console.error("Missing projectId, invoiceId or imageId in data:", data);
+    throw new functions.https.HttpsError("invalid-argument", "projectId, invoiceId and imageId are required");
   }
-  if (!request.auth) {
+  if (!context.auth) {
     console.error("Authentication error: User not authenticated");
-    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+    throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
   let docRef: FirebaseFirestore.DocumentReference | null = null;
-  if (projectId && invoiceId && imageId && request.auth?.uid) {
+  if (projectId && invoiceId && imageId && context.auth?.uid) {
       docRef = db.collection("users")
-          .doc(request.auth.uid)
+          .doc(context.auth.uid)
           .collection("projects")
           .doc(projectId)
           .collection("invoices")
@@ -261,6 +258,6 @@ export const analyzeImage = onCall({
           console.error("Failed to update status to analysis_failed on error:", finalErrorUpdate);
       }
     }
-    throw new HttpsError("internal", "Error analyzing text: " + (error instanceof Error ? error.message : "Unknown error"));
+    throw new functions.https.HttpsError("internal", "Error analyzing text: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 }); 

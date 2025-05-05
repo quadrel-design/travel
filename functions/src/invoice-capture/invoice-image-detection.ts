@@ -1,13 +1,13 @@
 /**
  * Handles text detection (OCR) using the Google Cloud Vision API.
- * Provides a helper function `detectTextInImage` and a callable Cloud Function `detectImage`
+ * Provides a helper function `detectTextInImage` and a callable Cloud Function `ocrInvoice`
  * to process images, update user costs, and store results in Firestore.
  */
 // Load environment variables from .env file (useful for local development)
 import * as dotenv from "dotenv";
 dotenv.config();
 
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import * as functions from "firebase-functions/v1";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { ImageAnnotatorClient } from "@google-cloud/vision";
 import { app } from "../init";
@@ -125,45 +125,40 @@ export async function detectTextInImage(imageUrl: string, imageBuffer?: Buffer) 
  * @returns {Promise<object>} A promise resolving to the result object from `detectTextInImage`.
  * @throws {HttpsError} Throws HttpsError on authentication, validation, or processing errors.
  */
-export const detectImage = onCall({
-  enforceAppCheck: false, // Consider enabling App Check for production
-  timeoutSeconds: 120,
-  memory: "1GiB",
-  maxInstances: 20
-}, async (request) => {
+export const ocrInvoice = functions.region('us-central1').https.onCall(async (data: any, context: any) => {
   console.log("====== DETECT IMAGE CALLED ======");
-  console.log("detectImage function called with data:", {
-    hasImageUrl: !!request.data.imageUrl,
-    hasImageData: !!request.data.imageData,
-    invoiceId: request.data.invoiceId,
-    imageId: request.data.imageId
+  console.log("ocrInvoice function called with data:", {
+    hasImageUrl: !!data.imageUrl,
+    hasImageData: !!data.imageData,
+    invoiceId: data.invoiceId,
+    imageId: data.imageId
   });
 
-  const userId = request.auth?.uid;
+  const userId = context.auth?.uid;
   if (!userId) {
     console.error("Authentication error: User not authenticated");
-    throw new HttpsError("unauthenticated", "The function must be called while authenticated.");
+    throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
   }
   console.log("User authenticated:", userId);
 
   // Validate the request data
-  if (!request.data.imageUrl && !request.data.imageData) {
+  if (!data.imageUrl && !data.imageData) {
     console.error("Invalid request: Neither image URL nor image data provided");
-    throw new HttpsError("invalid-argument", "Must provide either an image URL or image data");
+    throw new functions.https.HttpsError("invalid-argument", "Must provide either an image URL or image data");
   }
 
-  if (!request.data.invoiceId || !request.data.imageId) {
+  if (!data.invoiceId || !data.imageId) {
     console.error("Invalid request: Missing invoiceId or imageId");
-    throw new HttpsError("invalid-argument", "invoiceId and imageId are required");
+    throw new functions.https.HttpsError("invalid-argument", "invoiceId and imageId are required");
   }
 
-  const projectId = request.data.projectId;
+  const projectId = data.projectId;
   if (!projectId) {
-    throw new HttpsError("invalid-argument", "projectId is required");
+    throw new functions.https.HttpsError("invalid-argument", "projectId is required");
   }
 
-  const invoiceId = request.data.invoiceId;
-  const imageId = request.data.imageId;
+  const invoiceId = data.invoiceId;
+  const imageId = data.imageId;
   console.log(`Processing image (ID: ${imageId}) for invoice (ID: ${invoiceId})`);
   
   // Log that we're starting image processing
@@ -174,7 +169,7 @@ export const detectImage = onCall({
     await setInvoiceImageStatus(userId, projectId, imageId, "ocrInProgress");
     let detectResult;
     
-    if (request.data.imageData) {
+    if (data.imageData) {
       // Processing base64 image data
       console.log("Processing base64 image data");
       
@@ -189,24 +184,23 @@ export const detectImage = onCall({
         
         while (retryCount <= maxRetries) {
           try {
-            console.log(`Attempt ${retryCount + 1} to process image URL: ${request.data.imageUrl}`);
+            console.log(`Attempt ${retryCount + 1} to process image URL: ${data.imageUrl}`);
             
             // For URL-based processing, try to download image to buffer first
             console.log("Downloading image from URL for processing");
-            const response = await axios.get(request.data.imageUrl, {
+            const response = await axios.get(data.imageUrl, {
               responseType: "arraybuffer",
               timeout: 15000 // 15 second timeout for download
             });
             
-            // Assert response.data is Buffer or string for length
-            const data = response.data as Buffer | string;
-            const dataLength = typeof data === "string" ? Buffer.byteLength(data) : (Buffer.isBuffer(data) ? data.length : 0);
+            // Rename inner 'data' to 'imageData' to avoid shadowing
+            const imageData = response.data as Buffer | string;
+            const dataLength = typeof imageData === "string" ? Buffer.byteLength(imageData) : (Buffer.isBuffer(imageData) ? imageData.length : 0);
             console.log("Downloaded image size:", dataLength, "bytes");
             
             // Process the downloaded image buffer
-            // Assert response.data is Buffer or string for Buffer.from
-            const imageBuffer = Buffer.isBuffer(data) ? data : Buffer.from(data);
-            detectResult = await detectTextInImage(request.data.imageUrl, imageBuffer);
+            const imageBuffer = Buffer.isBuffer(imageData) ? imageData : Buffer.from(imageData);
+            detectResult = await detectTextInImage(data.imageUrl, imageBuffer);
             console.log("Text detection completed with result:", {
               success: detectResult.success,
               hasText: detectResult.hasText,
@@ -235,7 +229,7 @@ export const detectImage = onCall({
         }
       } catch (urlError) {
         console.error("Error processing image URL:", urlError);
-        throw new HttpsError("internal", "Error processing image URL: " + (urlError instanceof Error ? urlError.message : "Unknown error"));
+        throw new functions.https.HttpsError("internal", "Error processing image URL: " + (urlError instanceof Error ? urlError.message : "Unknown error"));
       }
     }
     
@@ -319,10 +313,10 @@ export const detectImage = onCall({
     console.error("Error during image processing stage:", error);
     
     // Ensure HttpsErrors are thrown correctly
-    if (error instanceof HttpsError) {
+    if (error instanceof functions.https.HttpsError) {
         throw error;
     }
-    throw new HttpsError("internal", "Error processing image: " + (error instanceof Error ? error.message : "Unknown error"));
+    throw new functions.https.HttpsError("internal", "Error processing image: " + (error instanceof Error ? error.message : "Unknown error"));
   }
 });
 
@@ -407,7 +401,7 @@ if (require.main === module) {
       },
     };
     try {
-      const result = await (detectImage as any)._callableHandler(request, {});
+      const result = await (ocrInvoice as any)._callableHandler(request, {});
       console.log("Test OCR result:", result);
     } catch (e) {
       console.error("Test OCR error:", e);

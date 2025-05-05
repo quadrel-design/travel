@@ -1,19 +1,23 @@
 export type InvoiceImageStatus =
   | "uploaded"
+  | "ocrStart"
   | "ocrInProgress"
   | "ocrError"
   | "ocrNoText"
   | "ocrFinished"
+  | "analyzeStart"
   | "analyzeInProgress"
   | "analyzeError"
   | "analyzeFinished";
 
 export const allowedTransitions: Record<InvoiceImageStatus, InvoiceImageStatus[]> = {
-  uploaded: ["ocrInProgress"],
+  uploaded: ["ocrStart"],
+  ocrStart: ["ocrInProgress"],
   ocrInProgress: ["ocrError", "ocrNoText", "ocrFinished"],
   ocrError: [],
-  ocrNoText: ["analyzeInProgress"],
-  ocrFinished: ["analyzeInProgress"],
+  ocrNoText: ["analyzeStart"],
+  ocrFinished: ["analyzeStart"],
+  analyzeStart: ["analyzeInProgress"],
   analyzeInProgress: ["analyzeError", "analyzeFinished"],
   analyzeError: [],
   analyzeFinished: [],

@@ -6,7 +6,9 @@
     "source": "functions",
     "predeploy": [
       "cd functions && npm run build"
-    ]
+    ],
+    "runtime": "nodejs18",
+    "platform": "gcfv1"
   },
   "hosting": {
     "public": "build/web",
