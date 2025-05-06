@@ -88,8 +88,8 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
             _buildOverviewLinkCard(context,
                 label: l10n.projectDetailExpensesLabel, // Use l10n
                 onTap: () {
-              // This one was correct
-              context.push('${AppRoutes.projectDetail}/${project.id}/expenses');
+              // Route to the expenses screen for this project
+              context.push('/home/project-detail/${project.id}/expenses');
             }),
             _buildOverviewLinkCard(context,
                 label: l10n.projectDetailParticipantsLabel, // Use l10n

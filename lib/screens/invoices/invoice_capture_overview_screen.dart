@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/models/project.dart';
-import '../models/invoice_image_process.dart';
+import '../../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 // import 'package:provider/provider.dart'; // Remove unused import
-import '../models/user.dart' as app_user;
+import '../../models/user.dart' as app_user;
 // Import Firestore
 import 'package:cloud_firestore/cloud_firestore.dart';
 

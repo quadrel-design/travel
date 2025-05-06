@@ -15,7 +15,7 @@ import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 // import 'package:travel/providers/logging_provider.dart'; // Import logger provider
 
 // Ensure Project model is imported
-import '../models/project.dart'; // Import Project model
+import '../../models/project.dart'; // Import Project model
 // Import AppTitle
 // Import the new widget
 import 'package:flutter_form_builder/flutter_form_builder.dart';

@@ -18,21 +18,21 @@ import 'firebase_options.dart'; // Import generated options
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 // Project-specific imports (Ensure these paths are correct)
-import 'screens/auth_screen.dart';
+import 'screens/auth/auth_screen.dart';
 import 'screens/home_screen.dart';
-import 'screens/project_create.dart';
-import 'screens/splash_screen.dart';
-import 'screens/invoice_capture_overview_screen.dart';
+import 'screens/project/project_create.dart';
+import 'screens/auth/splash_screen.dart';
+import 'screens/invoices/invoice_capture_overview_screen.dart';
 import 'screens/settings/app_settings_screen.dart';
 import 'repositories/auth_repository.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/theme/antonetti_theme.dart';
-import 'package:travel/screens/project_detail_overview_screen.dart';
+import 'package:travel/screens/project/project_overview_screen.dart';
 import 'providers/logging_provider.dart';
-import 'package:travel/screens/auth_wait_screen.dart';
-import 'package:travel/screens/project_expenses_screen.dart';
-import 'package:travel/screens/user_management_screen.dart';
+import 'package:travel/screens/auth/auth_wait_screen.dart';
+import 'package:travel/screens/expenses/project_expenses_screen.dart';
+import 'package:travel/screens/user/user_management_screen.dart';
 import 'models/project.dart';
 
 void printFirebaseConfig() {
@@ -55,7 +55,8 @@ final firebaseInitializationProvider = FutureProvider<FirebaseApp>((ref) async {
   );
   // Log that the Dart await completed
   print(
-      'DEBUG: firebaseInitializationProvider COMPLETED (Dart await returned).');
+    'DEBUG: firebaseInitializationProvider COMPLETED (Dart await returned).',
+  );
 
   // Print Firebase config after initialization
   printFirebaseConfig();

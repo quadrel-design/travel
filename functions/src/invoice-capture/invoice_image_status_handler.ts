@@ -10,7 +10,7 @@ export async function setInvoiceImageStatus(
   imageId: string,
   newStatus: InvoiceImageStatus
 ) {
-  if (!invoiceId) throw new Error('invoiceId is required');
+  if (!invoiceId) throw new Error("invoiceId is required");
   const docRef = db
     .collection("users")
     .doc(userId)

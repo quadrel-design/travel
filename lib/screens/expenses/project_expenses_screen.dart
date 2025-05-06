@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 // import 'package:flutter_riverpod/flutter_riverpod.dart'; // Remove unused import
 import 'package:travel/models/expense.dart';
 import 'package:intl/intl.dart';
+import 'package:travel/screens/expenses/budget_create_screen.dart';
 // import 'package:supabase_flutter/supabase_flutter.dart'; // Removed
 
 class ProjectExpensesScreen extends StatefulWidget {
@@ -17,6 +18,7 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
   bool _isLoading = true;
   List<Expense> _expenses = [];
   String? _error;
+  final List<_Budget> _budgets = [];
   // late Future<List<Expense>> _expensesFuture; // Remove unused field
 
   @override
@@ -104,40 +106,6 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    Widget content;
-    if (_isLoading) {
-      content = const Center(child: CircularProgressIndicator());
-    } else if (_error != null) {
-      content = Center(
-          child: Text(_error!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error)));
-    } else if (_expenses.isEmpty) {
-      content = const Center(child: Text('No expenses added yet.'));
-    } else {
-      double totalExpenses =
-          _expenses.fold(0.0, (sum, item) => sum + item.amount);
-      content = Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: Text(
-              'Total Expenses: ${NumberFormat.currency(symbol: '\$').format(totalExpenses)}',
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-          ),
-          Expanded(
-            child: ListView.builder(
-              itemCount: _expenses.length,
-              itemBuilder: (ctx, index) {
-                final expense = _expenses[index];
-                return _buildExpenseCard(context, expense);
-              },
-            ),
-          ),
-        ],
-      );
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Expenses'),
@@ -146,14 +114,42 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: _fetchExpenses,
           ),
-          // Add button is temporarily removed as _addExpense is removed
-          // IconButton(
-          //   icon: const Icon(Icons.add),
-          //   onPressed: _addExpense, // This method is removed
-          // ),
         ],
       ),
-      body: content,
+      body: _budgets.isEmpty
+          ? const Center(child: Text('No budgets yet.'))
+          : ListView.builder(
+              itemCount: _budgets.length,
+              itemBuilder: (context, index) {
+                final budget = _budgets[index];
+                return Card(
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: ListTile(
+                    title: Text(budget.name),
+                    subtitle: Text('Sum: 4${budget.sum.toStringAsFixed(2)}'),
+                  ),
+                );
+              },
+            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final result = await Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (context) => const BudgetCreateScreen(),
+            ),
+          );
+          if (result is Map<String, dynamic> &&
+              result['name'] != null &&
+              result['sum'] != null) {
+            setState(() {
+              _budgets.add(_Budget(name: result['name'], sum: result['sum']));
+            });
+          }
+        },
+        child: const Icon(Icons.add),
+        tooltip: 'Create New Budget',
+      ),
     );
   }
 
@@ -332,4 +328,10 @@ class _AddExpenseDialogState extends State<_AddExpenseDialog> {
       ],
     );
   }
+}
+
+class _Budget {
+  final String name;
+  final double sum;
+  _Budget({required this.name, required this.sum});
 }
