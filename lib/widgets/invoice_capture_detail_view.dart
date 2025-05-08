@@ -27,11 +27,13 @@ class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
     super.key,
     this.initialIndex = 0,
     required this.projectId,
+    required this.budgetId,
     required this.invoiceId,
   });
 
   final int initialIndex;
   final String projectId;
+  final String budgetId;
   final String invoiceId;
 
   @override
@@ -64,12 +66,16 @@ class _InvoiceCaptureDetailViewState
         logger: _logger,
         context: context,
         projectId: widget.projectId,
+        budgetId: widget.budgetId,
         invoiceId: invoiceId,
         setState: setState,
         getCurrentIndex: () => currentIndex,
         getImages: () => ref
-            .read(invoiceCaptureProvider(
-                (projectId: widget.projectId, invoiceId: invoiceId)))
+            .read(invoiceCaptureProvider((
+              projectId: widget.projectId,
+              budgetId: widget.budgetId,
+              invoiceId: invoiceId
+            )))
             .images);
   }
 
@@ -202,8 +208,11 @@ class _InvoiceCaptureDetailViewState
   @override
   Widget build(BuildContext context) {
     print('InvoiceCaptureDetailView build called');
-    final provider = invoiceCaptureProvider(
-        (projectId: widget.projectId, invoiceId: invoiceId));
+    final provider = invoiceCaptureProvider((
+      projectId: widget.projectId,
+      budgetId: widget.budgetId,
+      invoiceId: invoiceId
+    ));
     final state = ref.watch(provider);
     final images = state.images;
 

@@ -17,7 +17,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
-  const InvoiceCaptureOverviewScreen({super.key, required this.project});
+  final String budgetId;
+  const InvoiceCaptureOverviewScreen(
+      {super.key, required this.project, required this.budgetId});
 
   @override
   ConsumerState<InvoiceCaptureOverviewScreen> createState() =>
@@ -163,6 +165,7 @@ class _InvoiceCaptureOverviewScreenState
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: widget.project.id,
+                        budgetId: widget.budgetId,
                         invoiceId: imageInfo.id,
                         initialIndex: index,
                       ),
@@ -236,6 +239,7 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         widget.project.id,
+        widget.budgetId,
         imageInfo.id,
         imageInfo.id,
       );
@@ -296,7 +300,7 @@ class _InvoiceCaptureOverviewScreenState
 
       _logger.d("📸 Starting repository upload...");
       final uploadResult = await repo.uploadInvoiceImage(
-          widget.project.id, invoiceId, fileBytes, fileName);
+          widget.project.id, widget.budgetId, invoiceId, fileBytes, fileName);
 
       _logger.i("📸 Repository upload completed successfully");
       _logger

@@ -14,6 +14,7 @@ class InvoiceCaptureController {
   final Logger logger;
   final BuildContext context;
   final String projectId;
+  final String budgetId;
   final String invoiceId;
   final void Function(VoidCallback fn) setState;
   final int Function() getCurrentIndex;
@@ -24,6 +25,7 @@ class InvoiceCaptureController {
     required this.logger,
     required this.context,
     required this.projectId,
+    required this.budgetId,
     required this.invoiceId,
     required this.setState,
     required this.getCurrentIndex,
@@ -36,8 +38,8 @@ class InvoiceCaptureController {
     if (images.isEmpty || currentIndex >= images.length) return;
     final imageId = images[currentIndex].id;
     final imageUrl = images[currentIndex].url;
-    final provider =
-        invoiceCaptureProvider((projectId: projectId, invoiceId: invoiceId));
+    final provider = invoiceCaptureProvider(
+        (projectId: projectId, budgetId: budgetId, invoiceId: invoiceId));
     logger.i('Initiating scan for image ID: $imageId');
     ref.read(provider.notifier).initiateScan(imageId);
     Timer? timeoutTimer;
@@ -120,7 +122,8 @@ class InvoiceCaptureController {
     logger.i('Updating image with status: $isInvoice');
     await repository.updateImageWithOcrResults(
       projectId,
-      projectId,
+      budgetId,
+      invoiceId,
       imageId,
       isInvoice: isInvoice,
     );
@@ -171,7 +174,8 @@ class InvoiceCaptureController {
     try {
       await repository.deleteInvoiceImage(
         projectId,
-        projectId,
+        budgetId,
+        invoiceId,
         imageIdToDelete,
       );
       logger.i(

@@ -207,16 +207,21 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.invoiceCaptureOverview.split('/').last,
                 builder: (context, state) {
-                  final project = state.extra as Project?;
-                  if (project != null) {
-                    return InvoiceCaptureOverviewScreen(project: project);
+                  final project = state.extra is Map
+                      ? (state.extra as Map)['project'] as Project?
+                      : state.extra as Project?;
+                  final budgetId = state.extra is Map
+                      ? (state.extra as Map)['budgetId'] as String?
+                      : null;
+                  if (project != null && budgetId != null) {
+                    return InvoiceCaptureOverviewScreen(
+                        project: project, budgetId: budgetId);
                   } else {
                     return Scaffold(
                       appBar: AppBar(title: const Text('Error')),
                       body: const Center(
                         child: Text(
-                          'Project data missing for invoice capture.',
-                        ),
+                            'Project or budget not selected for invoice capture.'),
                       ),
                     );
                   }

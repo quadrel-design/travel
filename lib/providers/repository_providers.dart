@@ -92,16 +92,17 @@ final userInvoicesStreamProvider =
 /// The stream automatically updates when images are added, modified, or removed.
 ///
 /// Parameters:
-///   - params: A map containing 'projectId' and 'invoiceId'
+///   - params: A map containing 'projectId', 'budgetId', and 'invoiceId'
 final invoiceImagesStreamProvider = StreamProvider.autoDispose
     .family<List<InvoiceImageProcess>, Map<String, String>>((ref, params) {
   final repository = ref.watch(invoiceRepositoryProvider);
   final logger = ref.watch(loggerProvider);
   final projectId = params['projectId']!;
+  final budgetId = params['budgetId']!;
   final invoiceId = params['invoiceId']!;
   logger.d(
-      '[PROVIDER] invoiceImagesStreamProvider executing for projectId: $projectId, invoiceId: $invoiceId');
-  return repository.getInvoiceImagesStream(projectId, invoiceId);
+      '[PROVIDER] invoiceImagesStreamProvider executing for projectId: $projectId, budgetId: $budgetId, invoiceId: $invoiceId');
+  return repository.getInvoiceImagesStream(projectId, budgetId, invoiceId);
 });
 
 /// Stream provider for a single invoice by ID.

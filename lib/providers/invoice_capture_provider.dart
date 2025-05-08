@@ -75,6 +75,7 @@ class InvoiceCaptureState extends Equatable {
 class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   final Logger _logger;
   final String _projectId;
+  final String _budgetId;
   final String _invoiceId;
   final Ref _ref;
   StreamSubscription<List<InvoiceImageProcess>>? _imageStreamSubscription;
@@ -83,14 +84,15 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   ///
   /// Parameters:
   ///   - _projectId: The ID of the project to load images from
+  ///   - _budgetId: The ID of the budget to load images from
   ///   - _invoiceId: The ID of the invoice to load images from
   ///   - _logger: Logger instance for tracking operations
   ///   - _ref: Riverpod Ref for reading other providers
   InvoiceCaptureNotifier(
-      this._projectId, this._invoiceId, this._logger, this._ref)
+      this._projectId, this._budgetId, this._invoiceId, this._logger, this._ref)
       : super(const InvoiceCaptureState()) {
     _logger.i(
-        'InvoiceCaptureNotifier initialized for projectId: $_projectId, invoiceId: $_invoiceId');
+        'InvoiceCaptureNotifier initialized for projectId: $_projectId, budgetId: $_budgetId, invoiceId: $_invoiceId');
     _loadInitialImages();
   }
 
@@ -98,10 +100,11 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   Future<void> _loadInitialImages() async {
     try {
       _logger.d(
-          'Loading initial images for project $_projectId, invoice $_invoiceId');
+          'Loading initial images for project $_projectId, budget $_budgetId, invoice $_invoiceId');
       final repository = _ref.read(invoiceRepositoryProvider);
-      _imageStreamSubscription =
-          repository.getInvoiceImagesStream(_projectId, _invoiceId).listen(
+      _imageStreamSubscription = repository
+          .getInvoiceImagesStream(_projectId, _budgetId, _invoiceId)
+          .listen(
         (images) {
           _logger.d('Received \\${images.length} images from stream');
           state = state.copyWith(images: images);
@@ -158,7 +161,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
   @override
   void dispose() {
     _logger.d(
-        'Disposing InvoiceCaptureNotifier for projectId: $_projectId, invoiceId: $_invoiceId');
+        'Disposing InvoiceCaptureNotifier for projectId: $_projectId, budgetId: $_budgetId, invoiceId: $_invoiceId');
     _imageStreamSubscription?.cancel();
     super.dispose();
   }
@@ -175,15 +178,17 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
 ///
 /// Parameters:
 ///   - projectId: The ID of the project to manage invoice capture for
+///   - budgetId: The ID of the budget to manage invoice capture for
 ///   - invoiceId: The ID of the invoice to manage invoice capture for
 ///
-/// Usage: `final captureState = ref.watch(invoiceCaptureProvider(projectId, invoiceId));`
+/// Usage: `final captureState = ref.watch(invoiceCaptureProvider(projectId, budgetId, invoiceId));`
 final invoiceCaptureProvider = StateNotifierProvider.autoDispose.family<
     InvoiceCaptureNotifier,
     InvoiceCaptureState,
-    ({String projectId, String invoiceId})>(
+    ({String projectId, String budgetId, String invoiceId})>(
   (ref, ids) {
     final logger = ref.watch(loggerProvider);
-    return InvoiceCaptureNotifier(ids.projectId, ids.invoiceId, logger, ref);
+    return InvoiceCaptureNotifier(
+        ids.projectId, ids.budgetId, ids.invoiceId, logger, ref);
   },
 );

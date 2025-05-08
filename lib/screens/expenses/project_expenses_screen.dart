@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:travel/models/expense.dart';
 import 'package:intl/intl.dart';
 import 'package:travel/screens/expenses/budget_create_screen.dart';
+import 'package:travel/screens/expenses/budget_overview_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 // import 'package:supabase_flutter/supabase_flutter.dart'; // Removed
 
 class ProjectExpensesScreen extends StatefulWidget {
@@ -106,46 +109,62 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      return const Scaffold(
+        body: Center(child: Text('Not signed in.')),
+      );
+    }
+    final budgetsRef = FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .collection('projects')
+        .doc(widget.projectId)
+        .collection('budgets');
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Expenses'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchExpenses,
-          ),
-        ],
+      appBar: AppBar(title: const Text('Budgets')),
+      body: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+        stream: budgetsRef.orderBy('createdAt', descending: true).snapshots(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text('No budgets yet.'));
+          }
+          final budgets = snapshot.data!.docs;
+          return ListView.separated(
+            itemCount: budgets.length,
+            separatorBuilder: (_, __) => const Divider(),
+            itemBuilder: (context, index) {
+              final data = budgets[index].data();
+              return ListTile(
+                title: Text(data['name'] ?? ''),
+                subtitle:
+                    Text('Sum: 4${(data['sum'] ?? 0).toStringAsFixed(2)}'),
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => BudgetOverviewScreen(
+                        projectId: widget.projectId,
+                        budgetId: data['id'],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          );
+        },
       ),
-      body: _budgets.isEmpty
-          ? const Center(child: Text('No budgets yet.'))
-          : ListView.builder(
-              itemCount: _budgets.length,
-              itemBuilder: (context, index) {
-                final budget = _budgets[index];
-                return Card(
-                  margin:
-                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListTile(
-                    title: Text(budget.name),
-                    subtitle: Text('Sum: 4${budget.sum.toStringAsFixed(2)}'),
-                  ),
-                );
-              },
-            ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final result = await Navigator.of(context).push(
+          final newBudgetId = await Navigator.of(context).push<String>(
             MaterialPageRoute(
-              builder: (context) => const BudgetCreateScreen(),
+              builder: (_) => BudgetCreateScreen(projectId: widget.projectId),
             ),
           );
-          if (result is Map<String, dynamic> &&
-              result['name'] != null &&
-              result['sum'] != null) {
-            setState(() {
-              _budgets.add(_Budget(name: result['name'], sum: result['sum']));
-            });
-          }
+          // Optionally, scroll to or highlight the new budget
         },
         child: const Icon(Icons.add),
         tooltip: 'Create New Budget',

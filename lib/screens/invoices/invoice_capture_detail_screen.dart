@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
-import '../models/invoice_image_process.dart';
+import '../../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
@@ -13,10 +13,14 @@ import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
+  final String budgetId;
   final String invoiceId;
 
   const InvoiceCaptureDetailScreen(
-      {super.key, required this.projectId, required this.invoiceId});
+      {super.key,
+      required this.projectId,
+      required this.budgetId,
+      required this.invoiceId});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -141,6 +145,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: projectId,
+                        budgetId: budgetId,
                         invoiceId: invoiceId,
                         initialIndex: index,
                       ),
@@ -197,6 +202,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
       ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         projectId,
+        budgetId,
         invoiceId,
         imageInfo.id,
       );
@@ -227,7 +233,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
       ref.read(loggerProvider).d("📸 Starting repository upload...");
       final uploadResult = await repo.uploadInvoiceImage(
-          projectId, invoiceId, fileBytes, fileName);
+          projectId, budgetId, invoiceId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
       ref

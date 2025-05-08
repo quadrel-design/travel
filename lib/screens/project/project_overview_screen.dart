@@ -102,10 +102,33 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
                 label: l10n.projectDetailImagesLabel, // Use l10n
                 onTap: () {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // Navigate to the invoice capture overview for the project (no invoiceId yet)
-              context.push(
-                  '/home/project-detail/${project.id}/invoice-capture-overview',
-                  extra: project);
+              // Instead of navigating directly to invoice capture overview, show a dialog or screen to select a budget first.
+              // Example placeholder:
+              showDialog(
+                context: context,
+                builder: (context) => AlertDialog(
+                  title: const Text('Select Budget'),
+                  content:
+                      const Text('Please select a budget to view invoices.'),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        // TODO: Replace 'selectedBudgetId' with actual logic to select a budget
+                        const selectedBudgetId = 'REPLACE_WITH_BUDGET_ID';
+                        Navigator.of(context).pop();
+                        context.push(
+                          '/home/project-detail/${project.id}/invoice-capture-overview',
+                          extra: {
+                            'project': project,
+                            'budgetId': selectedBudgetId,
+                          },
+                        );
+                      },
+                      child: const Text('Continue'),
+                    ),
+                  ],
+                ),
+              );
             }),
           ],
         ),

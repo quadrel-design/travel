@@ -24,7 +24,7 @@ abstract class InvoiceRepository {
 
   /// Gets a stream of images for a specific invoice in a project
   Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
-      String projectId, String invoiceId);
+      String projectId, String budgetId, String invoiceId);
 
   /// Adds a new project
   Future<Project> addProject(Project project);
@@ -38,6 +38,7 @@ abstract class InvoiceRepository {
   /// Updates image info with OCR results
   Future<void> updateImageWithOcrResults(
     String projectId,
+    String budgetId,
     String invoiceId,
     String imageId, {
     bool? isInvoice,
@@ -46,11 +47,12 @@ abstract class InvoiceRepository {
 
   /// Deletes a project image
   Future<void> deleteInvoiceImage(
-      String projectId, String invoiceId, String imageId);
+      String projectId, String budgetId, String invoiceId, String imageId);
 
   /// Uploads a project image
   Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
+    String budgetId,
     String invoiceId,
     Uint8List fileBytes,
     String fileName,
@@ -208,7 +210,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
 
   @override
   Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
-      String projectId, String invoiceId) {
+      String projectId, String budgetId, String invoiceId) {
     final userId = _getCurrentUserId();
     print('[STREAM] Using userId: $userId');
     _logger.d(
@@ -327,8 +329,12 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<InvoiceImageProcess> uploadInvoiceImage(String projectId,
-      String invoiceId, Uint8List fileBytes, String fileName) async {
+  Future<InvoiceImageProcess> uploadInvoiceImage(
+      String projectId,
+      String budgetId,
+      String invoiceId,
+      Uint8List fileBytes,
+      String fileName) async {
     final userId = _getCurrentUserId(); // Use helper
     print('[UPLOAD] Using userId: $userId');
     _logger
@@ -386,8 +392,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<void> deleteInvoiceImage(
-      String projectId, String invoiceId, String imageId) async {
+  Future<void> deleteInvoiceImage(String projectId, String budgetId,
+      String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
       _logger.d('Deleting image $imageId from project $projectId');
@@ -445,6 +451,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   @override
   Future<void> updateImageWithOcrResults(
     String projectId,
+    String budgetId,
     String invoiceId,
     String imageId, {
     bool? isInvoice,
