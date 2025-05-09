@@ -133,10 +133,11 @@ final expensesStreamProvider = StreamProvider.autoDispose
   final repository = ref.watch(expenseRepositoryProvider);
   final logger = ref.watch(loggerProvider);
   final projectId = params['projectId']!;
+  final budgetId = params['budgetId']!;
   final invoiceId = params['invoiceId']!;
   logger.d(
-      '[PROVIDER] expensesStreamProvider executing for projectId: $projectId, invoiceId: $invoiceId');
-  return repository.getExpensesStream(projectId, invoiceId);
+      '[PROVIDER] expensesStreamProvider executing for projectId: $projectId, budgetId: $budgetId, invoiceId: $invoiceId');
+  return repository.getExpensesStream(projectId, budgetId, invoiceId);
 });
 
 /// Provider for tracking the gallery upload state.

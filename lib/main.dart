@@ -31,7 +31,7 @@ import 'package:travel/theme/antonetti_theme.dart';
 import 'package:travel/screens/project/project_overview_screen.dart';
 import 'providers/logging_provider.dart';
 import 'package:travel/screens/auth/auth_wait_screen.dart';
-import 'package:travel/screens/expenses/project_expenses_screen.dart';
+import 'package:travel/screens/expenses/project_budgets_screen.dart';
 import 'package:travel/screens/user/user_management_screen.dart';
 import 'models/project.dart';
 
@@ -247,7 +247,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) {
               final projectId = state.pathParameters['projectId'];
               if (projectId != null) {
-                return ProjectExpensesScreen(projectId: projectId);
+                return ProjectBudgetsScreen(projectId: projectId);
               } else {
                 return const Scaffold(
                   body: Center(child: Text('Missing project ID')),

@@ -144,8 +144,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .d('Attempting to delete project ID: $projectId for user: $userId');
 
       // --- 1. Delete associated images from Firebase Storage ---
-      final storagePath =
-          'users/$userId/projects/$projectId/invoices/$projectId';
+      final storagePath = 'users/$userId/projects/$projectId';
       _logger.d('Listing files in storage path: $storagePath for deletion.');
 
       try {
@@ -161,12 +160,9 @@ class ProjectRepositoryImpl implements InvoiceRepository {
         } else {
           _logger.d('No files found in storage path $storagePath to delete.');
         }
-        // Catch FirebaseException for storage operations
       } on FirebaseException catch (e, stackTrace) {
         _logger.e('FirebaseException deleting project content $projectId',
             error: e, stackTrace: stackTrace);
-        // Decide if this is critical - maybe only log and continue to delete DB record?
-        // For now, we'll throw a specific exception.
         throw ImageDeleteException(
             'Failed to delete images from storage: ${e.message}',
             e,
@@ -180,27 +176,20 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
-          .collection('invoices')
-          .doc(projectId)
           .delete();
-      // Note: Firestore rules should prevent unauthorized deletion
 
       _logger.i(
           'Successfully deleted project ID: $projectId and associated data.');
     } on FirebaseException catch (e, stackTrace) {
-      // Catch Firestore exceptions
       _logger.e('[PROJECT] Error deleting project:',
           error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
           'Failed to delete project record: ${e.message}', e, stackTrace);
     } on NotAuthenticatedException {
-      // Re-throw specific exception
       rethrow;
     } catch (e, stackTrace) {
       _logger.e('Unexpected error deleting project $projectId',
           error: e, stackTrace: stackTrace);
-      // Determine if it was storage or db based on where it happened?
-      // For now, throw generic DatabaseOperationException
       throw DatabaseOperationException(
           'An unexpected error occurred while deleting the project.',
           e,
@@ -335,8 +324,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       String invoiceId,
       Uint8List fileBytes,
       String fileName) async {
-    final userId = _getCurrentUserId(); // Use helper
-    print('[UPLOAD] Using userId: $userId');
+    final userId = _getCurrentUserId();
     _logger
         .i('Uploading image $fileName to project $projectId for user $userId');
 
@@ -345,7 +333,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
     final now = DateTime.now();
 
     final imagePath =
-        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
+        'users/$userId/projects/$projectId/budgets/$budgetId/invoices/$invoiceId/invoice_images/$fileName';
     final imageRef = _storage.ref().child(imagePath);
 
     try {
@@ -366,8 +354,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
 
       final docData = {
         ...imageInfo.toJson(),
-        'uploadedAt':
-            FieldValue.serverTimestamp(), // Use camelCase for Firestore field
+        'uploadedAt': FieldValue.serverTimestamp(),
       };
 
       await _firestore
@@ -375,6 +362,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
+          .collection('budgets')
+          .doc(budgetId)
           .collection('invoices')
           .doc(invoiceId)
           .collection('invoice_images')
@@ -382,7 +371,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .set(docData, SetOptions(merge: true));
 
       _logger.i('Image metadata added to Firestore with ID: $imageId');
-      // Return the InvoiceImageProcess object with the new ID
       return imageInfo;
     } catch (e, s) {
       _logger.e('Unknown error uploading image', error: e, stackTrace: s);
@@ -396,16 +384,15 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
-      _logger.d('Deleting image $imageId from project $projectId');
-
-      // Get the image info to get the file name
       final imageDoc = await _firestore
           .collection('users')
           .doc(userId)
           .collection('projects')
           .doc(projectId)
+          .collection('budgets')
+          .doc(budgetId)
           .collection('invoices')
-          .doc(projectId)
+          .doc(invoiceId)
           .collection('invoice_images')
           .doc(imageId)
           .get();
@@ -430,8 +417,10 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
+          .collection('budgets')
+          .doc(budgetId)
           .collection('invoices')
-          .doc(projectId)
+          .doc(invoiceId)
           .collection('invoice_images')
           .doc(imageId)
           .delete();
@@ -471,8 +460,10 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
+          .collection('budgets')
+          .doc(budgetId)
           .collection('invoices')
-          .doc(projectId)
+          .doc(invoiceId)
           .collection('invoice_images')
           .doc(imageId)
           .update(data);
@@ -582,12 +573,20 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   CollectionReference<Map<String, dynamic>> _getProjectsCollection(
           String userId) =>
       _firestore.collection('users').doc(userId).collection('projects');
-  CollectionReference<Map<String, dynamic>> _getInvoicesCollection(
+
+  CollectionReference<Map<String, dynamic>> _getBudgetsCollection(
           String userId, String projectId) =>
-      _getProjectsCollection(userId).doc(projectId).collection('invoices');
+      _getProjectsCollection(userId).doc(projectId).collection('budgets');
+
+  CollectionReference<Map<String, dynamic>> _getInvoicesCollection(
+          String userId, String projectId, String budgetId) =>
+      _getBudgetsCollection(userId, projectId)
+          .doc(budgetId)
+          .collection('invoices');
+
   CollectionReference<Map<String, dynamic>> _getInvoiceImagesCollection(
-          String userId, String projectId, String invoiceId) =>
-      _getInvoicesCollection(userId, projectId)
+          String userId, String projectId, String budgetId, String invoiceId) =>
+      _getInvoicesCollection(userId, projectId, budgetId)
           .doc(invoiceId)
           .collection('invoice_images');
 
@@ -597,7 +596,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
     _logger.d('Setting up stream for user projects: $userId');
     return _getProjectsCollection(userId).snapshots().map((snapshot) {
       _logger.d(
-          'Received project snapshot with \\${snapshot.docs.length} documents.');
+          'Received project snapshot with ${snapshot.docs.length} documents.');
       return snapshot.docs
           .map((doc) => Project.fromJson(doc.data()).copyWith(id: doc.id))
           .toList();
@@ -605,7 +604,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       _logger.e('[PROJECT] Error getting projects:',
           error: error, stackTrace: stackTrace);
       throw DatabaseFetchException(
-          'Failed to fetch projects: \\${error.toString()}', error, stackTrace);
+          'Failed to fetch projects: ${error.toString()}', error, stackTrace);
     });
   }
 
@@ -613,27 +612,32 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId) {
     final userId = _getCurrentUserId();
     _logger.d('Setting up stream for project images: $projectId');
-    final invoicesCollection =
-        _getProjectsCollection(userId).doc(projectId).collection('invoices');
-    return invoicesCollection.snapshots().asyncMap((invoicesSnapshot) async {
+    final budgetsCollection = _getBudgetsCollection(userId, projectId);
+    return budgetsCollection.snapshots().asyncMap((budgetsSnapshot) async {
       final allImages = <InvoiceImageProcess>[];
-      for (final invoiceDoc in invoicesSnapshot.docs) {
-        final invoiceId = invoiceDoc.id;
-        final imagesCollection =
-            invoicesCollection.doc(invoiceId).collection('invoice_images');
-        final imagesSnapshot = await imagesCollection.get();
-        for (final doc in imagesSnapshot.docs) {
-          try {
-            final data = doc.data();
-            data['id'] = doc.id;
-            if (!data.containsKey('url') || !data.containsKey('imagePath')) {
-              _logger.w(
-                  '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
-              continue;
+      for (final budgetDoc in budgetsSnapshot.docs) {
+        final budgetId = budgetDoc.id;
+        final invoicesCollection =
+            _getInvoicesCollection(userId, projectId, budgetId);
+        final invoicesSnapshot = await invoicesCollection.get();
+        for (final invoiceDoc in invoicesSnapshot.docs) {
+          final invoiceId = invoiceDoc.id;
+          final imagesCollection = _getInvoiceImagesCollection(
+              userId, projectId, budgetId, invoiceId);
+          final imagesSnapshot = await imagesCollection.get();
+          for (final doc in imagesSnapshot.docs) {
+            try {
+              final data = doc.data();
+              data['id'] = doc.id;
+              if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+                _logger.w(
+                    '[DEBUG] Skipping doc ${doc.id} due to missing url or imagePath');
+                continue;
+              }
+              allImages.add(InvoiceImageProcess.fromJson(data));
+            } catch (e) {
+              _logger.e('[DEBUG] Error parsing doc ${doc.id}: $e');
             }
-            allImages.add(InvoiceImageProcess.fromJson(data));
-          } catch (e) {
-            _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
           }
         }
       }
@@ -642,7 +646,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       _logger.e('[PROJECT] Error getting project images:',
           error: error, stackTrace: stackTrace);
       throw DatabaseFetchException(
-          'Failed to fetch project images: \\${error.toString()}',
+          'Failed to fetch project images: ${error.toString()}',
           error,
           stackTrace);
     });

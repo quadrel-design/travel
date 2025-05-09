@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+/// Screen for creating a new budget for a project.
+/// Saves the budget to Firestore and returns the new budget ID on success.
 class BudgetCreateScreen extends StatefulWidget {
   final String projectId;
   const BudgetCreateScreen({super.key, required this.projectId});
@@ -15,28 +17,45 @@ class _BudgetCreateScreenState extends State<BudgetCreateScreen> {
   String _budgetName = '';
   double? _budgetSum;
   bool _isLoading = false;
+  String? _error;
 
   Future<void> _saveBudget() async {
-    setState(() => _isLoading = true);
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) return;
-    final budgetsRef = FirebaseFirestore.instance
-        .collection('users')
-        .doc(userId)
-        .collection('projects')
-        .doc(widget.projectId)
-        .collection('budgets');
-    final docRef = budgetsRef.doc();
-    await docRef.set({
-      'id': docRef.id,
-      'name': _budgetName,
-      'sum': _budgetSum ?? 0.0,
-      'createdAt': DateTime.now().toIso8601String(),
-      'invoiceIds': <String>[],
+    setState(() {
+      _isLoading = true;
+      _error = null;
     });
-    setState(() => _isLoading = false);
-    if (mounted) {
-      Navigator.of(context).pop(docRef.id);
+    final userId = FirebaseAuth.instance.currentUser?.uid;
+    if (userId == null) {
+      setState(() {
+        _isLoading = false;
+        _error = 'Not signed in.';
+      });
+      return;
+    }
+    try {
+      final budgetsRef = FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('projects')
+          .doc(widget.projectId)
+          .collection('budgets');
+      final docRef = budgetsRef.doc();
+      await docRef.set({
+        'id': docRef.id,
+        'name': _budgetName,
+        'sum': _budgetSum ?? 0.0,
+        'createdAt': DateTime.now().toIso8601String(),
+        'invoiceIds': <String>[],
+      });
+      if (mounted) {
+        Navigator.of(context).pop(docRef.id);
+      }
+    } catch (e) {
+      setState(() {
+        _error = 'Failed to create budget: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -71,6 +90,13 @@ class _BudgetCreateScreenState extends State<BudgetCreateScreen> {
                     _budgetSum = double.tryParse(value ?? '') ?? 0.0,
               ),
               const SizedBox(height: 24),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text(_error!,
+                      style: TextStyle(
+                          color: Theme.of(context).colorScheme.error)),
+                ),
               _isLoading
                   ? const CircularProgressIndicator()
                   : ElevatedButton(
@@ -82,6 +108,7 @@ class _BudgetCreateScreenState extends State<BudgetCreateScreen> {
                       },
                       child: const Text('Create'),
                     ),
+              // TODO: Add more fields or logic as needed
             ],
           ),
         ),

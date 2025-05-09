@@ -8,104 +8,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // import 'package:supabase_flutter/supabase_flutter.dart'; // Removed
 
-class ProjectExpensesScreen extends StatefulWidget {
+/// Displays a list of budgets for the given project.
+/// Allows creating a new budget and viewing budget details.
+class ProjectBudgetsScreen extends StatelessWidget {
   final String projectId;
 
-  const ProjectExpensesScreen({super.key, required this.projectId});
-
-  @override
-  State<ProjectExpensesScreen> createState() => _ProjectExpensesScreenState();
-}
-
-class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
-  bool _isLoading = true;
-  List<Expense> _expenses = [];
-  String? _error;
-  final List<_Budget> _budgets = [];
-  // late Future<List<Expense>> _expensesFuture; // Remove unused field
-
-  @override
-  void initState() {
-    super.initState();
-    _fetchExpenses();
-  }
-
-  Future<void> _fetchExpenses() async {
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-    try {
-      await Future.delayed(const Duration(milliseconds: 500));
-      final fetchedExpenses = <Expense>[];
-
-      if (!mounted) return;
-      setState(() {
-        _expenses = fetchedExpenses;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _error = 'Failed to load expenses: $e';
-        _isLoading = false;
-      });
-    }
-  }
-
-  /* // Remove unused method _addExpense
-  void _addExpense() async {
-     // ... (content of the method)
-  }
-  */
-
-  Future<void> _deleteExpense(String expenseId) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Are you sure?'),
-        content: const Text('Do you want to delete this expense?'),
-        actions: <Widget>[
-          TextButton(
-            child: const Text('No'),
-            onPressed: () => Navigator.of(ctx).pop(false),
-          ),
-          TextButton(
-            child: const Text('Yes'),
-            onPressed: () => Navigator.of(ctx).pop(true),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    if (!mounted) return;
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      await Future.delayed(const Duration(milliseconds: 300));
-      final updatedExpenses = List<Expense>.from(_expenses);
-      updatedExpenses.removeWhere((exp) => exp.id == expenseId);
-
-      if (!mounted) return;
-      setState(() {
-        _expenses = updatedExpenses;
-        _isLoading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete expense: $e')),
-      );
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
+  const ProjectBudgetsScreen({super.key, required this.projectId});
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +27,7 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
         .collection('users')
         .doc(userId)
         .collection('projects')
-        .doc(widget.projectId)
+        .doc(projectId)
         .collection('budgets');
     return Scaffold(
       appBar: AppBar(title: const Text('Budgets')),
@@ -141,12 +49,12 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
               return ListTile(
                 title: Text(data['name'] ?? ''),
                 subtitle:
-                    Text('Sum: 4${(data['sum'] ?? 0).toStringAsFixed(2)}'),
+                    Text('Sum: €${(data['sum'] ?? 0).toStringAsFixed(2)}'),
                 onTap: () {
                   Navigator.of(context).push(
                     MaterialPageRoute(
                       builder: (_) => BudgetOverviewScreen(
-                        projectId: widget.projectId,
+                        projectId: projectId,
                         budgetId: data['id'],
                       ),
                     ),
@@ -159,37 +67,14 @@ class _ProjectExpensesScreenState extends State<ProjectExpensesScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final newBudgetId = await Navigator.of(context).push<String>(
+          await Navigator.of(context).push<String>(
             MaterialPageRoute(
-              builder: (_) => BudgetCreateScreen(projectId: widget.projectId),
+              builder: (_) => BudgetCreateScreen(projectId: projectId),
             ),
           );
-          // Optionally, scroll to or highlight the new budget
         },
         child: const Icon(Icons.add),
         tooltip: 'Create New Budget',
-      ),
-    );
-  }
-
-  Widget _buildExpenseCard(BuildContext context, Expense expense) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListTile(
-        title: Text(expense.title),
-        subtitle: Text(
-            '${expense.category} - ${DateFormat.yMd().format(expense.date)}'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(NumberFormat.currency(symbol: '\$').format(expense.amount)),
-            IconButton(
-              icon: const Icon(Icons.delete),
-              color: Theme.of(context).colorScheme.error,
-              onPressed: () => _deleteExpense(expense.id),
-            ),
-          ],
-        ),
       ),
     );
   }

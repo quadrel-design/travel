@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/models/project.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class ProjectDetailOverviewScreen extends StatelessWidget {
   final Project project;
@@ -100,33 +102,55 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
             }),
             _buildOverviewLinkCard(context,
                 label: l10n.projectDetailImagesLabel, // Use l10n
-                onTap: () {
+                onTap: () async {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              // Instead of navigating directly to invoice capture overview, show a dialog or screen to select a budget first.
-              // Example placeholder:
+              final userId = FirebaseAuth.instance.currentUser?.uid;
+              if (userId == null) return;
+              final budgetsRef = FirebaseFirestore.instance
+                  .collection('users')
+                  .doc(userId)
+                  .collection('projects')
+                  .doc(project.id)
+                  .collection('budgets');
               showDialog(
                 context: context,
                 builder: (context) => AlertDialog(
                   title: const Text('Select Budget'),
-                  content:
-                      const Text('Please select a budget to view invoices.'),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        // TODO: Replace 'selectedBudgetId' with actual logic to select a budget
-                        const selectedBudgetId = 'REPLACE_WITH_BUDGET_ID';
-                        Navigator.of(context).pop();
-                        context.push(
-                          '/home/project-detail/${project.id}/invoice-capture-overview',
-                          extra: {
-                            'project': project,
-                            'budgetId': selectedBudgetId,
+                  content: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: budgetsRef.snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const CircularProgressIndicator();
+                      }
+                      final budgets = snapshot.data!.docs;
+                      if (budgets.isEmpty) {
+                        return const Text('No budgets found.');
+                      }
+                      return SizedBox(
+                        width: 300,
+                        height: 200,
+                        child: ListView.builder(
+                          itemCount: budgets.length,
+                          itemBuilder: (context, index) {
+                            final data = budgets[index].data();
+                            return ListTile(
+                              title: Text(data['name'] ?? 'Unnamed'),
+                              onTap: () {
+                                Navigator.of(context).pop();
+                                context.push(
+                                  '/home/project-detail/${project.id}/invoice-capture-overview',
+                                  extra: {
+                                    'project': project,
+                                    'budgetId': data['id'],
+                                  },
+                                );
+                              },
+                            );
                           },
-                        );
-                      },
-                      child: const Text('Continue'),
-                    ),
-                  ],
+                        ),
+                      );
+                    },
+                  ),
                 ),
               );
             }),

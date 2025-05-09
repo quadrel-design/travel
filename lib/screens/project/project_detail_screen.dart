@@ -11,16 +11,21 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:travel/providers/logging_provider.dart';
 
-import '../models/project.dart';
-import '../models/invoice_image_process.dart';
+import '../../models/project.dart';
+import '../../models/invoice_image_process.dart';
 
 class ProjectDetailScreen extends ConsumerWidget {
   final Project project;
   final String invoiceId;
+  final String budgetId;
   final _dateFormat = DateFormat('dd/MM/yyyy');
 
-  ProjectDetailScreen(
-      {super.key, required this.project, required this.invoiceId});
+  ProjectDetailScreen({
+    super.key,
+    required this.project,
+    required this.invoiceId,
+    required this.budgetId,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -252,7 +257,7 @@ class ProjectDetailScreen extends ConsumerWidget {
     );
   }
 
-  void _scanImage(BuildContext context, WidgetRef ref,
+  Future<void> _scanImage(BuildContext context, WidgetRef ref,
       InvoiceImageProcess image, String invoiceId) async {
     try {
       final logger = ref.read(loggerProvider);
@@ -265,6 +270,8 @@ class ProjectDetailScreen extends ConsumerWidget {
             .doc(FirebaseAuth.instance.currentUser!.uid)
             .collection('projects')
             .doc(project.id)
+            .collection('budgets')
+            .doc(budgetId)
             .collection('invoices')
             .doc(invoiceId)
             .collection('invoice_images')
@@ -315,6 +322,8 @@ class ProjectDetailScreen extends ConsumerWidget {
             .doc(FirebaseAuth.instance.currentUser!.uid)
             .collection('projects')
             .doc(project.id)
+            .collection('budgets')
+            .doc(budgetId)
             .collection('invoices')
             .doc(invoiceId)
             .collection('invoice_images')

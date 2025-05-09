@@ -309,7 +309,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           _getInvoiceImagesCollection(userId, projectId, budgetId, invoiceId)
               .orderBy('uploadedAt', descending: true);
       return imagesCollection.snapshots().asyncMap((snapshot) async {
-        _logger.d('[DEBUG] Firestore returned ${snapshot.docs.length} docs');
         for (final doc in snapshot.docs) {
           _logger
               .d('[DEBUG] Raw Firestore doc: id=${doc.id}, data=${doc.data()}');
@@ -426,7 +425,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     String projectId,
     String budgetId,
     String invoiceId,
-    Uint8List imageBytes,
+    Uint8List fileBytes,
     String fileName,
   ) async {
     final userId = _getCurrentUserId();
@@ -434,7 +433,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final storageFileName = '${timestamp}_$fileName';
     final storagePath =
-        'users/$userId/projects/$projectId/invoices/$budgetId/$invoiceId/invoice_images/$storageFileName';
+        'users/$userId/projects/$projectId/budgets/$budgetId/invoices/$invoiceId/invoice_images/$storageFileName';
     try {
       final storageRef = _storage.ref().child(storagePath);
       final metadata = SettableMetadata(
@@ -449,7 +448,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           'uploadedAt': DateTime.now().toIso8601String(),
         },
       );
-      await storageRef.putData(imageBytes, metadata);
+      await storageRef.putData(fileBytes, metadata);
       String? downloadUrl;
       for (int i = 0; i < 3; i++) {
         try {

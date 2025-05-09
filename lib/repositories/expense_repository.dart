@@ -39,12 +39,14 @@ class ExpenseRepository {
 
   // Helper to get the expenses subcollection reference
   CollectionReference<Map<String, dynamic>> _getExpensesCollection(
-      String userId, String projectId, String invoiceId) {
+      String userId, String projectId, String budgetId, String invoiceId) {
     return _firestore
         .collection('users')
         .doc(userId)
         .collection('projects')
         .doc(projectId)
+        .collection('budgets')
+        .doc(budgetId)
         .collection('invoices')
         .doc(invoiceId)
         .collection('expenses');
@@ -54,6 +56,7 @@ class ExpenseRepository {
   ///
   /// Parameters:
   ///  - [projectId]: The ID of the project this invoice belongs to.
+  ///  - [budgetId]: The ID of the budget this invoice belongs to.
   ///  - [invoiceId]: The ID of the invoice this expense belongs to.
   ///  - [expense]: The [Expense] object to create.
   ///
@@ -61,34 +64,26 @@ class ExpenseRepository {
   /// Throws [DatabaseOperationException] on failure.
   /// Throws [NotAuthenticatedException] if the user is not logged in.
   Future<Expense> createExpense(
-      String projectId, String invoiceId, Expense expense) async {
+    String projectId,
+    String budgetId,
+    String invoiceId,
+    Expense expense,
+  ) async {
     final userId = _getCurrentUserId();
     _logger.i(
-        'Creating expense for project $projectId, invoice $invoiceId, user $userId');
+        'Creating expense for project $projectId, budget $budgetId, invoice $invoiceId, user $userId');
     try {
       final dataToSave = expense.toJson();
       dataToSave['updatedAt'] = FieldValue.serverTimestamp();
-      final docRef = await _getExpensesCollection(userId, projectId, invoiceId)
-          .add(dataToSave);
-      _logger.i('Expense created with ID: \\${docRef.id}');
-      final newDoc = await docRef.get();
-      return Expense.fromJson({...newDoc.data()!, 'id': newDoc.id});
-    } on FirebaseException catch (e, stackTrace) {
-      _logger.e(
-        '[EXPENSE] FirebaseException creating expense for project $projectId, invoice $invoiceId:',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      throw DatabaseOperationException(
-          'Failed to create expense: \\${e.message}', e, stackTrace);
+      final docRef =
+          await _getExpensesCollection(userId, projectId, budgetId, invoiceId)
+              .add(dataToSave);
+      _logger.i('Expense created with ID: ${docRef.id}');
+      return expense.copyWith(id: docRef.id);
     } catch (e, stackTrace) {
-      _logger.e(
-        '[EXPENSE] Error creating expense for project $projectId, invoice $invoiceId:',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      _logger.e('Error creating expense', error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred creating the expense.', e, stackTrace);
+          'Failed to create expense: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -96,43 +91,33 @@ class ExpenseRepository {
   ///
   /// Parameters:
   ///  - [projectId]: The ID of the project this invoice belongs to.
+  ///  - [budgetId]: The ID of the budget this invoice belongs to.
   ///  - [invoiceId]: The ID of the invoice this expense belongs to.
-  ///  - [expense]: The [Expense] object with updated data (must include expense ID).
+  ///  - [expense]: The [Expense] object to update.
   ///
   /// Throws [DatabaseOperationException] on failure.
   /// Throws [NotAuthenticatedException] if the user is not logged in.
   Future<void> updateExpense(
-      String projectId, String invoiceId, Expense expense) async {
-    if (expense.id.isEmpty) {
-      throw ArgumentError('Expense ID must be provided for update.');
-    }
+    String projectId,
+    String budgetId,
+    String invoiceId,
+    Expense expense,
+  ) async {
     final userId = _getCurrentUserId();
     _logger.i(
-        'Updating expense \\${expense.id} for project $projectId, invoice $invoiceId, user $userId');
+        'Updating expense ${expense.id} for project $projectId, budget $budgetId, invoice $invoiceId, user $userId');
     try {
       final dataToUpdate = expense.toJson();
       dataToUpdate.remove('id');
       dataToUpdate['updatedAt'] = FieldValue.serverTimestamp();
-      await _getExpensesCollection(userId, projectId, invoiceId)
+      await _getExpensesCollection(userId, projectId, budgetId, invoiceId)
           .doc(expense.id)
           .update(dataToUpdate);
-      _logger.i('Expense \\${expense.id} updated successfully.');
-    } on FirebaseException catch (e, stackTrace) {
-      _logger.e(
-        '[EXPENSE] FirebaseException updating expense \\${expense.id} for project $projectId, invoice $invoiceId:',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      throw DatabaseOperationException(
-          'Failed to update expense: \\${e.message}', e, stackTrace);
+      _logger.i('Expense updated successfully');
     } catch (e, stackTrace) {
-      _logger.e(
-        '[EXPENSE] Error updating expense \\${expense.id} for project $projectId, invoice $invoiceId:',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      _logger.e('Error updating expense', error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred updating the expense.', e, stackTrace);
+          'Failed to update expense: ${e.toString()}', e, stackTrace);
     }
   }
 
@@ -140,59 +125,58 @@ class ExpenseRepository {
   ///
   /// Parameters:
   ///  - [projectId]: The ID of the project this invoice belongs to.
+  ///  - [budgetId]: The ID of the budget this invoice belongs to.
   ///  - [invoiceId]: The ID of the invoice this expense belongs to.
   ///  - [expenseId]: The ID of the expense to delete.
   ///
   /// Throws [DatabaseOperationException] on failure.
   /// Throws [NotAuthenticatedException] if the user is not logged in.
   Future<void> deleteExpense(
-      String projectId, String invoiceId, String expenseId) async {
+    String projectId,
+    String budgetId,
+    String invoiceId,
+    String expenseId,
+  ) async {
     final userId = _getCurrentUserId();
     _logger.i(
-        'Deleting expense $expenseId from project $projectId, invoice $invoiceId, user $userId');
+        'Deleting expense $expenseId from project $projectId, budget $budgetId, invoice $invoiceId, user $userId');
     try {
-      await _getExpensesCollection(userId, projectId, invoiceId)
+      await _getExpensesCollection(userId, projectId, budgetId, invoiceId)
           .doc(expenseId)
           .delete();
-      _logger.i('Expense $expenseId deleted successfully.');
-    } on FirebaseException catch (e, stackTrace) {
-      _logger.e(
-        '[EXPENSE] FirebaseException deleting expense $expenseId from project $projectId, invoice $invoiceId:',
-        error: e,
-        stackTrace: stackTrace,
-      );
-      throw DatabaseOperationException(
-          'Failed to delete expense: $e', e, stackTrace);
+      _logger.i('Expense deleted successfully');
     } catch (e, stackTrace) {
-      _logger.e(
-        '[EXPENSE] Error deleting expense $expenseId from project $projectId, invoice $invoiceId:',
-        error: e,
-        stackTrace: stackTrace,
-      );
+      _logger.e('Error deleting expense', error: e, stackTrace: stackTrace);
       throw DatabaseOperationException(
-          'An unexpected error occurred deleting the expense.', e, stackTrace);
+          'Failed to delete expense: ${e.toString()}', e, stackTrace);
     }
   }
 
-  /// Retrieves a real-time stream of expenses for a specific invoice.
+  /// Returns a stream of all expenses for a specific invoice.
   ///
   /// Parameters:
   ///  - [projectId]: The ID of the project this invoice belongs to.
-  ///  - [invoiceId]: The ID of the invoice to fetch expenses for.
+  ///  - [budgetId]: The ID of the budget this invoice belongs to.
+  ///  - [invoiceId]: The ID of the invoice to get expenses for.
   ///
-  /// Returns a [Stream] of a list of [Expense] objects.
-  /// Emits an error wrapped in [DatabaseFetchException] if fetching fails.
+  /// Returns a [Stream] of [List<Expense>].
+  /// Throws [DatabaseFetchException] on failure.
   /// Throws [NotAuthenticatedException] if the user is not logged in.
-  Stream<List<Expense>> getExpensesStream(String projectId, String invoiceId) {
+  Stream<List<Expense>> getExpensesStream(
+    String projectId,
+    String budgetId,
+    String invoiceId,
+  ) {
     final userId = _getCurrentUserId();
     _logger.d(
-        'Creating expense stream for project $projectId, invoice $invoiceId, user $userId');
+        'Creating expense stream for project $projectId, budget $budgetId, invoice $invoiceId, user $userId');
     try {
-      final query = _getExpensesCollection(userId, projectId, invoiceId)
-          .orderBy('date', descending: true);
+      final query =
+          _getExpensesCollection(userId, projectId, budgetId, invoiceId)
+              .orderBy('date', descending: true);
       return query.snapshots().map((snapshot) {
         _logger.d(
-            '[EXPENSE STREAM] Received snapshot with \\${snapshot.docs.length} expense docs for project $projectId, invoice $invoiceId');
+            '[EXPENSE STREAM] Received snapshot with ${snapshot.docs.length} expense docs for project $projectId, budget $budgetId, invoice $invoiceId');
         return snapshot.docs
             .map((doc) {
               try {
@@ -200,7 +184,7 @@ class ExpenseRepository {
                 return Expense.fromJson({...data, 'id': doc.id});
               } catch (e, stackTrace) {
                 _logger.e(
-                  '[EXPENSE STREAM] Error parsing expense document \\${doc.id}:',
+                  '[EXPENSE STREAM] Error parsing expense document ${doc.id}:',
                   error: e,
                   stackTrace: stackTrace,
                 );
@@ -212,7 +196,7 @@ class ExpenseRepository {
             .toList();
       }).handleError((error, stackTrace) {
         _logger.e(
-          '[EXPENSE STREAM] Error in expense stream for project $projectId, invoice $invoiceId:',
+          '[EXPENSE STREAM] Error in expense stream for project $projectId, budget $budgetId, invoice $invoiceId:',
           error: error,
           stackTrace: stackTrace,
         );
@@ -221,7 +205,7 @@ class ExpenseRepository {
       });
     } catch (e, stackTrace) {
       _logger.e(
-        '[EXPENSE STREAM] Error creating expense stream for project $projectId, invoice $invoiceId:',
+        '[EXPENSE STREAM] Error creating expense stream for project $projectId, budget $budgetId, invoice $invoiceId:',
         error: e,
         stackTrace: stackTrace,
       );

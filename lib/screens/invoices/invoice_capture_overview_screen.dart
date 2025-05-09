@@ -269,9 +269,13 @@ class _InvoiceCaptureOverviewScreenState
         .doc(userId)
         .collection('projects')
         .doc(widget.project.id)
+        .collection('budgets')
+        .doc(widget.budgetId)
         .collection('invoices');
     final newInvoiceDoc = await invoicesCollection.add({
       'createdAt': FieldValue.serverTimestamp(),
+      'budgetId': widget.budgetId,
+      'projectId': widget.project.id,
       // Add any other default fields for a new invoice here
     });
     return newInvoiceDoc.id;
