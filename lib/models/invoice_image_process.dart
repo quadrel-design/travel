@@ -25,6 +25,9 @@ class InvoiceImageProcess {
   /// Path to the image in storage
   final String imagePath;
 
+  /// ID of the invoice this image belongs to
+  final String invoiceId;
+
   /// Text extracted by OCR, populated after successful detection
   final String? ocrText;
 
@@ -48,6 +51,7 @@ class InvoiceImageProcess {
     required this.id,
     required this.url,
     required this.imagePath,
+    required this.invoiceId,
     this.ocrText,
     this.invoiceAnalysis,
     this.lastProcessedAt,
@@ -75,6 +79,7 @@ class InvoiceImageProcess {
         id: json['id'] ?? '',
         url: json['url'] ?? '',
         imagePath: json['imagePath'] ?? json['image_path'] ?? '',
+        invoiceId: json['invoiceId'] ?? '',
         ocrText: json['ocrText'],
         invoiceAnalysis: json['invoiceAnalysis'],
         lastProcessedAt: parseDate(json['lastProcessedAt']),
@@ -99,6 +104,7 @@ class InvoiceImageProcess {
       'id': id,
       'url': url,
       'imagePath': imagePath,
+      'invoiceId': invoiceId,
       'ocrText': ocrText,
       'invoiceAnalysis': invoiceAnalysis,
       'lastProcessedAt': lastProcessedAt?.toIso8601String(),
@@ -113,13 +119,14 @@ class InvoiceImageProcess {
   /// Useful for debugging and logging.
   @override
   String toString() {
-    return 'InvoiceCaptureProcess(id: $id, ocrText: ${ocrText != null})';
+    return 'InvoiceCaptureProcess(id: $id, invoiceId: $invoiceId, ocrText: ${ocrText != null})';
   }
 
   InvoiceImageProcess copyWith({
     String? id,
     String? url,
     String? imagePath,
+    String? invoiceId,
     String? ocrText,
     Map<String, dynamic>? invoiceAnalysis,
     DateTime? lastProcessedAt,
@@ -131,6 +138,7 @@ class InvoiceImageProcess {
       id: id ?? this.id,
       url: url ?? this.url,
       imagePath: imagePath ?? this.imagePath,
+      invoiceId: invoiceId ?? this.invoiceId,
       ocrText: ocrText ?? this.ocrText,
       invoiceAnalysis: invoiceAnalysis ?? this.invoiceAnalysis,
       lastProcessedAt: lastProcessedAt ?? this.lastProcessedAt,

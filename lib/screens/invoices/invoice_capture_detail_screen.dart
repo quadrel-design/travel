@@ -13,14 +13,13 @@ import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
-  final String budgetId;
   final String invoiceId;
 
-  const InvoiceCaptureDetailScreen(
-      {super.key,
-      required this.projectId,
-      required this.budgetId,
-      required this.invoiceId});
+  const InvoiceCaptureDetailScreen({
+    super.key,
+    required this.projectId,
+    required this.invoiceId,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -145,7 +144,6 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: projectId,
-                        budgetId: budgetId,
                         invoiceId: invoiceId,
                         initialIndex: index,
                       ),
@@ -202,7 +200,6 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
       ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         projectId,
-        budgetId,
         invoiceId,
         imageInfo.id,
       );
@@ -233,7 +230,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
       ref.read(loggerProvider).d("📸 Starting repository upload...");
       final uploadResult = await repo.uploadInvoiceImage(
-          projectId, budgetId, invoiceId, fileBytes, fileName);
+          projectId, invoiceId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
       ref

@@ -63,19 +63,13 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           String userId) =>
       _firestore.collection('users').doc(userId).collection('projects');
 
-  CollectionReference<Map<String, dynamic>> _getBudgetsCollection(
-          String userId, String projectId) =>
-      _getProjectsCollection(userId).doc(projectId).collection('budgets');
-
   CollectionReference<Map<String, dynamic>> _getInvoicesCollection(
-          String userId, String projectId, String budgetId) =>
-      _getBudgetsCollection(userId, projectId)
-          .doc(budgetId)
-          .collection('invoices');
+          String userId, String projectId) =>
+      _getProjectsCollection(userId).doc(projectId).collection('invoices');
 
   CollectionReference<Map<String, dynamic>> _getInvoiceImagesCollection(
-          String userId, String projectId, String budgetId, String invoiceId) =>
-      _getInvoicesCollection(userId, projectId, budgetId)
+          String userId, String projectId, String invoiceId) =>
+      _getInvoicesCollection(userId, projectId)
           .doc(invoiceId)
           .collection('invoice_images');
 
@@ -297,18 +291,30 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   // --- Project Image Methods ---
   @override
   Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
-      String projectId, String budgetId, String invoiceId) {
+      String projectId, String invoiceId) {
     try {
       final userId = _getCurrentUserId();
       _logger.d(
-          '[DEBUG] getInvoiceImagesStream: userId=$userId, projectId=$projectId, budgetId=$budgetId, invoiceId=$invoiceId');
-      if (projectId.isEmpty || budgetId.isEmpty || invoiceId.isEmpty) {
+          '[DEBUG] getInvoiceImagesStream: userId=$userId, projectId=$projectId, invoiceId=$invoiceId');
+      if (projectId.isEmpty || invoiceId.isEmpty) {
         return Stream<List<InvoiceImageProcess>>.value([]);
       }
-      final imagesCollection =
-          _getInvoiceImagesCollection(userId, projectId, budgetId, invoiceId)
-              .orderBy('uploadedAt', descending: true);
+      final imagesCollection = _firestore
+          .collection('users')
+          .doc(userId)
+          .collection('projects')
+          .doc(projectId)
+          .collection('invoices')
+          .doc(invoiceId)
+          .collection('invoice_images')
+          .orderBy('uploadedAt', descending: true);
+
+      _logger.d(
+          '[DEBUG] Using Firestore path: users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images');
+
       return imagesCollection.snapshots().asyncMap((snapshot) async {
+        _logger.d(
+            '[DEBUG] Received ${snapshot.docs.length} documents from Firestore');
         for (final doc in snapshot.docs) {
           _logger
               .d('[DEBUG] Raw Firestore doc: id=${doc.id}, data=${doc.data()}');
@@ -323,8 +329,8 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
               return null;
             }
             // Fetch latest analysis
-            final analysis = await _getLatestAnalysis(
-                userId, projectId, budgetId, invoiceId, doc.id);
+            final analysis =
+                await _getLatestAnalysis(userId, projectId, invoiceId, doc.id);
             data['invoiceAnalysis'] = analysis?['invoiceAnalysis'];
             return InvoiceImageProcess.fromJson(data);
           } catch (e) {
@@ -338,10 +344,14 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
             .cast<InvoiceImageProcess>()
             .toList();
       }).handleError((error, stackTrace) {
+        _logger.e('[DEBUG] Error in stream:',
+            error: error, stackTrace: stackTrace);
         throw DatabaseFetchException(
             'Failed to fetch images', error, stackTrace);
       });
     } catch (e, stackTrace) {
+      _logger.e('[DEBUG] Error creating stream:',
+          error: e, stackTrace: stackTrace);
       return Stream<List<InvoiceImageProcess>>.error(DatabaseFetchException(
           'Failed to create image stream', e, stackTrace));
     }
@@ -389,9 +399,9 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   }
 
   Future<String> _getImageDownloadUrl(String userId, String projectId,
-      String budgetId, String invoiceId, String fileName) async {
+      String invoiceId, String fileName) async {
     final storagePath =
-        'users/$userId/projects/$projectId/invoices/$budgetId/$invoiceId/invoice_images/$fileName';
+        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
     final ref = _storage.ref().child(storagePath);
 
     try {
@@ -423,7 +433,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   @override
   Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
-    String budgetId,
     String invoiceId,
     Uint8List fileBytes,
     String fileName,
@@ -433,7 +442,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final storageFileName = '${timestamp}_$fileName';
     final storagePath =
-        'users/$userId/projects/$projectId/budgets/$budgetId/invoices/$invoiceId/invoice_images/$storageFileName';
+        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$storageFileName';
     try {
       final storageRef = _storage.ref().child(storagePath);
       final metadata = SettableMetadata(
@@ -441,7 +450,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         customMetadata: {
           'userId': userId,
           'projectId': projectId,
-          'budgetId': budgetId,
           'invoiceId': invoiceId,
           'imageId': imageId,
           'originalFileName': fileName,
@@ -466,15 +474,19 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         id: imageId,
         url: downloadUrl,
         imagePath: storagePath,
+        invoiceId: invoiceId,
+        lastProcessedAt: now,
+        location: null,
+        invoiceAnalysis: null,
       );
-      final docData = {
+      final docData = <String, dynamic>{
         ...imageInfo.toJson(),
         'uploadedAt': FieldValue.serverTimestamp(),
         'createdAt': now.toIso8601String(),
         'updatedAt': now.toIso8601String(),
         'storageRef': storagePath,
       };
-      await _getInvoiceImagesCollection(userId, projectId, budgetId, invoiceId)
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .set(docData, SetOptions(merge: true));
       return imageInfo;
@@ -485,21 +497,21 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   }
 
   @override
-  Future<void> deleteInvoiceImage(String projectId, String budgetId,
-      String invoiceId, String imageId) async {
+  Future<void> deleteInvoiceImage(
+      String projectId, String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
-      final imageDoc = await _getInvoiceImagesCollection(
-              userId, projectId, budgetId, invoiceId)
-          .doc(imageId)
-          .get();
+      final imageDoc =
+          await _getInvoiceImagesCollection(userId, projectId, invoiceId)
+              .doc(imageId)
+              .get();
       if (!imageDoc.exists) {
         throw DatabaseOperationException(
             'Image not found', null, StackTrace.current);
       }
       final imageInfo = InvoiceImageProcess.fromJson(imageDoc.data()!);
       await _storage.ref().child(imageInfo.imagePath).delete();
-      await _getInvoiceImagesCollection(userId, projectId, budgetId, invoiceId)
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .delete();
     } catch (e, stackTrace) {
@@ -510,7 +522,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   @override
   Future<void> updateImageWithOcrResults(
     String projectId,
-    String budgetId,
     String invoiceId,
     String imageId, {
     bool? isInvoice,
@@ -521,13 +532,11 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       final data = <String, dynamic>{
         'updatedAt': FieldValue.serverTimestamp(),
       };
-      await _getInvoiceImagesCollection(userId, projectId, budgetId, invoiceId)
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .update(data);
-      // Store the latest analysis in the analyses/latest doc
       if (invoiceAnalysis != null) {
-        await _getInvoiceImagesCollection(
-                userId, projectId, budgetId, invoiceId)
+        await _getInvoiceImagesCollection(userId, projectId, invoiceId)
             .doc(imageId)
             .collection('analyses')
             .doc('latest')
@@ -544,17 +553,13 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
 
   // Helper to get the latest analysis for an image
   Future<Map<String, dynamic>?> _getLatestAnalysis(
-      String userId,
-      String projectId,
-      String budgetId,
-      String invoiceId,
-      String imageId) async {
-    final analysisDoc = await _getInvoiceImagesCollection(
-            userId, projectId, budgetId, invoiceId)
-        .doc(imageId)
-        .collection('analyses')
-        .doc('latest')
-        .get();
+      String userId, String projectId, String invoiceId, String imageId) async {
+    final analysisDoc =
+        await _getInvoiceImagesCollection(userId, projectId, invoiceId)
+            .doc(imageId)
+            .collection('analyses')
+            .doc('latest')
+            .get();
     return analysisDoc.exists ? analysisDoc.data() : null;
   }
 
@@ -564,56 +569,39 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       final userId = _getCurrentUserId();
       _logger.d(
           '[DEBUG] getProjectImagesStream: userId=$userId, projectId=$projectId');
-      final budgetsCollection = _getBudgetsCollection(userId, projectId);
-      // Listen to all budgets, then merge all invoices streams
-      return budgetsCollection.snapshots().asyncExpand((budgetsSnapshot) {
-        final List<Stream<List<InvoiceImageProcess>>> streams = [];
-        for (final budgetDoc in budgetsSnapshot.docs) {
-          final budgetId = budgetDoc.id;
-          final invoicesCollection =
-              _getInvoicesCollection(userId, projectId, budgetId);
-          final invoiceStream =
-              invoicesCollection.snapshots().asyncExpand((invoicesSnapshot) {
-            final List<Stream<List<InvoiceImageProcess>>> imageStreams = [];
-            for (final invoiceDoc in invoicesSnapshot.docs) {
-              final invoiceId = invoiceDoc.id;
-              final imagesCollection = invoicesCollection
-                  .doc(invoiceId)
-                  .collection('invoice_images');
-              imageStreams
-                  .add(imagesCollection.snapshots().map((imagesSnapshot) {
-                return imagesSnapshot.docs
-                    .map((doc) {
-                      try {
-                        final data = doc.data();
-                        data['id'] = doc.id;
-                        if (!data.containsKey('url') ||
-                            !data.containsKey('imagePath')) {
-                          _logger.w(
-                              '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
-                          return null;
-                        }
-                        return InvoiceImageProcess.fromJson(data);
-                      } catch (e) {
-                        _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
-                        return null;
-                      }
-                    })
-                    .whereType<InvoiceImageProcess>()
-                    .toList();
-              }));
-            }
-            if (imageStreams.isEmpty) {
-              return Stream.value(<InvoiceImageProcess>[]);
-            }
-            return StreamGroup.merge<List<InvoiceImageProcess>>(imageStreams);
-          });
-          streams.add(invoiceStream);
+      final invoicesCollection = _getInvoicesCollection(userId, projectId);
+      return invoicesCollection.snapshots().asyncExpand((invoicesSnapshot) {
+        final List<Stream<List<InvoiceImageProcess>>> imageStreams = [];
+        for (final invoiceDoc in invoicesSnapshot.docs) {
+          final invoiceId = invoiceDoc.id;
+          final imagesCollection =
+              invoicesCollection.doc(invoiceId).collection('invoice_images');
+          imageStreams.add(imagesCollection.snapshots().map((imagesSnapshot) {
+            return imagesSnapshot.docs
+                .map((doc) {
+                  try {
+                    final data = doc.data();
+                    data['id'] = doc.id;
+                    if (!data.containsKey('url') ||
+                        !data.containsKey('imagePath')) {
+                      _logger.w(
+                          '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
+                      return null;
+                    }
+                    return InvoiceImageProcess.fromJson(data);
+                  } catch (e) {
+                    _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
+                    return null;
+                  }
+                })
+                .whereType<InvoiceImageProcess>()
+                .toList();
+          }));
         }
-        if (streams.isEmpty) {
+        if (imageStreams.isEmpty) {
           return Stream.value(<InvoiceImageProcess>[]);
         }
-        return StreamGroup.merge<List<InvoiceImageProcess>>(streams);
+        return StreamGroup.merge<List<InvoiceImageProcess>>(imageStreams);
       }).handleError((error, stackTrace) {
         throw DatabaseFetchException(
             'Failed to fetch project images', error, stackTrace);

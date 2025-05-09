@@ -24,7 +24,7 @@ abstract class InvoiceRepository {
 
   /// Gets a stream of images for a specific invoice in a project
   Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
-      String projectId, String budgetId, String invoiceId);
+      String projectId, String invoiceId);
 
   /// Adds a new project
   Future<Project> addProject(Project project);
@@ -38,7 +38,6 @@ abstract class InvoiceRepository {
   /// Updates image info with OCR results
   Future<void> updateImageWithOcrResults(
     String projectId,
-    String budgetId,
     String invoiceId,
     String imageId, {
     bool? isInvoice,
@@ -47,12 +46,11 @@ abstract class InvoiceRepository {
 
   /// Deletes a project image
   Future<void> deleteInvoiceImage(
-      String projectId, String budgetId, String invoiceId, String imageId);
+      String projectId, String invoiceId, String imageId);
 
   /// Uploads a project image
   Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
-    String budgetId,
     String invoiceId,
     Uint8List fileBytes,
     String fileName,
@@ -199,7 +197,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
 
   @override
   Stream<List<InvoiceImageProcess>> getInvoiceImagesStream(
-      String projectId, String budgetId, String invoiceId) {
+      String projectId, String invoiceId) {
     final userId = _getCurrentUserId();
     print('[STREAM] Using userId: $userId');
     _logger.d(
@@ -318,12 +316,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<InvoiceImageProcess> uploadInvoiceImage(
-      String projectId,
-      String budgetId,
-      String invoiceId,
-      Uint8List fileBytes,
-      String fileName) async {
+  Future<InvoiceImageProcess> uploadInvoiceImage(String projectId,
+      String invoiceId, Uint8List fileBytes, String fileName) async {
     final userId = _getCurrentUserId();
     _logger
         .i('Uploading image $fileName to project $projectId for user $userId');
@@ -333,7 +327,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
     final now = DateTime.now();
 
     final imagePath =
-        'users/$userId/projects/$projectId/budgets/$budgetId/invoices/$invoiceId/invoice_images/$fileName';
+        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
     final imageRef = _storage.ref().child(imagePath);
 
     try {
@@ -347,6 +341,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
         id: imageId,
         url: downloadUrl,
         imagePath: imagePath,
+        invoiceId: invoiceId,
         lastProcessedAt: now,
         location: null,
         invoiceAnalysis: null,
@@ -362,8 +357,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
-          .collection('budgets')
-          .doc(budgetId)
           .collection('invoices')
           .doc(invoiceId)
           .collection('invoice_images')
@@ -380,8 +373,8 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   }
 
   @override
-  Future<void> deleteInvoiceImage(String projectId, String budgetId,
-      String invoiceId, String imageId) async {
+  Future<void> deleteInvoiceImage(
+      String projectId, String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
       final imageDoc = await _firestore
@@ -389,8 +382,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
-          .collection('budgets')
-          .doc(budgetId)
           .collection('invoices')
           .doc(invoiceId)
           .collection('invoice_images')
@@ -417,8 +408,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
-          .collection('budgets')
-          .doc(budgetId)
           .collection('invoices')
           .doc(invoiceId)
           .collection('invoice_images')
@@ -440,7 +429,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   @override
   Future<void> updateImageWithOcrResults(
     String projectId,
-    String budgetId,
     String invoiceId,
     String imageId, {
     bool? isInvoice,
@@ -460,8 +448,6 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           .doc(userId)
           .collection('projects')
           .doc(projectId)
-          .collection('budgets')
-          .doc(budgetId)
           .collection('invoices')
           .doc(invoiceId)
           .collection('invoice_images')
@@ -574,19 +560,13 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           String userId) =>
       _firestore.collection('users').doc(userId).collection('projects');
 
-  CollectionReference<Map<String, dynamic>> _getBudgetsCollection(
-          String userId, String projectId) =>
-      _getProjectsCollection(userId).doc(projectId).collection('budgets');
-
   CollectionReference<Map<String, dynamic>> _getInvoicesCollection(
-          String userId, String projectId, String budgetId) =>
-      _getBudgetsCollection(userId, projectId)
-          .doc(budgetId)
-          .collection('invoices');
+          String userId, String projectId) =>
+      _getProjectsCollection(userId).doc(projectId).collection('invoices');
 
   CollectionReference<Map<String, dynamic>> _getInvoiceImagesCollection(
-          String userId, String projectId, String budgetId, String invoiceId) =>
-      _getInvoicesCollection(userId, projectId, budgetId)
+          String userId, String projectId, String invoiceId) =>
+      _getInvoicesCollection(userId, projectId)
           .doc(invoiceId)
           .collection('invoice_images');
 
@@ -612,32 +592,26 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId) {
     final userId = _getCurrentUserId();
     _logger.d('Setting up stream for project images: $projectId');
-    final budgetsCollection = _getBudgetsCollection(userId, projectId);
-    return budgetsCollection.snapshots().asyncMap((budgetsSnapshot) async {
+    final invoicesCollection = _getInvoicesCollection(userId, projectId);
+    return invoicesCollection.snapshots().asyncMap((invoicesSnapshot) async {
       final allImages = <InvoiceImageProcess>[];
-      for (final budgetDoc in budgetsSnapshot.docs) {
-        final budgetId = budgetDoc.id;
-        final invoicesCollection =
-            _getInvoicesCollection(userId, projectId, budgetId);
-        final invoicesSnapshot = await invoicesCollection.get();
-        for (final invoiceDoc in invoicesSnapshot.docs) {
-          final invoiceId = invoiceDoc.id;
-          final imagesCollection = _getInvoiceImagesCollection(
-              userId, projectId, budgetId, invoiceId);
-          final imagesSnapshot = await imagesCollection.get();
-          for (final doc in imagesSnapshot.docs) {
-            try {
-              final data = doc.data();
-              data['id'] = doc.id;
-              if (!data.containsKey('url') || !data.containsKey('imagePath')) {
-                _logger.w(
-                    '[DEBUG] Skipping doc ${doc.id} due to missing url or imagePath');
-                continue;
-              }
-              allImages.add(InvoiceImageProcess.fromJson(data));
-            } catch (e) {
-              _logger.e('[DEBUG] Error parsing doc ${doc.id}: $e');
+      for (final invoiceDoc in invoicesSnapshot.docs) {
+        final invoiceId = invoiceDoc.id;
+        final imagesCollection =
+            _getInvoiceImagesCollection(userId, projectId, invoiceId);
+        final imagesSnapshot = await imagesCollection.get();
+        for (final doc in imagesSnapshot.docs) {
+          try {
+            final data = doc.data();
+            data['id'] = doc.id;
+            if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+              _logger.w(
+                  '[DEBUG] Skipping doc ${doc.id} due to missing url or imagePath');
+              continue;
             }
+            allImages.add(InvoiceImageProcess.fromJson(data));
+          } catch (e) {
+            _logger.e('[DEBUG] Error parsing doc ${doc.id}: $e');
           }
         }
       }

@@ -2,8 +2,59 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isProjectMember(projectId) {
+      return isAuthenticated() && 
+        exists(/databases/$(database)/documents/projects/$(projectId)/members/$(request.auth.uid));
+    }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isOwner(userId);
+    }
+
+    // Projects
+    match /projects/{projectId} {
+      // TEMPORARY: Allow all authenticated users to read all projects
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+      
+      // Project members
+      match /members/{memberId} {
+        allow read: if isAuthenticated();
+        allow write: if isAuthenticated() && isOwner(resource.data.ownerId);
+      }
+      
+      // Project expenses
+      match /expenses/{expenseId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+      }
+      
+      // Project invoices
+      match /invoices/{invoiceId} {
+        allow read: if isAuthenticated();
+        allow create: if isAuthenticated() && isProjectMember(projectId);
+        allow update, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+        
+        // Invoice images
+        match /images/{imageId} {
+          allow read: if isAuthenticated();
+          allow create: if isAuthenticated() && isProjectMember(projectId);
+          allow update, delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+        }
+      }
     }
   }
 } 

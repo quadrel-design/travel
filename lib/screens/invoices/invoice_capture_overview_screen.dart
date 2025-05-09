@@ -17,9 +17,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
-  final String budgetId;
-  const InvoiceCaptureOverviewScreen(
-      {super.key, required this.project, required this.budgetId});
+  const InvoiceCaptureOverviewScreen({super.key, required this.project});
 
   @override
   ConsumerState<InvoiceCaptureOverviewScreen> createState() =>
@@ -165,8 +163,7 @@ class _InvoiceCaptureOverviewScreenState
                     MaterialPageRoute(
                       builder: (context) => InvoiceCaptureDetailView(
                         projectId: widget.project.id,
-                        budgetId: widget.budgetId,
-                        invoiceId: imageInfo.id,
+                        invoiceId: imageInfo.invoiceId,
                         initialIndex: index,
                       ),
                     ),
@@ -239,8 +236,7 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         widget.project.id,
-        widget.budgetId,
-        imageInfo.id,
+        imageInfo.invoiceId,
         imageInfo.id,
       );
       _logger.i("🗑️ Invoice deleted successfully");
@@ -269,13 +265,9 @@ class _InvoiceCaptureOverviewScreenState
         .doc(userId)
         .collection('projects')
         .doc(widget.project.id)
-        .collection('budgets')
-        .doc(widget.budgetId)
         .collection('invoices');
     final newInvoiceDoc = await invoicesCollection.add({
       'createdAt': FieldValue.serverTimestamp(),
-      'budgetId': widget.budgetId,
-      'projectId': widget.project.id,
       // Add any other default fields for a new invoice here
     });
     return newInvoiceDoc.id;
@@ -304,7 +296,7 @@ class _InvoiceCaptureOverviewScreenState
 
       _logger.d("📸 Starting repository upload...");
       final uploadResult = await repo.uploadInvoiceImage(
-          widget.project.id, widget.budgetId, invoiceId, fileBytes, fileName);
+          widget.project.id, invoiceId, fileBytes, fileName);
 
       _logger.i("📸 Repository upload completed successfully");
       _logger

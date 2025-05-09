@@ -42,9 +42,9 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
     );
   }
 
-  void _navigateToInvoiceCapture(BuildContext context, String invoiceId) {
+  void _navigateToInvoiceCapture(BuildContext context) {
     final fullPath =
-        '/home/project-detail/${project.id}/invoice-capture-overview?invoiceId=$invoiceId';
+        '/home/project-detail/${project.id}/invoice-capture-overview';
     context.push(fullPath, extra: project);
   }
 
@@ -102,57 +102,9 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
             }),
             _buildOverviewLinkCard(context,
                 label: l10n.projectDetailImagesLabel, // Use l10n
-                onTap: () async {
+                onTap: () {
               ScaffoldMessenger.of(context).removeCurrentSnackBar();
-              final userId = FirebaseAuth.instance.currentUser?.uid;
-              if (userId == null) return;
-              final budgetsRef = FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(userId)
-                  .collection('projects')
-                  .doc(project.id)
-                  .collection('budgets');
-              showDialog(
-                context: context,
-                builder: (context) => AlertDialog(
-                  title: const Text('Select Budget'),
-                  content: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: budgetsRef.snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const CircularProgressIndicator();
-                      }
-                      final budgets = snapshot.data!.docs;
-                      if (budgets.isEmpty) {
-                        return const Text('No budgets found.');
-                      }
-                      return SizedBox(
-                        width: 300,
-                        height: 200,
-                        child: ListView.builder(
-                          itemCount: budgets.length,
-                          itemBuilder: (context, index) {
-                            final data = budgets[index].data();
-                            return ListTile(
-                              title: Text(data['name'] ?? 'Unnamed'),
-                              onTap: () {
-                                Navigator.of(context).pop();
-                                context.push(
-                                  '/home/project-detail/${project.id}/invoice-capture-overview',
-                                  extra: {
-                                    'project': project,
-                                    'budgetId': data['id'],
-                                  },
-                                );
-                              },
-                            );
-                          },
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              );
+              _navigateToInvoiceCapture(context);
             }),
           ],
         ),
