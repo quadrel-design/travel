@@ -1,58 +1,12 @@
 const express = require('express');
 const cors = require('cors');
-const { Storage } = require('@google-cloud/storage');
-const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const serviceAccountPath = path.join(__dirname, 'service-account.json');
-const storage = new Storage({ keyFilename: serviceAccountPath });
-const bucket = storage.bucket('travel-files');
+app.use(require('./routes/gcs'));
+app.use(require('./routes/ocr'));
+app.use(require('./routes/analysis'));
 
-// Generate signed upload URL
-app.post('/generate-upload-url', async (req, res) => {
-  const { filename, contentType } = req.body;
-  try {
-    const [url] = await bucket.file(filename).getSignedUrl({
-      version: 'v4',
-      action: 'write',
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-      contentType,
-    });
-    res.json({ url });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Generate signed download URL
-app.get('/generate-download-url', async (req, res) => {
-  const { filename } = req.query;
-  try {
-    const [url] = await bucket.file(filename).getSignedUrl({
-      version: 'v4',
-      action: 'read',
-      expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-    });
-    res.json({ url });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Add this endpoint for deleting files
-app.post('/delete', async (req, res) => {
-  const { fileName } = req.body;
-  if (!fileName) {
-    return res.status(400).json({ error: 'fileName is required' });
-  }
-  try {
-    await bucket.file(fileName).delete();
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-app.listen(3030, () => console.log('Server running on port 3030'));
+const PORT = process.env.PORT || 3030;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
