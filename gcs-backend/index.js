@@ -1,11 +1,13 @@
 const express = require('express');
 const cors = require('cors');
 const { Storage } = require('@google-cloud/storage');
+const path = require('path');
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-const storage = new Storage({ keyFilename: 'service-account.json' });
+const serviceAccountPath = path.join(__dirname, 'service-account.json');
+const storage = new Storage({ keyFilename: serviceAccountPath });
 const bucket = storage.bucket('travel-files');
 
 // Generate signed upload URL
@@ -34,6 +36,20 @@ app.get('/generate-download-url', async (req, res) => {
       expires: Date.now() + 15 * 60 * 1000, // 15 minutes
     });
     res.json({ url });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add this endpoint for deleting files
+app.post('/delete', async (req, res) => {
+  const { fileName } = req.body;
+  if (!fileName) {
+    return res.status(400).json({ error: 'fileName is required' });
+  }
+  try {
+    await bucket.file(fileName).delete();
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
