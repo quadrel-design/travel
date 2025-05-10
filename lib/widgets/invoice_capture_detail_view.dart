@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,9 +12,9 @@ import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
 import '../providers/repository_providers.dart';
 import '../providers/firebase_functions_provider.dart';
+import '../providers/service_providers.dart' as service;
 import 'package:path/path.dart' as p;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import '../providers/location_service_provider.dart';
 import './invoice_analysis_panel.dart';
@@ -21,6 +22,7 @@ import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
 import 'package:travel/widgets/invoice_image_gallery.dart';
 import 'package:travel/widgets/invoice_capture_feedback_widgets.dart';
 import 'package:travel/widgets/invoice_capture_controller.dart';
+import '../services/gcs_file_service.dart';
 
 class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
   const InvoiceCaptureDetailView({
@@ -128,15 +130,18 @@ class _InvoiceCaptureDetailViewState
         return imageInfo.url;
       }
 
-      // If existing URL is invalid, try to get a fresh one
+      // If existing URL is invalid, try to get a fresh one from GCS
       try {
-        final storageRef = FirebaseStorage.instance.ref(imageInfo.imagePath);
-        final downloadUrl = await storageRef.getDownloadURL();
-        _logger.d('[INVOICE_CAPTURE] Generated fresh download URL');
-        return downloadUrl;
+        final gcsFileService = ref.read(service.gcsFileServiceProvider);
+        final fileBytes =
+            await gcsFileService.downloadFile(fileName: imageInfo.imagePath);
+        // Convert bytes to base64 for display
+        final base64Image = base64Encode(fileBytes);
+        final mimeType = 'image/jpeg'; // or determine from file extension
+        return 'data:$mimeType;base64,$base64Image';
       } catch (storageError) {
         _logger.w(
-            '[INVOICE_CAPTURE] Failed to get fresh URL from storage, falling back to original URL',
+            '[INVOICE_CAPTURE] Failed to get fresh URL from GCS, falling back to original URL',
             error: storageError);
         return imageInfo.url;
       }

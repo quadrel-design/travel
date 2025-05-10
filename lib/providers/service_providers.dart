@@ -1,9 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:logger/logger.dart';
 import '../config/service_config.dart';
-import '../services/storage/storage_service.dart';
-import '../services/storage/google_cloud_storage_client.dart';
+import '../services/gcs_file_service.dart';
 import '../services/auth/auth_service.dart';
 import '../services/auth/custom_auth_service.dart';
 
@@ -21,19 +19,10 @@ final loggerProvider = Provider<Logger>((ref) {
   );
 });
 
-// Firebase Storage Provider
-final firebaseStorageProvider = Provider<FirebaseStorage>((ref) {
-  return FirebaseStorage.instance;
-});
-
-// Storage Service Provider
-final storageServiceProvider = Provider<StorageService>((ref) {
-  final logger = ref.watch(loggerProvider);
-  final storage = ref.watch(firebaseStorageProvider);
-
-  return GoogleCloudStorageClient(
-    storage: storage,
-    logger: logger,
+// GCS File Service Provider
+final gcsFileServiceProvider = Provider<GcsFileService>((ref) {
+  return GcsFileService(
+    backendBaseUrl: ServiceConfig.gcsApiBaseUrl,
   );
 });
 

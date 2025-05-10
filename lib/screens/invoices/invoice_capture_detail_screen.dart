@@ -10,6 +10,9 @@ import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
 import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'package:travel/services/gcs_file_service.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
@@ -58,43 +61,58 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
   Widget _buildImageTile(
       BuildContext context, WidgetRef ref, InvoiceImageProcess imageInfo) {
-    if (imageInfo.url.isEmpty) {
+    if (imageInfo.imagePath.isEmpty) {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
 
-    return CachedNetworkImage(
-      imageUrl: imageInfo.url,
-      fit: BoxFit.cover,
-      httpHeaders: const {
-        'Accept': 'image/*',
-        'Cache-Control': 'no-cache',
-      },
-      progressIndicatorBuilder: (context, url, progress) {
-        return Center(
-          child: CircularProgressIndicator(
-            value: progress.progress,
-          ),
-        );
-      },
-      errorWidget: (context, url, error) {
-        ref
-            .read(loggerProvider)
-            .e('[INVOICE_CAPTURE] Error loading image:', error: error);
-        return Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(Icons.error_outline, color: Colors.redAccent),
-              const SizedBox(height: 4),
-              ElevatedButton(
-                onPressed: () => ref.invalidate(invoiceImagesStreamProvider({
-                  'projectId': projectId,
-                  'invoiceId': invoiceId,
-                })),
-                child: const Text('Retry', style: TextStyle(fontSize: 10)),
+    return FutureBuilder<String>(
+      future: ref
+          .read(gcsFileServiceProvider)
+          .getSignedDownloadUrl(fileName: imageInfo.imagePath),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Center(child: Icon(Icons.error, color: Colors.red));
+        }
+        final signedUrl = snapshot.data!;
+        return CachedNetworkImage(
+          imageUrl: signedUrl,
+          fit: BoxFit.cover,
+          httpHeaders: const {
+            'Accept': 'image/*',
+            'Cache-Control': 'no-cache',
+          },
+          progressIndicatorBuilder: (context, url, progress) {
+            return Center(
+              child: CircularProgressIndicator(
+                value: progress.progress,
               ),
-            ],
-          ),
+            );
+          },
+          errorWidget: (context, url, error) {
+            ref
+                .read(loggerProvider)
+                .e('[INVOICE_CAPTURE] Error loading image:', error: error);
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.redAccent),
+                  const SizedBox(height: 4),
+                  ElevatedButton(
+                    onPressed: () =>
+                        ref.invalidate(invoiceImagesStreamProvider({
+                      'projectId': projectId,
+                      'invoiceId': invoiceId,
+                    })),
+                    child: const Text('Retry', style: TextStyle(fontSize: 10)),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );

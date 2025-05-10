@@ -14,6 +14,7 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
@@ -90,31 +91,34 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Widget _buildImageTile(BuildContext context, InvoiceImageProcess imageInfo) {
-    if (imageInfo.url.isEmpty) {
+    if (imageInfo.imagePath.isEmpty) {
       return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
     }
 
-    // Use Image.network for web compatibility
-    return Image.network(
-      imageInfo.url,
-      fit: BoxFit.cover,
-      errorBuilder: (context, error, stackTrace) {
-        _logger.e('[INVOICE_CAPTURE] Error loading image via Image.network:',
-            error: error);
-        return const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.error_outline, color: Colors.redAccent),
-              SizedBox(height: 4),
-              Text('Error', style: TextStyle(fontSize: 10)),
-            ],
-          ),
+    return FutureBuilder<String>(
+      future: ref
+          .read(gcsFileServiceProvider)
+          .getSignedDownloadUrl(fileName: imageInfo.imagePath),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError || !snapshot.hasData) {
+          return const Center(child: Icon(Icons.error, color: Colors.red));
+        }
+        final signedUrl = snapshot.data!;
+        return Image.network(
+          signedUrl,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return const Center(
+                child: Icon(Icons.error_outline, color: Colors.redAccent));
+          },
+          loadingBuilder: (context, child, loadingProgress) {
+            if (loadingProgress == null) return child;
+            return const Center(child: CircularProgressIndicator());
+          },
         );
-      },
-      loadingBuilder: (context, child, loadingProgress) {
-        if (loadingProgress == null) return child;
-        return const Center(child: CircularProgressIndicator());
       },
     );
   }

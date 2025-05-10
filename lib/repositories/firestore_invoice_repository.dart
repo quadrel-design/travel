@@ -16,7 +16,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 // Conditionally import html only for web platform
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+// import 'package:firebase_storage/firebase_storage.dart'; // Remove this line
 import 'package:logger/logger.dart';
 import 'package:async/async.dart';
 
@@ -29,6 +29,7 @@ import '../models/invoice_image_process.dart';
 import '../models/project.dart';
 import 'invoice_repository.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
+import 'package:travel/services/gcs_file_service.dart';
 
 class FirestoreException implements Exception {
   final String message;
@@ -48,15 +49,15 @@ class FirestoreException implements Exception {
 class FirestoreInvoiceRepository implements InvoiceRepository {
   FirestoreInvoiceRepository(
     this._firestore,
-    this._storage,
     this._auth,
     this._logger,
+    this._gcsFileService,
   );
 
   final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
   final FirebaseAuth _auth;
   final Logger _logger;
+  final GcsFileService _gcsFileService;
 
   // Cache collection references to avoid recreating them
   CollectionReference<Map<String, dynamic>> _getProjectsCollection(
@@ -239,29 +240,12 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       _logger
           .d('Attempting to delete project ID: $projectId for user: $userId');
 
-      // --- 1. Delete associated images from Firebase Storage ---
+      // --- 1. Delete associated images from GCS ---
       final storagePath = 'users/$userId/projects/$projectId/invoices';
-      _logger.d('Listing files in storage path: $storagePath for deletion.');
-
-      try {
-        final listResult = await _storage.ref().child(storagePath).listAll();
-        final fileRefsToDelete = listResult.items;
-
-        if (fileRefsToDelete.isNotEmpty) {
-          _logger
-              .d('Deleting ${fileRefsToDelete.length} files from storage...');
-          // Delete all files concurrently
-          await Future.wait(fileRefsToDelete.map((ref) => ref.delete()));
-          _logger.d('Storage files deleted.');
-        } else {
-          _logger.d('No files found in storage path $storagePath to delete.');
-        }
-      } on FirebaseException catch (e, stackTrace) {
-        _logger.e('FirebaseException deleting project content $projectId',
-            error: e, stackTrace: stackTrace);
-        // Log error but continue with DB deletion
-        _logger.w('Continuing with database deletion despite storage error.');
-      }
+      _logger
+          .d('Would delete files in storage path: $storagePath for deletion.');
+      // TODO: Implement recursive deletion of all files in GCS for this project
+      // This may require listing all image paths from Firestore and calling _gcsFileService.deleteFile for each
 
       // --- 2. Delete the project record from Firestore ---
       _logger.d('Deleting project record ID: $projectId from database.');
@@ -398,38 +382,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     }
   }
 
-  Future<String> _getImageDownloadUrl(String userId, String projectId,
-      String invoiceId, String fileName) async {
-    final storagePath =
-        'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
-    final ref = _storage.ref().child(storagePath);
-
-    try {
-      await ref.getMetadata();
-
-      if (kIsWeb) {
-        final downloadUrl = await ref.getDownloadURL();
-        final token = await _auth.currentUser?.getIdToken();
-
-        final uri = Uri.parse(downloadUrl);
-        final newUri = uri.replace(queryParameters: {
-          ...uri.queryParameters,
-          if (token != null) 'token': token,
-          'alt': 'media',
-          'cache-control': 'no-cache',
-        });
-
-        return newUri.toString();
-      } else {
-        return await ref.getDownloadURL();
-      }
-    } catch (e, stackTrace) {
-      _logger.e('Error getting download URL', error: e, stackTrace: stackTrace);
-      throw FirestoreException(
-          message: 'Failed to generate download URL', error: e);
-    }
-  }
-
   @override
   Future<InvoiceImageProcess> uploadInvoiceImage(
     String projectId,
@@ -444,35 +396,16 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     final storagePath =
         'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$storageFileName';
     try {
-      final storageRef = _storage.ref().child(storagePath);
-      final metadata = SettableMetadata(
+      // Upload to GCS via backend
+      await _gcsFileService.uploadFile(
+        fileName: storagePath,
+        fileBytes: fileBytes,
         contentType: 'image/jpeg',
-        customMetadata: {
-          'userId': userId,
-          'projectId': projectId,
-          'invoiceId': invoiceId,
-          'imageId': imageId,
-          'originalFileName': fileName,
-          'uploadedAt': DateTime.now().toIso8601String(),
-        },
       );
-      await storageRef.putData(fileBytes, metadata);
-      String? downloadUrl;
-      for (int i = 0; i < 3; i++) {
-        try {
-          downloadUrl = await storageRef.getDownloadURL();
-          break;
-        } catch (e) {
-          await Future.delayed(const Duration(seconds: 1));
-        }
-      }
-      if (downloadUrl == null) {
-        throw FirestoreException(message: 'Download URL is null after upload');
-      }
       final now = DateTime.now();
       final imageInfo = InvoiceImageProcess(
         id: imageId,
-        url: downloadUrl,
+        url: storagePath, // You may want to store the GCS path or a signed URL
         imagePath: storagePath,
         invoiceId: invoiceId,
         lastProcessedAt: now,
@@ -510,7 +443,8 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
             'Image not found', null, StackTrace.current);
       }
       final imageInfo = InvoiceImageProcess.fromJson(imageDoc.data()!);
-      await _storage.ref().child(imageInfo.imagePath).delete();
+      // Delete from GCS via backend
+      await _gcsFileService.deleteFile(fileName: imageInfo.imagePath);
       await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
           .delete();

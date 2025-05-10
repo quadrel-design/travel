@@ -4,6 +4,8 @@ class ServiceConfig {
   // Google Cloud Storage Configuration
   static const String gcsBucketName = 'splitbase-7ec0f.appspot.com';
   static const String gcsProjectId = 'splitbase-7ec0f';
+  static const String gcsApiBaseUrl =
+      'http://localhost:3030'; // Update this with your actual backend URL
 
   // Authentication Configuration
   static const String authApiBaseUrl =

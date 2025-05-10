@@ -13,6 +13,7 @@ import 'package:logger/logger.dart'; // Import Logger
 import '../models/invoice_image_process.dart';
 import 'repository_exceptions.dart'; // Import custom exceptions
 import '../models/project.dart';
+import '../services/gcs_file_service.dart';
 
 /// Interface for invoice-related operations
 abstract class InvoiceRepository {

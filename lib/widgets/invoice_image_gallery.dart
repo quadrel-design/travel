@@ -1,9 +1,14 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:photo_view/photo_view.dart';
 import 'package:photo_view/photo_view_gallery.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/invoice_image_process.dart';
+import '../services/gcs_file_service.dart';
+import '../providers/service_providers.dart' as service;
+import 'dart:convert';
 
-class InvoiceImageGallery extends StatelessWidget {
+class InvoiceImageGallery extends ConsumerWidget {
   final List<InvoiceImageProcess> images;
   final int currentIndex;
   final ValueChanged<int>? onPageChanged;
@@ -18,16 +23,38 @@ class InvoiceImageGallery extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     if (images.isEmpty) {
       return const Center(child: Text('No images available'));
     }
+
     return PhotoViewGallery.builder(
       scrollPhysics: const BouncingScrollPhysics(),
       builder: (BuildContext context, int index) {
         final imageInfo = images[index];
         return PhotoViewGalleryPageOptions.customChild(
-          child: Image.network(imageInfo.url, fit: BoxFit.contain),
+          child: FutureBuilder<Uint8List>(
+            future: ref.read(service.gcsFileServiceProvider).downloadFile(
+                  fileName: imageInfo.imagePath,
+                ),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text('Error loading image: ${snapshot.error}'),
+                );
+              }
+              if (!snapshot.hasData) {
+                return const Center(child: Text('No image data'));
+              }
+              return Image.memory(
+                snapshot.data!,
+                fit: BoxFit.contain,
+              );
+            },
+          ),
           minScale: PhotoViewComputedScale.contained,
           maxScale: PhotoViewComputedScale.covered * 2,
           heroAttributes: PhotoViewHeroAttributes(tag: imageInfo.id),

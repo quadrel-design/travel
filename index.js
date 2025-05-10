@@ -39,4 +39,28 @@ app.get('/generate-download-url', async (req, res) => {
   }
 });
 
+// Delete file from GCS
+app.delete('/delete/:filename(*)', async (req, res) => {
+  const filename = req.params.filename;
+  try {
+    await bucket.file(filename).delete();
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// (Optional) Direct download endpoint (prefer signed URLs for production)
+app.get('/download/:filename(*)', async (req, res) => {
+  const filename = req.params.filename;
+  try {
+    const file = bucket.file(filename);
+    file.createReadStream().on('error', (err) => {
+      res.status(500).json({ error: err.message });
+    }).pipe(res);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(8080, () => console.log('Server running on port 8080')); 

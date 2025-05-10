@@ -17,10 +17,13 @@ import 'package:travel/repositories/auth_repository.dart';
 // Import Firebase services
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:logger/logger.dart';
+import '../repositories/invoice_repository.dart';
+import '../repositories/firestore_invoice_repository.dart';
+import '../services/gcs_file_service.dart';
+import 'service_providers.dart' as service;
 
 import '../providers/logging_provider.dart';
-import 'package:travel/repositories/firestore_invoice_repository.dart';
 import 'package:travel/repositories/firebase_auth_repository.dart';
 import 'package:travel/repositories/project_repository.dart';
 import 'package:travel/models/project.dart';
@@ -42,13 +45,6 @@ final firestoreProvider =
 final firebaseAuthProvider =
     Provider<FirebaseAuth>((ref) => FirebaseAuth.instance);
 
-/// Provider for accessing the Firebase Storage instance.
-///
-/// This provider delivers a singleton instance of FirebaseStorage throughout the app.
-/// It serves as the foundation for all storage operations, including image uploads.
-final firebaseStorageProvider =
-    Provider<FirebaseStorage>((ref) => FirebaseStorage.instance);
-
 /// Provider for the authentication repository.
 ///
 /// This provider creates and delivers an implementation of the AuthRepository interface.
@@ -56,8 +52,7 @@ final firebaseStorageProvider =
 final authRepositoryProvider = Provider<AuthRepository>((ref) {
   final firebaseAuth = ref.watch(firebaseAuthProvider);
   final logger = ref.watch(loggerProvider);
-  return FirebaseAuthRepository(
-      firebaseAuth, logger); // Use concrete implementation
+  return FirebaseAuthRepository(firebaseAuth, logger);
 });
 
 /// Provider for the invoice repository.
@@ -66,11 +61,11 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
 /// It handles operations related to invoices, including invoice CRUD operations and image management.
 final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  final storage = ref.watch(firebaseStorageProvider);
   final auth = ref.watch(firebaseAuthProvider);
   final logger = ref.watch(loggerProvider);
+  final gcsFileService = ref.watch(service.gcsFileServiceProvider);
 
-  return FirestoreInvoiceRepository(firestore, storage, auth, logger);
+  return FirestoreInvoiceRepository(firestore, auth, logger, gcsFileService);
 });
 
 /// Stream provider for accessing the current user's invoices.
@@ -156,11 +151,11 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
 // Legacy providers for backwards compatibility
 final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
   final firestore = ref.watch(firestoreProvider);
-  final storage = ref.watch(firebaseStorageProvider);
   final auth = ref.watch(firebaseAuthProvider);
   final logger = ref.watch(loggerProvider);
+  final gcsFileService = ref.watch(service.gcsFileServiceProvider);
 
-  return FirestoreInvoiceRepository(firestore, storage, auth, logger);
+  return FirestoreInvoiceRepository(firestore, auth, logger, gcsFileService);
 });
 final userProjectsStreamProvider = Provider<AsyncValue<List<Project>>>(
     (ref) => ref.watch(userInvoicesStreamProvider));
@@ -181,4 +176,9 @@ final projectImagesStreamProvider = StreamProvider.autoDispose
   logger.d(
       '[PROVIDER] projectImagesStreamProvider executing for projectId: $projectId');
   return repository.getProjectImagesStream(projectId);
+});
+
+final gcsFileServiceProvider = Provider<GcsFileService>((ref) {
+  // Use your backend base URL here
+  return GcsFileService(backendBaseUrl: 'http://localhost:3030');
 });
