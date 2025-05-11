@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:http/http.dart' as http;
-import 'package:http_parser/http_parser.dart';
 import 'package:logger/logger.dart';
 
 class GcsFileService {
@@ -11,19 +10,17 @@ class GcsFileService {
   GcsFileService({required this.backendBaseUrl});
 
   /// Uploads a file to GCS via your backend.
+  /// Returns the GCS path of the uploaded file.
   Future<String> uploadFile({
     required Uint8List fileBytes,
     required String fileName,
-    String? contentType,
+    String contentType = 'image/jpeg',
   }) async {
     try {
-      // Hardcode for debugging
-      contentType = 'image/jpeg';
-      _logger
-          .i('[GCS DEBUG] Uploading $fileName with contentType: $contentType');
+      _logger.i('[GCS] Uploading $fileName with contentType: $contentType');
       // 1. Get signed upload URL from backend
       final uploadUrlResp = await http.post(
-        Uri.parse('$backendBaseUrl/generate-upload-url'),
+        Uri.parse('$backendBaseUrl/api/gcs/generate-upload-url'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'filename': fileName, 'contentType': contentType}),
       );
@@ -43,8 +40,8 @@ class GcsFileService {
         throw Exception('Failed to upload file: ${uploadResp.body}');
       }
 
-      // 3. Return the GCS path or signed URL (you can adjust as needed)
-      return signedUrl;
+      // 3. Return the GCS path (not the signed URL)
+      return fileName;
     } catch (e, stackTrace) {
       _logger.e('Error uploading file', error: e, stackTrace: stackTrace);
       rethrow;
@@ -55,7 +52,7 @@ class GcsFileService {
   Future<String> getSignedDownloadUrl({required String fileName}) async {
     try {
       final url = Uri.parse(
-          '$backendBaseUrl/generate-download-url?filename=${Uri.encodeComponent(fileName)}');
+          '$backendBaseUrl/api/gcs/generate-download-url?filename=${Uri.encodeComponent(fileName)}');
       final response = await http.get(url);
       if (response.statusCode != 200) {
         _logger.e('Failed to get signed download URL: ${response.body}');
@@ -75,7 +72,7 @@ class GcsFileService {
   }
 
   Future<void> deleteFile({required String fileName}) async {
-    final url = Uri.parse('$backendBaseUrl/delete');
+    final url = Uri.parse('$backendBaseUrl/api/gcs/delete');
     final response = await http.post(
       url,
       headers: {'Content-Type': 'application/json'},

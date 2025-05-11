@@ -1,5 +1,5 @@
-# Use Node.js LTS version
-FROM node:18-slim
+# Use Node.js latest LTS version
+FROM node:20-slim
 
 # Create app directory
 WORKDIR /usr/src/app
@@ -17,7 +17,5 @@ EXPOSE 8080
 # Set the Google Cloud Project ID
 ENV GOOGLE_CLOUD_PROJECT=splitbase-7ec0f
 
-# Start the app
-CMD [ "node", "index.js" ]
-
-COPY service-account.json /usr/src/app/service-account.json 
+# Start the main application
+CMD [ "node", "index.js" ] 

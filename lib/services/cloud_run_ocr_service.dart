@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:logger/logger.dart';
 import '../repositories/repository_exceptions.dart';
+import '../services/gcs_file_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 /// Cloud Run OCR Service
 ///
@@ -25,11 +27,10 @@ class CloudRunOcrService {
   /// Calls the OCR endpoint to process an image.
   ///
   /// Parameters:
-  ///  - [imageUrl]: The URL of the image to scan.
+  ///  - [imagePath]: The path of the image to scan.
   ///  - [projectId]: The ID of the associated project/invoice.
   ///  - [invoiceId]: The ID of the specific invoice.
   ///  - [imageId]: The ID of the specific image document.
-  ///  - [userId]: The ID of the user associated with the image.
   ///  - [timeoutSeconds]: Optional timeout duration (defaults to 60s).
   ///
   /// Returns: A [Map<String, dynamic>] containing the OCR result data upon success.
@@ -37,10 +38,14 @@ class CloudRunOcrService {
   /// Throws:
   ///  - [FunctionCallException]: If the API call fails, times out,
   ///    or returns an unexpected result.
-  Future<Map<String, dynamic>> scanImage(String imageUrl, String projectId,
-      String invoiceId, String imageId, String userId,
+  Future<Map<String, dynamic>> scanImage(
+      String imagePath, String projectId, String invoiceId, String imageId,
       {int timeoutSeconds = _defaultTimeoutSeconds}) async {
     try {
+      // Always fetch a fresh signed URL for OCR
+      final gcsFileService = GcsFileService(backendBaseUrl: _baseUrl);
+      final imageUrl =
+          await gcsFileService.getSignedDownloadUrl(fileName: imagePath);
       _logger.d('[OCR] Preparing to scan image: $imageUrl');
       _logger.d(
           '[OCR] Project ID: $projectId, Invoice ID: $invoiceId, Image ID: $imageId');
@@ -50,11 +55,11 @@ class CloudRunOcrService {
         Uri.parse('$_baseUrl/ocr-invoice'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
+          'imageUrl': imageUrl,
           'projectId': projectId,
           'invoiceId': invoiceId,
           'imageId': imageId,
-          'userId': userId,
-          'imageUrl': imageUrl,
+          'userId': FirebaseAuth.instance.currentUser?.uid,
         }),
       )
           .timeout(

@@ -1,3 +1,8 @@
+/**
+ * GCS Routes.
+ * Handles signed URL generation, file upload, download, and deletion.
+ */
+
 const express = require('express');
 const router = express.Router();
 const gcsService = require('../services/gcsService');
@@ -5,7 +10,12 @@ const { Storage } = require('@google-cloud/storage');
 const storage = new Storage();
 const bucketName = 'travel-files';
 
-// Generate signed upload URL
+/**
+ * Generate a signed upload URL for a file.
+ * @route POST /generate-upload-url
+ * @body {string} filename
+ * @body {string} contentType
+ */
 router.post('/generate-upload-url', async (req, res) => {
   const { filename, contentType } = req.body;
   try {
@@ -16,7 +26,11 @@ router.post('/generate-upload-url', async (req, res) => {
   }
 });
 
-// Generate signed download URL
+/**
+ * Generate a signed download URL for a file.
+ * @route GET /generate-download-url
+ * @query {string} filename
+ */
 router.get('/generate-download-url', async (req, res) => {
   const { filename } = req.query;
   try {

@@ -14,7 +14,6 @@ import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
@@ -109,7 +108,7 @@ class _InvoiceCaptureOverviewScreenState
           return const Center(child: Icon(Icons.error, color: Colors.red));
         }
         final signedUrl = snapshot.data!;
-        print('[DEBUG] Displaying image with signed URL: ' + signedUrl);
+        print('[DEBUG] Displaying image with signed URL: $signedUrl');
         return CachedNetworkImage(
           imageUrl: signedUrl,
           fit: BoxFit.cover,

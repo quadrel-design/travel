@@ -36,7 +36,10 @@ class InvoiceCaptureController {
     final currentIndex = getCurrentIndex();
     if (images.isEmpty || currentIndex >= images.length) return;
     final imageId = images[currentIndex].id;
-    final imageUrl = images[currentIndex].url;
+    final imagePath = images[currentIndex].imagePath;
+    final gcsFileService = ref.read(service_providers.gcsFileServiceProvider);
+    final imageUrl =
+        await gcsFileService.getSignedDownloadUrl(fileName: imagePath);
     final provider =
         invoiceCaptureProvider((projectId: projectId, invoiceId: invoiceId));
     logger.i('Initiating scan for image ID: $imageId');

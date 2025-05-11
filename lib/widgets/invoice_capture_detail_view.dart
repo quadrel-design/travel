@@ -1,27 +1,21 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:photo_view/photo_view.dart';
-import 'package:photo_view/photo_view_gallery.dart';
 import 'package:logger/logger.dart';
 import '../models/invoice_image_process.dart';
 import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
-import '../providers/repository_providers.dart';
 import '../providers/service_providers.dart' as service;
-import 'package:path/path.dart' as p;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import '../providers/location_service_provider.dart';
 import './invoice_analysis_panel.dart';
 import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
 import 'package:travel/widgets/invoice_image_gallery.dart';
 import 'package:travel/widgets/invoice_capture_feedback_widgets.dart';
 import 'package:travel/widgets/invoice_capture_controller.dart';
-import '../services/gcs_file_service.dart';
 
 class InvoiceCaptureDetailView extends ConsumerStatefulWidget {
   const InvoiceCaptureDetailView({
@@ -130,14 +124,6 @@ class _InvoiceCaptureDetailViewState
 
   Future<String> _getValidImageUrl(InvoiceImageProcess imageInfo) async {
     try {
-      // First try to validate the existing URL
-      if (await _validateImageUrl(imageInfo.url)) {
-        _logger.d('[INVOICE_CAPTURE] Existing URL is valid, using it');
-        return imageInfo.url;
-      }
-
-      // If existing URL is invalid, get a fresh signed URL
-      _logger.d('[INVOICE_CAPTURE] Getting fresh signed URL for image');
       final gcsFileService = ref.read(service.gcsFileServiceProvider);
       return await gcsFileService.getSignedDownloadUrl(
           fileName: imageInfo.imagePath);

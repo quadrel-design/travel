@@ -28,6 +28,7 @@ import 'package:travel/models/project.dart';
 import 'package:travel/models/expense.dart';
 import 'package:travel/repositories/expense_repository.dart';
 import 'package:travel/models/invoice_image_process.dart';
+import 'package:travel/config/service_config.dart';
 
 /// Provider for accessing the Firestore database instance.
 ///
@@ -180,7 +181,7 @@ final projectImagesStreamProvider = StreamProvider.autoDispose
 
 final gcsFileServiceProvider = Provider<GcsFileService>((ref) {
   // Use your backend base URL here
-  return GcsFileService(backendBaseUrl: 'http://localhost:8080');
+  return GcsFileService(backendBaseUrl: ServiceConfig.gcsApiBaseUrl);
 });
 
 final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {

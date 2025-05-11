@@ -1,5 +1,10 @@
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
 
+// Debug log to verify project ID and credentials
+console.log('GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
+console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
+// Initialize Vision client (uses ADC by default)
 const vision = new ImageAnnotatorClient();
 
 async function detectTextInImage(imageUrl, imageBuffer) {

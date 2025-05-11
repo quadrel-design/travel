@@ -8,8 +8,8 @@ import 'package:travel/constants/app_routes.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:travel/providers/logging_provider.dart';
+import 'package:travel/providers/service_providers.dart' as service_providers;
 
 import '../../models/project.dart';
 import '../../models/invoice_image_process.dart';
@@ -261,7 +261,8 @@ class ProjectDetailScreen extends ConsumerWidget {
       InvoiceImageProcess image, String invoiceId) async {
     try {
       final logger = ref.read(loggerProvider);
-      logger.d("🔍 Starting OCR scan for image ${image.id}...");
+      logger.d(
+          "🔍 Starting OCR scan for image ${image.id} using Cloud Run service...");
 
       // First update status to ocr_running
       try {
@@ -288,30 +289,47 @@ class ProjectDetailScreen extends ConsumerWidget {
         // Continue even if this fails
       }
 
-      // Call the OCR function
-      final functions = FirebaseFunctions.instance;
-      final callable = functions.httpsCallable('detectImage');
+      // Call the OCR service via CloudRunOcrService
+      final ocrService = ref.read(service_providers.cloudRunOcrServiceProvider);
 
-      await callable.call({
-        'imageUrl': image.url,
-        'invoiceId': invoiceId,
-        'imageId': image.id,
-      });
+      // Ensure all required parameters are available and correct
+      // CloudRunOcrService.scanImage expects:
+      // String imagePath, String projectId, String invoiceId, String imageId
 
-      logger.i("🔍 OCR processing initiated successfully");
+      logger.d(
+          "🔍 Calling Cloud Run OCR endpoint with imagePath: ${image.imagePath}, projectId: ${project.id}, invoiceId: $invoiceId, imageId: ${image.id}");
+
+      final result = await ocrService.scanImage(
+        image.imagePath, // imagePath from InvoiceImageProcess
+        project.id, // projectId from the current project
+        invoiceId, // invoiceId passed to _scanImage
+        image.id, // imageId from InvoiceImageProcess
+      );
+
+      // Process the result if needed, e.g., update UI based on result.success
+      logger.i("🔍 OCR processing via Cloud Run completed. Result: $result");
 
       if (context.mounted) {
+        // Example: Show a message based on the 'status' or 'success' field in the result
+        String message = "OCR processing completed.";
+        if (result.containsKey('success') && result['success'] == true) {
+          message =
+              result['message'] as String? ?? "OCR successful via Cloud Run.";
+          // Potentially, update local state or re-fetch data if OCR modifies data significantly
+        } else {
+          message = result['error'] as String? ?? "OCR failed via Cloud Run.";
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('OCR processing started!')),
+          SnackBar(content: Text(message)),
         );
       }
     } catch (e) {
       if (context.mounted) {
         final logger = ref.read(loggerProvider);
-        logger.e("🔍 Error starting OCR process", error: e);
+        logger.e("🔍 Error during Cloud Run OCR process", error: e);
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error starting OCR: $e')),
+          SnackBar(content: Text('Error during OCR: ${e.toString()}')),
         );
       }
 

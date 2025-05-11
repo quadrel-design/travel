@@ -3,7 +3,7 @@ class ServiceConfig {
   static const String gcsBucketName = 'splitbase-7ec0f.appspot.com';
   static const String gcsProjectId = 'splitbase-7ec0f';
   static const String gcsApiBaseUrl =
-      'http://localhost:8080'; // Updated to 8080
+      'https://invoice-service-ykprlfkmpa-uc.a.run.app'; // CORRECTED CLOUD RUN URL
 
   // Authentication Configuration
   static const String authApiBaseUrl =

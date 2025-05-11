@@ -18,7 +18,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 // import 'package:firebase_storage/firebase_storage.dart'; // Remove this line
 import 'package:logger/logger.dart';
-import 'package:async/async.dart';
 
 // Conditionally import dart:html for web platform only
 // ignore: avoid_web_libraries_in_flutter
@@ -307,9 +306,9 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           try {
             final data = doc.data();
             data['id'] = doc.id;
-            if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+            if (!data.containsKey('imagePath')) {
               _logger.w(
-                  '[DEBUG] Skipping doc ${doc.id} due to missing url or imagePath');
+                  '[DEBUG] Skipping doc \${doc.id} due to missing imagePath');
               return null;
             }
             // Fetch latest analysis
@@ -403,14 +402,10 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         contentType: 'image/jpeg',
       );
 
-      // Get a signed URL for immediate display
-      final signedUrl =
-          await _gcsFileService.getSignedDownloadUrl(fileName: storagePath);
-
       final now = DateTime.now();
       final imageInfo = InvoiceImageProcess(
         id: imageId,
-        url: signedUrl, // Store the signed URL
+        url: '', // Do not store signed URL
         imagePath: storagePath,
         invoiceId: invoiceId,
         lastProcessedAt: now,
@@ -506,6 +501,7 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
   }
 
   /// Returns a stream of all invoice images for all invoices in a project.
+  @override
   Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId) {
     try {
       final userId = _getCurrentUserId();
@@ -523,14 +519,14 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
             try {
               final data = doc.data();
               data['id'] = doc.id;
-              if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+              if (!data.containsKey('imagePath')) {
                 _logger.w(
-                    '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
+                    '[DEBUG] Skipping doc \${doc.id} due to missing imagePath');
                 return null;
               }
               return InvoiceImageProcess.fromJson(data);
             } catch (e) {
-              _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
+              _logger.e('[DEBUG] Error parsing doc \${doc.id}: $e');
               return null;
             }
           }).whereType<InvoiceImageProcess>());

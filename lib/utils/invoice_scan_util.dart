@@ -36,11 +36,10 @@ class InvoiceScanUtil {
       logger.d("🔍 Calling Cloud Run OCR endpoint");
       final ocrService = ref.read(service_providers.cloudRunOcrServiceProvider);
       final result = await ocrService.scanImage(
-        imageInfo.url,
+        imageInfo.imagePath,
         projectId,
         invoiceId,
         imageInfo.id,
-        userId,
       );
 
       logger.i("🔍 OCR processing completed successfully");
