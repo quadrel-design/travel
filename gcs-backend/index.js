@@ -116,9 +116,18 @@ app.get('/test-firestore-write', async (req, res) => {
 const ocrRoutes = require('./routes/ocr')(dbAdminInstance); // Pass db instance
 const analysisRoutes = require('./routes/analysis')(dbAdminInstance); // Pass db instance
 // Assuming gcs routes do not need db, or will be refactored similarly if they do
+console.log('[INDEX.JS] Attempting to load gcsRoutes from ./routes/gcs...');
 const gcsRoutes = require('./routes/gcs'); 
+console.log('[DEBUG] typeof gcsRoutes:', typeof gcsRoutes);
+console.log('[DEBUG] gcsRoutes object:', gcsRoutes); // Express routers are functions with properties
 
-app.use('/api/gcs', gcsRoutes);
+try {
+  app.use('/api/gcs', gcsRoutes);
+  console.log('[INDEX.JS] gcsRoutes loaded and mounted at /api/gcs.');
+} catch (e) {
+  console.error('[DEBUG] CRITICAL ERROR mounting /api/gcs routes:', e);
+}
+
 app.use(ocrRoutes);
 app.use(analysisRoutes);
 

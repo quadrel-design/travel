@@ -144,6 +144,7 @@ class CloudRunOcrService {
           'projectId': projectId,
           'invoiceId': invoiceId,
           'imageId': imageId,
+          'userId': FirebaseAuth.instance.currentUser?.uid,
         }),
       )
           .timeout(
