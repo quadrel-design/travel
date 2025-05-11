@@ -2,16 +2,13 @@
 
 set -e
 
-PROJECT_ID="splitbase-7ec0f"
-IMAGE_NAME="gcs-backend"
-REGION="us-central1"
-
 # Build and push the Docker image
-docker buildx build --platform linux/amd64 -t gcr.io/$PROJECT_ID/$IMAGE_NAME:latest . --push
+docker buildx build --platform linux/amd64 -t gcr.io/splitbase-7ec0f/gcs-backend:latest . --push
 
-# Deploy to Google Cloud Run
-gcloud run deploy $IMAGE_NAME \
-  --image gcr.io/$PROJECT_ID/$IMAGE_NAME:latest \
+# Deploy to Google Cloud Run with the project ID env var
+gcloud run deploy gcs-backend \
+  --image gcr.io/splitbase-7ec0f/gcs-backend:latest \
   --platform managed \
-  --region $REGION \
-  --allow-unauthenticated 
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars=GOOGLE_CLOUD_PROJECT=splitbase-7ec0f
