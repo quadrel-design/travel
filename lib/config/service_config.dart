@@ -1,11 +1,9 @@
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-
 class ServiceConfig {
   // Google Cloud Storage Configuration
   static const String gcsBucketName = 'splitbase-7ec0f.appspot.com';
   static const String gcsProjectId = 'splitbase-7ec0f';
   static const String gcsApiBaseUrl =
-      'http://localhost:3030'; // Update this with your actual backend URL
+      'http://localhost:8080'; // Updated to 8080
 
   // Authentication Configuration
   static const String authApiBaseUrl =

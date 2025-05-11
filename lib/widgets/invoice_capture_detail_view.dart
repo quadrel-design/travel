@@ -11,7 +11,6 @@ import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/logging_provider.dart';
 import '../providers/repository_providers.dart';
-import '../providers/firebase_functions_provider.dart';
 import '../providers/service_providers.dart' as service;
 import 'package:path/path.dart' as p;
 import 'package:firebase_auth/firebase_auth.dart';
@@ -46,8 +45,8 @@ class _InvoiceCaptureDetailViewState
     extends ConsumerState<InvoiceCaptureDetailView> {
   late PageController pageController;
   late int currentIndex;
-  bool _isDeleting = false;
-  bool _showAppBar = true;
+  final bool _isDeleting = false;
+  final bool _showAppBar = true;
   bool _showAnalysis = false;
   final bool _isAnalyzing = false;
   late Logger _logger;
@@ -89,11 +88,26 @@ class _InvoiceCaptureDetailViewState
       return const ImageErrorWidget(message: 'Image URL is missing');
     }
 
-    if (kIsWeb) {
-      return _buildWebImageView(imageInfo);
-    }
+    return FutureBuilder<String>(
+      future: _getValidImageUrl(imageInfo),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const LoadingIndicatorWidget();
+        }
 
-    return _buildMobileImageView(imageInfo);
+        if (snapshot.hasError) {
+          _logger.e('[INVOICE_CAPTURE] Error getting image URL:',
+              error: snapshot.error);
+          return ImageErrorWidget(
+            message: 'Error loading image: ${snapshot.error}',
+            onRetry: () => setState(() {}),
+          );
+        }
+
+        final imageUrl = snapshot.data ?? imageInfo.url;
+        return _buildPhotoView(imageUrl, kIsWeb);
+      },
+    );
   }
 
   Widget _buildWebImageView(InvoiceImageProcess imageInfo) {
@@ -116,38 +130,20 @@ class _InvoiceCaptureDetailViewState
 
   Future<String> _getValidImageUrl(InvoiceImageProcess imageInfo) async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
-      final token = await user?.getIdToken(true);
-      if (token == null) {
-        _logger.w(
-            '[INVOICE_CAPTURE] No auth token available, falling back to original URL');
-        return imageInfo.url;
-      }
-
       // First try to validate the existing URL
       if (await _validateImageUrl(imageInfo.url)) {
         _logger.d('[INVOICE_CAPTURE] Existing URL is valid, using it');
         return imageInfo.url;
       }
 
-      // If existing URL is invalid, try to get a fresh one from GCS
-      try {
-        final gcsFileService = ref.read(service.gcsFileServiceProvider);
-        final fileBytes =
-            await gcsFileService.downloadFile(fileName: imageInfo.imagePath);
-        // Convert bytes to base64 for display
-        final base64Image = base64Encode(fileBytes);
-        final mimeType = 'image/jpeg'; // or determine from file extension
-        return 'data:$mimeType;base64,$base64Image';
-      } catch (storageError) {
-        _logger.w(
-            '[INVOICE_CAPTURE] Failed to get fresh URL from GCS, falling back to original URL',
-            error: storageError);
-        return imageInfo.url;
-      }
+      // If existing URL is invalid, get a fresh signed URL
+      _logger.d('[INVOICE_CAPTURE] Getting fresh signed URL for image');
+      final gcsFileService = ref.read(service.gcsFileServiceProvider);
+      return await gcsFileService.getSignedDownloadUrl(
+          fileName: imageInfo.imagePath);
     } catch (e) {
-      _logger.e('[INVOICE_CAPTURE] Error preparing URL:', error: e);
-      return imageInfo.url; // Fall back to original URL
+      _logger.e('[INVOICE_CAPTURE] Error getting image URL:', error: e);
+      rethrow;
     }
   }
 

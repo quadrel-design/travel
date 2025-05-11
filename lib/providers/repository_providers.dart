@@ -17,8 +17,6 @@ import 'package:travel/repositories/auth_repository.dart';
 // Import Firebase services
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:logger/logger.dart';
-import '../repositories/invoice_repository.dart';
 import '../repositories/firestore_invoice_repository.dart';
 import '../services/gcs_file_service.dart';
 import 'service_providers.dart' as service;
@@ -170,7 +168,9 @@ final projectStreamProvider = Provider.family<AsyncValue<Project?>, String>(
 /// Parameters:
 ///   - projectId: The ID of the project
 final projectImagesStreamProvider = StreamProvider.autoDispose
-    .family<List<InvoiceImageProcess>, String>((ref, projectId) {
+    .family<List<InvoiceImageProcess>, String>((ref, projectIdWithKey) {
+  final parts = projectIdWithKey.split('|');
+  final projectId = parts[0];
   final repository = ref.watch(invoiceRepositoryProvider);
   final logger = ref.watch(loggerProvider);
   logger.d(
@@ -180,5 +180,10 @@ final projectImagesStreamProvider = StreamProvider.autoDispose
 
 final gcsFileServiceProvider = Provider<GcsFileService>((ref) {
   // Use your backend base URL here
-  return GcsFileService(backendBaseUrl: 'http://localhost:3030');
+  return GcsFileService(backendBaseUrl: 'http://localhost:8080');
+});
+
+final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {
+  final logger = ref.watch(loggerProvider);
+  return FirebaseAuthRepository(FirebaseAuth.instance, logger);
 });

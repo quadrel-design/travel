@@ -402,10 +402,15 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
         fileBytes: fileBytes,
         contentType: 'image/jpeg',
       );
+
+      // Get a signed URL for immediate display
+      final signedUrl =
+          await _gcsFileService.getSignedDownloadUrl(fileName: storagePath);
+
       final now = DateTime.now();
       final imageInfo = InvoiceImageProcess(
         id: imageId,
-        url: storagePath, // You may want to store the GCS path or a signed URL
+        url: signedUrl, // Store the signed URL
         imagePath: storagePath,
         invoiceId: invoiceId,
         lastProcessedAt: now,
@@ -434,10 +439,9 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       String projectId, String invoiceId, String imageId) async {
     try {
       final userId = _getCurrentUserId();
-      final imageDoc =
-          await _getInvoiceImagesCollection(userId, projectId, invoiceId)
-              .doc(imageId)
-              .get();
+      final imagesCollection =
+          _getInvoiceImagesCollection(userId, projectId, invoiceId);
+      final imageDoc = await imagesCollection.doc(imageId).get();
       if (!imageDoc.exists) {
         throw DatabaseOperationException(
             'Image not found', null, StackTrace.current);
@@ -445,9 +449,13 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       final imageInfo = InvoiceImageProcess.fromJson(imageDoc.data()!);
       // Delete from GCS via backend
       await _gcsFileService.deleteFile(fileName: imageInfo.imagePath);
-      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
-          .doc(imageId)
-          .delete();
+      await imagesCollection.doc(imageId).delete();
+
+      // Clean up: if this was the last image, delete the invoice doc itself
+      final remainingImages = await imagesCollection.get();
+      if (remainingImages.size == 0) {
+        await _getInvoicesCollection(userId, projectId).doc(invoiceId).delete();
+      }
     } catch (e, stackTrace) {
       throw DatabaseOperationException('Failed to delete image', e, stackTrace);
     }
@@ -504,38 +512,30 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
       _logger.d(
           '[DEBUG] getProjectImagesStream: userId=$userId, projectId=$projectId');
       final invoicesCollection = _getInvoicesCollection(userId, projectId);
-      return invoicesCollection.snapshots().asyncExpand((invoicesSnapshot) {
-        final List<Stream<List<InvoiceImageProcess>>> imageStreams = [];
+      return invoicesCollection.snapshots().asyncMap((invoicesSnapshot) async {
+        List<InvoiceImageProcess> allImages = [];
         for (final invoiceDoc in invoicesSnapshot.docs) {
           final invoiceId = invoiceDoc.id;
           final imagesCollection =
               invoicesCollection.doc(invoiceId).collection('invoice_images');
-          imageStreams.add(imagesCollection.snapshots().map((imagesSnapshot) {
-            return imagesSnapshot.docs
-                .map((doc) {
-                  try {
-                    final data = doc.data();
-                    data['id'] = doc.id;
-                    if (!data.containsKey('url') ||
-                        !data.containsKey('imagePath')) {
-                      _logger.w(
-                          '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
-                      return null;
-                    }
-                    return InvoiceImageProcess.fromJson(data);
-                  } catch (e) {
-                    _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
-                    return null;
-                  }
-                })
-                .whereType<InvoiceImageProcess>()
-                .toList();
-          }));
+          final imagesSnapshot = await imagesCollection.get();
+          allImages.addAll(imagesSnapshot.docs.map((doc) {
+            try {
+              final data = doc.data();
+              data['id'] = doc.id;
+              if (!data.containsKey('url') || !data.containsKey('imagePath')) {
+                _logger.w(
+                    '[DEBUG] Skipping doc \\${doc.id} due to missing url or imagePath');
+                return null;
+              }
+              return InvoiceImageProcess.fromJson(data);
+            } catch (e) {
+              _logger.e('[DEBUG] Error parsing doc \\${doc.id}: $e');
+              return null;
+            }
+          }).whereType<InvoiceImageProcess>());
         }
-        if (imageStreams.isEmpty) {
-          return Stream.value(<InvoiceImageProcess>[]);
-        }
-        return StreamGroup.merge<List<InvoiceImageProcess>>(imageStreams);
+        return allImages;
       }).handleError((error, stackTrace) {
         throw DatabaseFetchException(
             'Failed to fetch project images', error, stackTrace);

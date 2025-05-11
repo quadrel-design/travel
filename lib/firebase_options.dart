@@ -55,7 +55,7 @@ class DefaultFirebaseOptions {
     appId: '1:213342165039:android:6caaed832566702b458eda',
     messagingSenderId: '213342165039',
     projectId: 'splitbase-7ec0f',
-    storageBucket: 'splitbase-7ec0f.appspot.com',
+    storageBucket: 'splitbase-7ec0f.firebasestorage.app',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -63,7 +63,8 @@ class DefaultFirebaseOptions {
     appId: '1:213342165039:ios:03e18acd08537cda458eda',
     messagingSenderId: '213342165039',
     projectId: 'splitbase-7ec0f',
-    storageBucket: 'splitbase-7ec0f.appspot.com',
+    storageBucket: 'splitbase-7ec0f.firebasestorage.app',
+    iosClientId: '213342165039-7u8qrhrq2bs8h9c2v9gq8n804k1iva6g.apps.googleusercontent.com',
     iosBundleId: 'com.antonetti.travel',
   );
 
@@ -72,7 +73,8 @@ class DefaultFirebaseOptions {
     appId: '1:213342165039:ios:772fdfeed7586f9e458eda',
     messagingSenderId: '213342165039',
     projectId: 'splitbase-7ec0f',
-    storageBucket: 'splitbase-7ec0f.appspot.com',
+    storageBucket: 'splitbase-7ec0f.firebasestorage.app',
+    iosClientId: '213342165039-s1m6uh9m38tfrt9fhshr11vldhaqq8f9.apps.googleusercontent.com',
     iosBundleId: 'com.example.travel',
   );
 
@@ -82,7 +84,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '213342165039',
     projectId: 'splitbase-7ec0f',
     authDomain: 'splitbase-7ec0f.firebaseapp.com',
-    storageBucket: 'splitbase-7ec0f.appspot.com',
+    storageBucket: 'splitbase-7ec0f.firebasestorage.app',
     measurementId: 'G-2YRXRS65BX',
   );
 }

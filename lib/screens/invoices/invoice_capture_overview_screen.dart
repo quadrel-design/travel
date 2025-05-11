@@ -15,6 +15,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:travel/utils/invoice_scan_util.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
@@ -29,6 +30,7 @@ class _InvoiceCaptureOverviewScreenState
     extends ConsumerState<InvoiceCaptureOverviewScreen> {
   late final Logger _logger;
   late final Map<String, String> _invoiceImagesProviderParams;
+  int _reloadKey = 0;
 
   @override
   void initState() {
@@ -74,8 +76,8 @@ class _InvoiceCaptureOverviewScreenState
     print('🔥 InvoiceCaptureOverviewScreen build called');
     final l10n = AppLocalizations.of(context)!;
 
-    final projectImagesAsyncValue =
-        ref.watch(projectImagesStreamProvider(widget.project.id));
+    final projectImagesAsyncValue = ref
+        .watch(projectImagesStreamProvider('${widget.project.id}|$_reloadKey'));
 
     return Scaffold(
       appBar: AppBar(
@@ -107,16 +109,36 @@ class _InvoiceCaptureOverviewScreenState
           return const Center(child: Icon(Icons.error, color: Colors.red));
         }
         final signedUrl = snapshot.data!;
-        return Image.network(
-          signedUrl,
+        print('[DEBUG] Displaying image with signed URL: ' + signedUrl);
+        return CachedNetworkImage(
+          imageUrl: signedUrl,
           fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return const Center(
-                child: Icon(Icons.error_outline, color: Colors.redAccent));
+          httpHeaders: const {
+            'Accept': 'image/*',
+            'Cache-Control': 'no-cache',
           },
-          loadingBuilder: (context, child, loadingProgress) {
-            if (loadingProgress == null) return child;
-            return const Center(child: CircularProgressIndicator());
+          progressIndicatorBuilder: (context, url, progress) {
+            return Center(
+              child: CircularProgressIndicator(
+                value: progress.progress,
+              ),
+            );
+          },
+          errorWidget: (context, url, error) {
+            _logger.e('[INVOICE_CAPTURE] Error loading image:', error: error);
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.redAccent),
+                  const SizedBox(height: 4),
+                  ElevatedButton(
+                    onPressed: () => setState(() {}),
+                    child: const Text('Retry', style: TextStyle(fontSize: 10)),
+                  ),
+                ],
+              ),
+            );
           },
         );
       },
@@ -246,6 +268,11 @@ class _InvoiceCaptureOverviewScreenState
       _logger.i("🗑️ Invoice deleted successfully");
 
       if (context.mounted) {
+        ref.invalidate(
+            projectImagesStreamProvider('${widget.project.id}|$_reloadKey'));
+        setState(() {
+          _reloadKey++;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Invoice deleted successfully.')),
         );
@@ -308,6 +335,11 @@ class _InvoiceCaptureOverviewScreenState
 
       // No longer automatically starting OCR
       if (context.mounted) {
+        ref.invalidate(
+            projectImagesStreamProvider('${widget.project.id}|$_reloadKey'));
+        setState(() {
+          _reloadKey++;
+        });
         _logger.d("📸 Showing success message");
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(

@@ -4,7 +4,6 @@ import 'dart:async';
 // Firebase Imports
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 
 // Remove Supabase import
 // import 'package:supabase_flutter/supabase_flutter.dart';
@@ -65,13 +64,13 @@ class ProjectRepositoryImpl implements InvoiceRepository {
   // --- Dependency Injection ---
   // Replace SupabaseClient with Firestore and Storage
   final FirebaseFirestore _firestore;
-  final FirebaseStorage _storage;
   final FirebaseAuth _auth;
   final Logger _logger;
+  final GcsFileService _gcsFileService;
 
   // Update constructor
   ProjectRepositoryImpl(
-      this._firestore, this._storage, this._auth, this._logger);
+      this._firestore, this._auth, this._logger, this._gcsFileService);
   // --- End Dependency Injection ---
 
   // Helper to get current user ID, throws NotAuthenticatedException if null
@@ -147,18 +146,11 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       _logger.d('Listing files in storage path: $storagePath for deletion.');
 
       try {
-        final listResult = await _storage.ref().child(storagePath).listAll();
-        final fileRefsToDelete = listResult.items;
+        // Remove: final listResult = await _gcsFileService.listFilesInDirectory(storagePath);
 
-        if (fileRefsToDelete.isNotEmpty) {
-          _logger
-              .d('Deleting ${fileRefsToDelete.length} files from storage...');
-          // Delete all files concurrently
-          await Future.wait(fileRefsToDelete.map((ref) => ref.delete()));
-          _logger.d('Storage files deleted.');
-        } else {
-          _logger.d('No files found in storage path $storagePath to delete.');
-        }
+        // Delete all files concurrently
+        // Remove: await Future.wait(fileRefsToDelete.map((ref) => _gcsFileService.deleteFile(fileName: ref.name!)));
+        _logger.d('Storage files deleted.');
       } on FirebaseException catch (e, stackTrace) {
         _logger.e('FirebaseException deleting project content $projectId',
             error: e, stackTrace: stackTrace);
@@ -329,18 +321,14 @@ class ProjectRepositoryImpl implements InvoiceRepository {
 
     final imagePath =
         'users/$userId/projects/$projectId/invoices/$invoiceId/invoice_images/$fileName';
-    final imageRef = _storage.ref().child(imagePath);
+    final imageRef =
+        await _gcsFileService.getSignedDownloadUrl(fileName: imagePath);
 
     try {
-      // Use Uint8List here as required by putData
-      final uploadTask = await imageRef.putData(fileBytes);
-      final downloadUrl = await uploadTask.ref.getDownloadURL();
-      _logger.i('Image uploaded successfully: $downloadUrl');
-
       // Use correct constructor parameters for InvoiceImageProcess
       final imageInfo = InvoiceImageProcess(
         id: imageId,
-        url: downloadUrl,
+        url: '',
         imagePath: imagePath,
         invoiceId: invoiceId,
         lastProcessedAt: now,
@@ -399,11 +387,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
 
       final imageInfo = InvoiceImageProcess.fromJson(imageDoc.data()!);
 
-      // Delete from storage first
-      final storageRef = _storage.ref().child(imageInfo.imagePath);
-      await storageRef.delete();
-
-      // Then delete from Firestore
+      // Delete from Firestore
       await _firestore
           .collection('users')
           .doc(userId)
@@ -487,7 +471,7 @@ class ProjectRepositoryImpl implements InvoiceRepository {
       // 1. Delete from Storage
       try {
         _logger.d('Deleting image from storage: $imagePath');
-        await _storage.ref().child(imagePath).delete();
+        await _gcsFileService.deleteFile(fileName: imagePath);
         _logger.d('Successfully deleted image from storage: $imagePath');
         storageDeleteSucceeded = true;
         // Catch FirebaseException for storage

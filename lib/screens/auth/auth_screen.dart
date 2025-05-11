@@ -137,13 +137,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     if (_formKey.currentState!.validate()) {
       _formKey.currentState!.save();
       ref.read(authLoadingProvider.notifier).state = true;
-      ref.read(authErrorProvider.notifier).state =
-          null; // Clear previous errors
+      ref.read(authErrorProvider.notifier).state = null;
       try {
+        // Use only Firebase Auth via your repository/provider
         await ref.read(authRepositoryProvider).signInWithEmailAndPassword(
               email: _emailController.text.trim(),
               password: _passwordController.text.trim(),
             );
+        print(
+            'DEBUG: Current user after login: ${FirebaseAuth.instance.currentUser}');
         _logger.i(
             'Sign in attempt successful for ${_emailController.text.trim()}');
       } on FirebaseAuthException catch (e) {

@@ -33,23 +33,21 @@ class InvoiceImageGallery extends ConsumerWidget {
       builder: (BuildContext context, int index) {
         final imageInfo = images[index];
         return PhotoViewGalleryPageOptions.customChild(
-          child: FutureBuilder<Uint8List>(
-            future: ref.read(service.gcsFileServiceProvider).downloadFile(
-                  fileName: imageInfo.imagePath,
-                ),
+          child: FutureBuilder<String>(
+            future:
+                ref.read(service.gcsFileServiceProvider).getSignedDownloadUrl(
+                      fileName: imageInfo.imagePath,
+                    ),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (snapshot.hasError) {
+              if (snapshot.hasError || !snapshot.hasData) {
                 return Center(
                   child: Text('Error loading image: ${snapshot.error}'),
                 );
               }
-              if (!snapshot.hasData) {
-                return const Center(child: Text('No image data'));
-              }
-              return Image.memory(
+              return Image.network(
                 snapshot.data!,
                 fit: BoxFit.contain,
               );

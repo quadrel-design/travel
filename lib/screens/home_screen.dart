@@ -12,7 +12,6 @@ import 'package:intl/intl.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
-import 'package:travel/models/project.dart';
 
 // Change to ConsumerWidget (or ConsumerStatefulWidget if other state needed later)
 /// The main screen displayed after successful login.

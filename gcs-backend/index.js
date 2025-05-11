@@ -8,5 +8,10 @@ app.use(require('./routes/gcs'));
 app.use(require('./routes/ocr'));
 app.use(require('./routes/analysis'));
 
-const PORT = process.env.PORT || 3030;
+// Add this route for root path
+app.get('/', (req, res) => {
+  res.send('API is running!');
+});
+
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

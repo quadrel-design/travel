@@ -5,9 +5,10 @@ import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/repository_providers.dart';
-import '../providers/firebase_functions_provider.dart';
 import '../providers/location_service_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:travel/utils/invoice_scan_util.dart';
+import '../providers/service_providers.dart' as service_providers;
 
 class InvoiceCaptureController {
   final WidgetRef ref;
@@ -60,26 +61,16 @@ class InvoiceCaptureController {
         throw Exception("Failed to download image: ${httpResponse.statusCode}");
       }
       logger.d("Image downloaded successfully for scan (ID: $imageId)");
-      final functionsService = ref.read(firebaseFunctionsProvider);
-      logger
-          .i('Calling Firebase Cloud Function for scanning image ID: $imageId');
-      final result = await functionsService.scanImage(
-        imageUrl,
+      logger.i('Calling Cloud Run OCR for scanning image ID: $imageId');
+      await InvoiceScanUtil.scanImage(
+        context,
+        ref,
         projectId,
         invoiceId,
-        imageId,
+        images[currentIndex],
       );
       timeoutTimer.cancel();
-      logger.i('Scan completed for $imageId: ${result['success']}');
-      logger.d('Full result from scan: $result');
-      if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Scan completed.')),
-        );
-        await _processAndStoreScanResults(result, imageId);
-      } else {
-        throw Exception(result['error'] ?? 'Unknown error during scan');
-      }
+      logger.i('Scan completed for $imageId');
     } catch (e, stackTrace) {
       timeoutTimer.cancel();
       logger.e('[INVOICE_CAPTURE] Error during scan process:',
@@ -135,8 +126,9 @@ class InvoiceCaptureController {
     final currentIndex = getCurrentIndex();
     if (images.isEmpty || currentIndex >= images.length) return;
     final imageInfo = images[currentIndex];
-    final functionsService = ref.read(firebaseFunctionsProvider);
-    await functionsService.analyzeImage(
+    final analysisService =
+        ref.read(service_providers.cloudRunOcrServiceProvider);
+    await analysisService.analyzeImage(
       imageInfo.ocrText ?? '',
       projectId,
       invoiceId,

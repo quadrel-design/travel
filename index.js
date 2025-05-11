@@ -6,11 +6,14 @@ app.use(cors());
 app.use(express.json());
 
 const storage = new Storage({ keyFilename: 'service-account.json' });
-const bucket = storage.bucket('splitbase-7ec0f.appspot.com'); // Use your bucket name
+const bucket = storage.bucket('travel-files'); // Use your bucket name
 
 // Generate signed upload URL
 app.post('/generate-upload-url', async (req, res) => {
-  const { filename, contentType } = req.body;
+  let { filename, contentType } = req.body;
+  // Hardcode for debugging
+  contentType = 'image/jpeg';
+  console.log('[GCS DEBUG] Generating signed URL for:', filename, 'with contentType:', contentType);
   try {
     const [url] = await bucket.file(filename).getSignedUrl({
       version: 'v4',

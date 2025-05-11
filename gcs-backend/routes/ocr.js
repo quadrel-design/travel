@@ -25,11 +25,36 @@ router.post('/ocr-invoice', async (req, res) => {
       let lastError = null;
       while (retryCount <= maxRetries) {
         try {
+          console.log('[OCR] Downloading image from URL:', imageUrl);
+
           const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 15000 });
+
+          console.log('[OCR] Downloaded image size:', response.data.length, 'bytes');
+
           const imageBuffer = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
           detectResult = await detectTextInImage(imageUrl, imageBuffer);
           break;
         } catch (err) {
+          if (err.response) {
+            let responseData = '[binary or empty]';
+            try {
+              if (typeof err.response.data === 'string') {
+                responseData = err.response.data;
+              } else if (Buffer.isBuffer(err.response.data)) {
+                const utf8 = err.response.data.toString('utf8');
+                responseData = /[^\x00-\x7F]/.test(utf8) ? err.response.data.toString('hex') : utf8;
+              }
+            } catch (e) {
+              // ignore
+            }
+            console.error('[OCR] Error downloading image:', {
+              status: err.response.status,
+              headers: err.response.headers,
+              data: responseData,
+            });
+          } else {
+            console.error('[OCR] Error downloading image:', err.message);
+          }
           lastError = err;
           if (retryCount === maxRetries) break;
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));

@@ -8,14 +8,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
-import 'package:firebase_core/firebase_core.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async'; // For StreamSubscription
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 // Generated files
-import 'firebase_options.dart'; // Import generated options
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 // Project-specific imports (Ensure these paths are correct)
 import 'screens/auth/auth_screen.dart';
@@ -27,93 +27,30 @@ import 'screens/settings/app_settings_screen.dart';
 import 'repositories/auth_repository.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
-import 'package:travel/theme/antonetti_theme.dart';
 import 'package:travel/screens/project/project_overview_screen.dart';
 import 'providers/logging_provider.dart';
 import 'package:travel/screens/auth/auth_wait_screen.dart';
 import 'package:travel/screens/user/user_management_screen.dart';
 import 'models/project.dart';
 
-void printFirebaseConfig() {
-  final options = Firebase.app().options;
-  print('--- FIREBASE CONFIG ---');
-  print('Project ID: \\${options.projectId}');
-  print('Storage Bucket: \\${options.storageBucket}');
-  print('API Key: \\${options.apiKey}');
-  print('App ID: \\${options.appId}');
-  print('Auth Domain: \\${options.authDomain}');
-  print('Messaging Sender ID: \\${options.messagingSenderId}');
-  print('-----------------------');
-}
-
-// --- Provider for Firebase Initialization ---
-final firebaseInitializationProvider = FutureProvider<FirebaseApp>((ref) async {
-  print('DEBUG: firebaseInitializationProvider executing...');
-  final app = await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
-  // Log that the Dart await completed
-  print(
-    'DEBUG: firebaseInitializationProvider COMPLETED (Dart await returned).',
-  );
-
-  // Print Firebase config after initialization
-  printFirebaseConfig();
-
-  print('DEBUG: firebaseInitializationProvider returning app.');
-  return app;
-});
-// --- End Provider ---
-
 /// Main application entry point.
 /// Initializes essential services and runs the Flutter app.
 Future<void> main() async {
   // Ensure Flutter bindings are initialized.
   WidgetsFlutterBinding.ensureInitialized();
-  print('DEBUG: main() started.'); // Log start
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  print('DEBUG: Firebase initialized.');
 
   // Load environment variables from .env file.
   await dotenv.load();
-  print('DEBUG: dotenv loaded.'); // Log dotenv
-
-  // NOTE: Explicit Firebase.initializeApp() call is moved to the provider above
-
-  // Connect to Firebase Emulators in debug mode (Keep this section if you use emulators)
-  if (kDebugMode) {
-    try {
-      // Use Firebase Functions Emulator.
-      // FirebaseFunctions.instance.useFunctionsEmulator('localhost', 5001);
-      // print('🔥 Using Firebase Functions Emulator at localhost:5001');
-    } catch (e) {
-      print('⚠️ Error connecting to Firebase Functions Emulator: $e');
-    }
-    // Connect to Firestore Emulator
-    try {
-      // FirebaseFirestore.instance.useFirestoreEmulator('localhost', 8080);
-      // print('🔥 Using Firebase Firestore Emulator at localhost:8080');
-    } catch (e) {
-      print('⚠️ Error connecting to Firebase Firestore Emulator: $e');
-    }
-    // Connect to Auth Emulator
-    try {
-      // FirebaseAuth.instance.useAuthEmulator('localhost', 9099);
-      // print('🔥 Using Firebase Auth Emulator at localhost:9099');
-    } catch (e) {
-      print('⚠️ Error connecting to Firebase Auth Emulator: $e');
-    }
-    // Connect to Storage Emulator
-    try {
-      // FirebaseStorage.instance.useStorageEmulator('localhost', 9199);
-      // print('🔥 Using Firebase Storage Emulator at localhost:9199');
-    } catch (e) {
-      print('⚠️ Error connecting to Firebase Storage Emulator: $e');
-    }
-  }
+  print('DEBUG: dotenv loaded.');
 
   // Run the app within a ProviderScope for Riverpod state management.
-  print('DEBUG: Calling runApp()...'); // Log before runApp
+  print('DEBUG: Calling runApp()...');
   runApp(const ProviderScope(child: MyApp()));
-  print('DEBUG: runApp() finished.'); // Log after runApp
+  print('DEBUG: runApp() finished.');
 }
 
 // Update redirect function to accept repository
@@ -265,45 +202,32 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Watch the initialization provider
-    final firebaseInitialization = ref.watch(firebaseInitializationProvider);
+    print('DEBUG: MyApp build() called');
+    return MaterialApp.router(
+      routerConfig: ref.watch(routerProvider),
+      debugShowCheckedModeBanner: false,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+    );
+  }
+}
 
-    // Show loading while Firebase initializes, or error if it fails
-    return firebaseInitialization.when(
-      loading: () {
-        print('DEBUG: MyApp waiting for Firebase init...'); // Log loading
-        // Show a simple loading screen
-        return const MaterialApp(
-          home: Scaffold(body: Center(child: CircularProgressIndicator())),
-          debugShowCheckedModeBanner: false,
-        );
-      },
-      error: (err, stack) {
-        print('DEBUG: MyApp Firebase init FAILED: $err'); // Log error
-        // Show an error screen
-        return MaterialApp(
-          home: Scaffold(
-            body: Center(child: Text('Firebase Init Failed: $err')),
-          ),
-          debugShowCheckedModeBanner: false,
-        );
-      },
-      data: (firebaseApp) {
-        print(
-          'DEBUG: MyApp Firebase init complete, building main app...',
-        ); // Log success
-        // Firebase is ready, build the main app with the router
-        final router = ref.watch(
-          routerProvider,
-        ); // Now it's safe to watch router
-        return MaterialApp.router(
-          routerConfig: router,
-          theme: antonettiTheme,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          debugShowCheckedModeBanner: false,
-        );
-      },
+// Add a debug version of your home screen for tracing
+class DebugHomeScreen extends ConsumerWidget {
+  const DebugHomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    print('DEBUG: DebugHomeScreen build() called');
+    // Example: If you use a provider for data
+    // final data = ref.watch(yourProvider);
+    // print('DEBUG: DebugHomeScreen provider data: $data');
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Debug Home')),
+      body: Center(
+        child: Text('Debug: HomeScreen loaded'),
+      ),
     );
   }
 }
