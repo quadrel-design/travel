@@ -239,6 +239,13 @@ module.exports = function(pool) {
      * @param {Date} [analysisData.analyzed_invoice_date]
      * @param {Date} [analysisData.analysis_processed_at]
      * @param {string} [analysisData.error_message]
+     * @param {object} [analysisData.gemini_analysis_json] - Full JSON result from Gemini analysis
+     * @param {number} [analysisData.invoice_sum] - Total invoice amount
+     * @param {string} [analysisData.invoice_location] - Merchant location 
+     * @param {string} [analysisData.invoice_currency] - Currency code
+     * @param {number} [analysisData.invoice_taxes] - Tax amount
+     * @param {string} [analysisData.invoice_taxonomy] - Hierarchical classification
+     * @param {string} [analysisData.invoice_category] - Primary category
      */
     updateInvoiceImageWithAnalysisData: async (imageId, analysisData) => {
       const {
@@ -250,7 +257,15 @@ module.exports = function(pool) {
         analyzed_merchant_location,
         analyzed_invoice_date,
         analysis_processed_at,
-        error_message
+        error_message,
+        gemini_analysis_json,
+        // New specific fields
+        invoice_sum,
+        invoice_location,
+        invoice_currency,
+        invoice_taxes,
+        invoice_taxonomy,
+        invoice_category
       } = analysisData;
 
       const now = new Date();
@@ -288,6 +303,37 @@ module.exports = function(pool) {
         columnsToUpdate.push(`analyzed_invoice_date = $${placeholderIndex++}`);
         values.push(analyzed_invoice_date);
       }
+      if (gemini_analysis_json !== undefined) {
+        columnsToUpdate.push(`gemini_analysis_json = $${placeholderIndex++}`);
+        values.push(gemini_analysis_json);
+      }
+      
+      // Add new specific invoice fields
+      if (invoice_sum !== undefined) {
+        columnsToUpdate.push(`invoice_sum = $${placeholderIndex++}`);
+        values.push(invoice_sum);
+      }
+      if (invoice_location !== undefined) {
+        columnsToUpdate.push(`invoice_location = $${placeholderIndex++}`);
+        values.push(invoice_location);
+      }
+      if (invoice_currency !== undefined) {
+        columnsToUpdate.push(`invoice_currency = $${placeholderIndex++}`);
+        values.push(invoice_currency);
+      }
+      if (invoice_taxes !== undefined) {
+        columnsToUpdate.push(`invoice_taxes = $${placeholderIndex++}`);
+        values.push(invoice_taxes);
+      }
+      if (invoice_taxonomy !== undefined) {
+        columnsToUpdate.push(`invoice_taxonomy = $${placeholderIndex++}`);
+        values.push(invoice_taxonomy);
+      }
+      if (invoice_category !== undefined) {
+        columnsToUpdate.push(`invoice_category = $${placeholderIndex++}`);
+        values.push(invoice_category);
+      }
+      
       columnsToUpdate.push(`analysis_processed_at = $${placeholderIndex++}`);
       values.push(analysis_processed_at || now);
 

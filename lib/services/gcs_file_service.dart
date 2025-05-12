@@ -51,6 +51,25 @@ class GcsFileService {
   /// Gets a signed download URL from the backend for a file in GCS.
   Future<String> getSignedDownloadUrl({required String fileName}) async {
     try {
+      // First try the new /get-signed-url endpoint used by Cloud Run service
+      try {
+        final url = Uri.parse('$backendBaseUrl/get-signed-url');
+        final response = await http.post(url,
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'path': fileName}));
+
+        if (response.statusCode == 200) {
+          final data = jsonDecode(response.body);
+          if (data.containsKey('url')) {
+            return data['url'];
+          }
+        }
+        // If this fails, we'll fall back to the previous endpoint
+      } catch (e) {
+        _logger.w('Failed with new endpoint, trying fallback: $e');
+      }
+
+      // Fall back to previous endpoint format
       final url = Uri.parse(
           '$backendBaseUrl/api/gcs/generate-download-url?filename=${Uri.encodeComponent(fileName)}');
       final response = await http.get(url);

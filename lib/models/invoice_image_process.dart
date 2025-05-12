@@ -155,6 +155,10 @@ class InvoiceAnalysis {
   final String? merchantName;
   final String? date;
   final String? location;
+  // New fields from Gemini analysis
+  final double? taxes;
+  final String? category;
+  final String? taxonomy;
 
   InvoiceAnalysis({
     this.totalAmount,
@@ -162,20 +166,57 @@ class InvoiceAnalysis {
     this.merchantName,
     this.date,
     this.location,
+    this.taxes,
+    this.category,
+    this.taxonomy,
   });
 
   factory InvoiceAnalysis.fromJson(Map<String, dynamic> json) {
+    // For debugging - use this in production code with proper logging
+    print('InvoiceAnalysis.fromJson received: $json');
+
+    // Try to handle different possible structures
+    Map<String, dynamic> data = json;
+
+    // If there's an 'invoiceAnalysis' within the JSON, use that
+    if (json.containsKey('invoiceAnalysis') &&
+        json['invoiceAnalysis'] is Map<String, dynamic>) {
+      data = json['invoiceAnalysis'] as Map<String, dynamic>;
+    }
+
+    // If there's a 'data' field within the JSON, use that
+    if (json.containsKey('data') && json['data'] is Map<String, dynamic>) {
+      data = json['data'] as Map<String, dynamic>;
+    }
+
     return InvoiceAnalysis(
-      totalAmount: (json['totalAmount'] is num)
-          ? (json['totalAmount'] as num).toDouble()
-          : (json['totalAmount'] is String)
-              ? double.tryParse(json['totalAmount'])
-              : null,
-      currency: json['currency'] as String?,
-      merchantName: json['merchantName'] as String?,
-      date: json['date'] as String?,
-      location: json['location'] as String?,
+      totalAmount: _parseNumericValue(data['totalAmount']),
+      currency: _parseStringValue(data['currency']),
+      merchantName: _parseStringValue(data['merchantName']),
+      date: _parseStringValue(data['date']),
+      location: _parseStringValue(data['location']),
+      // Parse new fields
+      taxes: _parseNumericValue(data['taxes']),
+      category: _parseStringValue(data['category']),
+      taxonomy: _parseStringValue(data['taxonomy']),
     );
+  }
+
+  // Helper methods to safely parse various data types
+  static double? _parseNumericValue(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    if (value is String) {
+      final parsed = double.tryParse(value.replaceAll(RegExp(r'[^\d.-]'), ''));
+      return parsed;
+    }
+    return null;
+  }
+
+  static String? _parseStringValue(dynamic value) {
+    if (value == null) return null;
+    if (value is String) return value;
+    return value.toString();
   }
 
   Map<String, dynamic> toJson() => {
@@ -184,5 +225,8 @@ class InvoiceAnalysis {
         'merchantName': merchantName,
         'date': date,
         'location': location,
+        'taxes': taxes,
+        'category': category,
+        'taxonomy': taxonomy,
       };
 }

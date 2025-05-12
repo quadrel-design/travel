@@ -28,17 +28,25 @@ async function analyzeDetectedText(ocrText) {
       topP: 1,
     },
   });
-  const prompt = `Analyze this text from an image and extract the following information in JSON format:
-    - totalAmount: the total amount as a number (required)
-    - currency: the currency code (e.g., USD, EUR) (required)
-    - date: the date in ISO format (YYYY-MM-DD)
-    - merchantName: the name of the merchant/business
-    - location: the location or address
+  const prompt = `Analyze this text from an invoice or receipt image and extract the following information in a structured JSON format:
 
-    Text to analyze:
+    - totalAmount: The final total amount paid, as a numeric value without currency symbols (REQUIRED)
+    - currency: The 3-letter currency code (e.g., USD, EUR, GBP, JPY) (REQUIRED)
+    - date: The invoice/receipt date in ISO format (YYYY-MM-DD)
+    - merchantName: The full name of the merchant, company, or service provider
+    - location: The physical location, address, or city of the merchant
+    - taxes: The tax amount as a numeric value (include VAT, sales tax, etc.)
+    - category: The primary expense category (e.g., food, transportation, accommodation, office, entertainment)
+    - taxonomy: A hierarchical classification with '/' separators (e.g., "travel/accommodation/hotel", "business/office/supplies")
+
+    Text from image to analyze:
     ${ocrText}
 
-    Respond ONLY with the JSON object, no additional text.`;
+    Important: 
+    - If you're uncertain about a value, use null rather than guessing
+    - For totalAmount and taxes, return numeric values only (e.g., 10.99, not "$10.99")
+    - Ensure all key names match exactly as specified above
+    - Respond ONLY with the JSON object, no additional text, explanations, or markdown formatting`;
 
   try {
     const result = await model.generateContent(prompt);

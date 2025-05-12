@@ -81,6 +81,20 @@ try {
 app.use(ocrRoutes);
 app.use(analysisRoutes);
 
+/**
+ * User Subscription Routes
+ * 
+ * These routes handle user subscription-related operations such as toggling
+ * between 'pro' and 'free' subscription tiers. The routes use Firebase Auth
+ * custom claims to store and retrieve the user's subscription status.
+ * 
+ * Mounted at: /api/user
+ * Available endpoints:
+ * - POST /api/user/toggle-subscription: Toggle between pro/free subscription
+ */
+const userSubscriptionRoutes = require('./routes/userSubscription');
+app.use('/api/user', userSubscriptionRoutes);
+
 // Root health check
 app.get('/', (req, res) => {
   res.send('API is running!');

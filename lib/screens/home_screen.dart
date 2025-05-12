@@ -12,6 +12,7 @@ import 'package:intl/intl.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart'; // Import routes
 import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Import
+import 'package:travel/providers/user_subscription_provider.dart';
 
 // Change to ConsumerWidget (or ConsumerStatefulWidget if other state needed later)
 /// The main screen displayed after successful login.
@@ -42,6 +43,21 @@ class HomeScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(l10n.yourProjectsTitle),
         actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final subscription = ref.watch(userSubscriptionProvider);
+              final isPro = subscription == 'pro';
+              return IconButton(
+                icon: Icon(
+                  isPro ? Icons.star : Icons.star_border,
+                  color: isPro ? Colors.amber : Colors.grey,
+                ),
+                tooltip: isPro ? 'Pro Version' : 'Free Version',
+                onPressed: () =>
+                    ref.read(userSubscriptionProvider.notifier).toggle(),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: 'App Settings',

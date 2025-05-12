@@ -3,6 +3,7 @@ import 'package:logger/logger.dart';
 import '../config/service_config.dart';
 import '../services/gcs_file_service.dart';
 import '../services/cloud_run_ocr_service.dart';
+import '../services/invoice_processing_service.dart';
 
 // Logger Provider
 final loggerProvider = Provider<Logger>((ref) => Logger());
@@ -21,4 +22,10 @@ final cloudRunOcrServiceProvider = Provider<CloudRunOcrService>((ref) {
     logger: logger,
     baseUrl: ServiceConfig.gcsApiBaseUrl,
   );
+});
+
+// Invoice Processing Service Provider
+final invoiceProcessingServiceProvider =
+    Provider<InvoiceProcessingService>((ref) {
+  return InvoiceProcessingService(ref);
 });

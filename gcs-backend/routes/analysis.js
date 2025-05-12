@@ -76,11 +76,31 @@ module.exports = function(postgresService) { // MODIFIED: Removed firestoreDbIns
           };
           if (analysisResult.success && analysisResult.invoiceAnalysis) {
             const ia = analysisResult.invoiceAnalysis;
+            
+            // Standard fields we were already storing
             analysisDataForPg.analyzed_total_amount = ia.totalAmount;
             analysisDataForPg.analyzed_currency = ia.currency;
             analysisDataForPg.analyzed_merchant_name = ia.merchantName;
             analysisDataForPg.analyzed_merchant_location = ia.location;
             analysisDataForPg.analyzed_invoice_date = ia.date ? new Date(ia.date) : null; // Convert to Date for PG
+            
+            // Store the complete analysis JSON
+            analysisDataForPg.gemini_analysis_json = analysisResult.invoiceAnalysis;
+            
+            // Helper function to ensure numeric values
+            const ensureNumeric = (val) => {
+              if (val === null || val === undefined) return null;
+              const num = parseFloat(val);
+              return isNaN(num) ? null : num;
+            };
+            
+            // Add the new specific invoice fields with proper data type handling
+            analysisDataForPg.invoice_sum = ensureNumeric(ia.totalAmount);
+            analysisDataForPg.invoice_location = ia.location || null;
+            analysisDataForPg.invoice_currency = ia.currency || null;
+            analysisDataForPg.invoice_taxes = ensureNumeric(ia.taxes);
+            analysisDataForPg.invoice_taxonomy = ia.taxonomy || null;
+            analysisDataForPg.invoice_category = ia.category || null;
           }
           // If analysis failed but there was an error message from Gemini
           if (!analysisResult.success && analysisResult.message) {
@@ -124,6 +144,10 @@ module.exports = function(postgresService) { // MODIFIED: Removed firestoreDbIns
               analysis_processed_at: errorTimestamp,
               error_message: error.message || 'Analysis failed in main catch'
             };
+            // If there's any partial analysis data, include it
+            if (error.analysisResult && error.analysisResult.invoiceAnalysis) {
+              analysisDataForPg.gemini_analysis_json = error.analysisResult.invoiceAnalysis;
+            }
             await postgresService.updateInvoiceImageWithAnalysisData(imageId, analysisDataForPg);
             console.log(`[ANALYSIS ROUTE] Analysis error data updated in PostgreSQL (catch block) for imageId: ${imageId}`);
           } catch (pgErr) {

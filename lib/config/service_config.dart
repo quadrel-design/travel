@@ -2,8 +2,14 @@ class ServiceConfig {
   // Google Cloud Storage Configuration
   static const String gcsBucketName = 'splitbase-7ec0f.appspot.com';
   static const String gcsProjectId = 'splitbase-7ec0f';
+
+  // Cloud Run URL for backend services
+  // Using the us-central1 region for the invoice service
   static const String gcsApiBaseUrl =
-      'https://invoice-service-ykprlfkmpa-uc.a.run.app'; // CORRECTED CLOUD RUN URL
+      'https://invoice-service-ykprlfkmpa-uc.a.run.app';
+
+  // NOTE: In production, these values should be retrieved from environment
+  // variables or secure configuration rather than being hardcoded.
 
   // Authentication Configuration
   static const String authApiBaseUrl =

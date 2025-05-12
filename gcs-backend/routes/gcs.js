@@ -106,8 +106,13 @@ router.post('/delete', (req, res) => {
   res.status(200).json({ message: "MINIMAL delete OK" });
 });
 
-// Endpoint: GET /api/gcs/signed-url?path=...
-// Returns a fresh signed URL for the given GCS object path
+/**
+ * Generate a signed URL for accessing a GCS object.
+ * @route GET /api/gcs/signed-url
+ * @query {string} path - The path to the object in the GCS bucket
+ * @returns {Object} - Object containing the signed URL
+ * @returns {string} returns.url - The signed URL for accessing the object
+ */
 router.get('/signed-url', async (req, res) => {
   const { path } = req.query;
   if (!path) return res.status(400).json({ error: 'Missing path' });
