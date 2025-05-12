@@ -12,18 +12,16 @@ const geminiService = require('../services/geminiService');
 // visionService might also need refactoring if it uses Firestore and isn't passed the db instance
 // const { detectTextInImage } = require('../services/visionService'); 
 
-module.exports = function(firestoreDbInstance, postgresService) { // Accept both instances
-  if (!firestoreDbInstance) {
-    const errorMessage = "analysisRoutes: CRITICAL ERROR - Firestore db instance was not provided!";
-    console.error(errorMessage);
-    throw new Error(errorMessage);
-  }
-  // Initialize firestoreServiceInstance with the firestoreDbInstance
-  const firestoreServiceInstance = require('../services/firestoreService')(firestoreDbInstance);
+module.exports = function(postgresService) { // MODIFIED: Removed firestoreDbInstance
+  // REMOVED Firestore instance check and firestoreServiceInstance initialization
+  // if (!firestoreDbInstance) { ... }
+  // const firestoreServiceInstance = require('../services/firestoreService')(firestoreDbInstance);
 
   if (!postgresService) {
-    // Log a warning but allow the route to function with Firestore only for now
-    console.warn('analysisRoutes: WARNING - postgresService was not provided. Analysis routes will operate on Firestore only.');
+    // MODIFIED: Changed warning to an error
+    const errorMessage = 'analysisRoutes: CRITICAL ERROR - postgresService was not provided. Analysis routes cannot function.';
+    console.error(errorMessage);
+    throw new Error(errorMessage);
   }
 
   /**
@@ -45,9 +43,6 @@ module.exports = function(firestoreDbInstance, postgresService) { // Accept both
     console.log(`[ANALYSIS ROUTE] Received /analyze-invoice for imageId: ${imageId}, userId: ${userId}`);
 
     try {
-      // Update Firestore status
-      await firestoreServiceInstance.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_running');
-      
       // Also update PostgreSQL status if service is available
       if (postgresService) {
         try {
@@ -67,23 +62,10 @@ module.exports = function(firestoreDbInstance, postgresService) { // Accept both
       }
       
       const firestoreTimestamp = new Date();
-      const firestoreUpdateData = {
-        status: finalStatus,
-        isInvoice: analysisResult.isInvoice,
-        lastProcessedAt: firestoreTimestamp,
-        ocrText: ocrText, // Persist the original OCR text that was analyzed
-        updatedAt: firestoreTimestamp, // Add updatedAt for Firestore
-      };
-
-      if (analysisResult.success && analysisResult.invoiceAnalysis) {
-        const ia = analysisResult.invoiceAnalysis;
-        firestoreUpdateData.totalAmount = ia.totalAmount;
-        firestoreUpdateData.currency = ia.currency;
-        firestoreUpdateData.merchantName = ia.merchantName;
-        firestoreUpdateData.merchantLocation = ia.location;
-        firestoreUpdateData.invoiceDate = ia.date; // Presumes ia.date is Firestore compatible (e.g. ISO string or Timestamp)
-      }
-      await firestoreServiceInstance.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, firestoreUpdateData);
+      // REMOVED: Firestore update data block
+      // const firestoreUpdateData = { ... };
+      // if (analysisResult.success && analysisResult.invoiceAnalysis) { ... }
+      // await firestoreServiceInstance.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, firestoreUpdateData);
 
       if (postgresService) {
         try {
@@ -130,15 +112,10 @@ module.exports = function(firestoreDbInstance, postgresService) { // Accept both
       console.error(`[ANALYSIS ROUTE] CATCH BLOCK for imageId ${imageId}. Error:`, error.message, error.stack);
       const errorTimestamp = new Date();
       try {
-        const firestoreErrorUpdatePayload = {
-          status: 'analysis_failed',
-          lastProcessedAt: errorTimestamp,
-          updatedAt: errorTimestamp,
-          ocrText: ocrText, 
-          errorMessage: error.message || 'Analysis failed in main catch'
-        };
-        await firestoreServiceInstance.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_failed');
-        await firestoreServiceInstance.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, firestoreErrorUpdatePayload);
+        // REMOVED: Firestore updates in catch block
+        // const firestoreErrorUpdatePayload = { ... };
+        // await firestoreServiceInstance.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_failed');
+        // await firestoreServiceInstance.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, firestoreErrorUpdatePayload);
 
         if (postgresService) {
           try {
@@ -154,7 +131,8 @@ module.exports = function(firestoreDbInstance, postgresService) { // Accept both
           }
         }
       } catch (serviceError) {
-        console.error(`[ANALYSIS ROUTE] Firestore update FAILED in main catch for imageId ${imageId}:`, serviceError.message, serviceError.stack);
+        // MODIFIED: Changed error message to reflect only potential PG error
+        console.error(`[ANALYSIS ROUTE] PostgreSQL update FAILED in main catch for imageId ${imageId}:`, serviceError.message, serviceError.stack);
       }
       res.status(500).json({ success: false, error: error.message || 'Analysis failed overall' });
     }

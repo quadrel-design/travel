@@ -8,16 +8,11 @@ const router = express.Router();
 const axios = require('axios');
 const { detectTextInImage } = require('../services/visionService');
 
-module.exports = function(firestoreDbInstance, postgresService) {
-  if (!firestoreDbInstance) {
-    const errorMessage = "ocrRoutes: CRITICAL ERROR - Firestore db instance was not provided!";
+module.exports = function(postgresService) {
+  if (!postgresService) {
+    const errorMessage = 'ocrRoutes: CRITICAL ERROR - postgresService was not provided. OCR routes cannot function.';
     console.error(errorMessage);
     throw new Error(errorMessage);
-  }
-  const firestoreService = require('../services/firestoreService')(firestoreDbInstance);
-
-  if (!postgresService) {
-    console.warn('ocrRoutes: WARNING - postgresService was not provided. OCR routes will operate on Firestore only.');
   }
 
   router.post('/ocr-invoice', async (req, res) => {
@@ -52,7 +47,6 @@ module.exports = function(firestoreDbInstance, postgresService) {
       }
       // ***** END POSTGRESQL INITIAL RECORD INTEGRATION *****
 
-      await firestoreService.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'ocrInProgress');
       console.log(`[OCR AFTER setInProgress] imageId: ${imageId}, GOOGLE_CLOUD_PROJECT: '${process.env.GOOGLE_CLOUD_PROJECT}'`);
       
       let detectResult = null;
@@ -93,16 +87,6 @@ module.exports = function(firestoreDbInstance, postgresService) {
       const firestoreTimestamp = new Date();
       if (detectResult.success) {
         const newStatus = detectResult.extractedText ? 'ocrFinished' : 'ocrNoText';
-        await firestoreService.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, newStatus);
-        const firestoreUpdateData = {
-          confidence: detectResult.confidence || 0,
-          textBlocks: detectResult.textBlocks || [],
-          lastProcessedAt: firestoreTimestamp,
-          updatedAt: firestoreTimestamp,
-          ocrText: detectResult.extractedText ?? '',
-          errorMessage: detectResult.error || null
-        };
-        await firestoreService.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, firestoreUpdateData);
 
         if (postgresService) {
           try {
@@ -121,15 +105,6 @@ module.exports = function(firestoreDbInstance, postgresService) {
           }
         }
       } else {
-        await firestoreService.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'ocrError');
-        const firestoreUpdateData = {
-          ocrText: '',
-          lastProcessedAt: firestoreTimestamp,
-          updatedAt: firestoreTimestamp,
-          errorMessage: detectResult.error || 'OCR process failed or no text found'
-        };
-        await firestoreService.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, firestoreUpdateData);
-
         if (postgresService) {
           try {
             const pgOcrData = {
@@ -150,14 +125,6 @@ module.exports = function(firestoreDbInstance, postgresService) {
       console.error(`[OCR ROUTE CATCH BLOCK] imageId: ${imageId}, Error: ${error.message}, GOOGLE_CLOUD_PROJECT: '${process.env.GOOGLE_CLOUD_PROJECT}'`, error.stack);
       const errorTimestamp = new Date();
       try {
-        await firestoreService.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'ocrError');
-        await firestoreService.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, {
-          ocrText: '',
-          lastProcessedAt: errorTimestamp,
-          updatedAt: errorTimestamp,
-          errorMessage: error.message || 'OCR process failed in main catch'
-        });
-
         if (postgresService) {
           try {
             const pgOcrData = {
@@ -172,7 +139,7 @@ module.exports = function(firestoreDbInstance, postgresService) {
           }
         }
       } catch (serviceError) {
-        console.error(`[OCR ROUTE] Firestore update FAILED in main catch for imageId ${imageId}:`, serviceError.message, serviceError.stack);
+        console.error(`[OCR ROUTE] PostgreSQL update FAILED in main catch for imageId ${imageId}:`, serviceError.message, serviceError.stack);
       }
       res.status(500).json({ success: false, error: error.message || 'OCR process failed overall' });
     }
