@@ -80,6 +80,16 @@ try {
   // If pgPool is critical, consider throwing e to halt startup
 }
 
+// Initialize services (PostgreSQL)
+const postgresServiceFile = require('./services/postgresService');
+let postgresServiceInstance = null;
+if (pgPool) { // Only initialize if the pool was created successfully
+  postgresServiceInstance = postgresServiceFile(pgPool);
+  console.log('✅ PostgreSQL Service initialized.');
+} else {
+  console.error('❌ PostgreSQL Service NOT initialized because pgPool is null.');
+}
+
 // For debugging, let's ensure these are still logged to see what Cloud Run provides:
 console.log('[ENV CHECK] GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
 console.log('[ENV CHECK] GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS); // Should ideally be unset if relying on ADC
@@ -144,9 +154,10 @@ app.get('/test-firestore-write', async (req, res) => {
   }
 });
 
-// Pass the db instance to the routes/services
-const ocrRoutes = require('./routes/ocr')(dbAdminInstance); // Pass db instance
-const analysisRoutes = require('./routes/analysis')(dbAdminInstance); // Pass db instance
+// Pass the db instances to the routes/services
+// TODO: Refactor routes to accept and use postgresServiceInstance
+const ocrRoutes = require('./routes/ocr')(dbAdminInstance, postgresServiceInstance); 
+const analysisRoutes = require('./routes/analysis')(dbAdminInstance, postgresServiceInstance); 
 // Assuming gcs routes do not need db, or will be refactored similarly if they do
 console.log('[INDEX.JS] Attempting to load gcsRoutes from ./routes/gcs...');
 const gcsRoutes = require('./routes/gcs'); 

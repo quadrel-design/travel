@@ -2,46 +2,45 @@
 
 set -e
 
-# Define your project ID and image names
+# Define your project ID and shared image name
 PROJECT_ID="splitbase-7ec0f"
-IMAGE_NAME_INVOICE_SERVICE="invoice-service" # This is the primary service we're fixing
-TARGET_GCS_BUCKET_NAME="travel-files" # Your GCS bucket name
-# IMAGE_NAME_GCS_BACKEND="gcs-backend" # Define if gcs-backend is a separate service name
+APP_IMAGE_NAME="travel-app-shared" # Single image for both services
+TARGET_GCS_BUCKET_NAME="travel-files" # Your GCS bucket name for invoice-service
+
+# --- IMPORTANT: Replace these with your actual Secret Manager secret names ---
+DB_PASSWORD_SECRET_NAME="gcs-backend-db-password" # e.g., "gcs-backend-db-password"
+GEMINI_API_KEY_SECRET_NAME="shared-gemini-api-key" # e.g., "shared-gemini-api-key"
+# ---
 
 # Create a unique tag for this build
 BUILD_TAG=$(date +%s)
 
 # Build and push the Docker image
-# The image is built once and tagged.
-echo "Building and pushing image for ${IMAGE_NAME_INVOICE_SERVICE} with tag: ${BUILD_TAG} and :latest"
+echo "Building and pushing image for ${APP_IMAGE_NAME} with tag: ${BUILD_TAG} and :latest"
 docker buildx build \
   --no-cache \
   --platform linux/amd64 \
-  -t "gcr.io/${PROJECT_ID}/${IMAGE_NAME_INVOICE_SERVICE}:${BUILD_TAG}" \
-  -t "gcr.io/${PROJECT_ID}/${IMAGE_NAME_INVOICE_SERVICE}:latest" \
+  -t "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:${BUILD_TAG}" \
+  -t "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:latest" \
   . \
   --push
 
-# Deploy to invoice-service using the unique BUILD_TAG and include GCS_BUCKET_NAME
-echo "Deploying ${IMAGE_NAME_INVOICE_SERVICE} with image tag: ${BUILD_TAG}"
-gcloud run deploy ${IMAGE_NAME_INVOICE_SERVICE} \
-  --image "gcr.io/${PROJECT_ID}/${IMAGE_NAME_INVOICE_SERVICE}:${BUILD_TAG}" \
+# Deploy to gcs-backend
+echo "Deploying gcs-backend with image tag: ${BUILD_TAG}"
+gcloud run deploy gcs-backend \
+  --image "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:${BUILD_TAG}" \
   --platform managed \
   --region us-central1 \
   --allow-unauthenticated \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GEMINI_API_KEY=AIzaSyBjbl2JxSq7A65TrGWIcK5uLlVpuq3f3bM,GCS_BUCKET_NAME=${TARGET_GCS_BUCKET_NAME}" # Ensure your API key is correct and securely managed
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DB_USER=travel_user,DB_HOST=37.148.202.133,DB_NAME=travel_db,DB_PORT=5432,DB_PASSWORD=secret:${DB_PASSWORD_SECRET_NAME}:latest,GEMINI_API_KEY=secret:${GEMINI_API_KEY_SECRET_NAME}:latest"
 
-# If gcs-backend is a distinct service and still needs to be deployed from the same source:
-# If it's the SAME service as invoice-service, this second deploy is redundant.
-# Consider removing this block if invoice-service is your sole target for this codebase.
-#
-# IMAGE_NAME_GCS_BACKEND="gcs-backend" # Make sure this service name is correct if used
-# echo "Deploying ${IMAGE_NAME_GCS_BACKEND} with image tag: ${BUILD_TAG}"
-# gcloud run deploy ${IMAGE_NAME_GCS_BACKEND} \
-#   --image "gcr.io/${PROJECT_ID}/${IMAGE_NAME_GCS_BACKEND}:${BUILD_TAG}" \ # This assumes gcs-backend image uses the same name path
-#   --platform managed \
-#   --region us-central1 \
-#   --allow-unauthenticated \
-#   --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID}"
+# Deploy to invoice-service
+echo "Deploying invoice-service with image tag: ${BUILD_TAG}"
+gcloud run deploy invoice-service \
+  --image "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:${BUILD_TAG}" \
+  --platform managed \
+  --region us-central1 \
+  --allow-unauthenticated \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},GEMINI_API_KEY=secret:${GEMINI_API_KEY_SECRET_NAME}:latest,GCS_BUCKET_NAME=${TARGET_GCS_BUCKET_NAME}"
 
 echo "Script completed."
