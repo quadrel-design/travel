@@ -5,6 +5,7 @@ import 'package:logger/logger.dart';
 import '../repositories/repository_exceptions.dart';
 import '../services/gcs_file_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 
 /// Cloud Run OCR Service
 ///
@@ -154,6 +155,9 @@ class CloudRunOcrService {
               'Analysis request timed out after $timeoutSeconds seconds');
         },
       );
+
+      debugPrint(
+          '[CloudRunOcrService] Raw response body from /analyze-invoice: \${response.body}');
 
       if (response.statusCode != 200) {
         throw FunctionCallException(

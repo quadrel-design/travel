@@ -129,15 +129,75 @@ class InvoiceCaptureController {
     final currentIndex = getCurrentIndex();
     if (images.isEmpty || currentIndex >= images.length) return;
     final imageInfo = images[currentIndex];
+
+    logger.d(
+        "Full ocrText from imageInfo before sending to analyzeImage: START-----\n${imageInfo.ocrText}\n-----END ocrText. Length: ${imageInfo.ocrText?.length}");
+
     final analysisService =
         ref.read(service_providers.cloudRunOcrServiceProvider);
-    await analysisService.analyzeImage(
+
+    final Map<String, dynamic> analysisResponse =
+        await analysisService.analyzeImage(
       imageInfo.ocrText ?? '',
       projectId,
       invoiceId,
       imageInfo.id,
     );
-    await Future.delayed(const Duration(seconds: 1));
+
+    if (analysisResponse['success'] == true &&
+        analysisResponse['data'] != null) {
+      final Map<String, dynamic> newInvoiceAnalysisData =
+          analysisResponse['data'] as Map<String, dynamic>;
+
+      ref
+          .read(invoiceCaptureProvider(
+              (projectId: projectId, invoiceId: invoiceId)).notifier)
+          .updateImageAnalysisData(imageInfo.id, newInvoiceAnalysisData);
+
+      logger.i(
+          "Successfully received and updated LOCAL analysis data for image ${imageInfo.id}: $newInvoiceAnalysisData");
+
+      // Now, persist these results to Firestore
+      try {
+        final projectRepo = ref.read(projectRepositoryProvider);
+        final bool isConfirmed =
+            newInvoiceAnalysisData['isInvoice'] as bool? ?? false;
+
+        await projectRepo.updateImageWithAnalysisDetails(
+            projectId, invoiceId, imageInfo.id,
+            analysisData: newInvoiceAnalysisData,
+            isInvoiceConfirmed: isConfirmed,
+            // You can pass a specific status string if your backend provides one,
+            // or rely on the default in the repository method
+            status: analysisResponse['status'] as String?);
+        logger.i(
+            "Successfully PERSISTED analysis data to Firestore for image ${imageInfo.id}");
+      } catch (e, s) {
+        logger.e(
+            "Error persisting analysis data to Firestore for image ${imageInfo.id}: $e",
+            error: e,
+            stackTrace: s);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text('Error saving analysis details: ${e.toString()}')),
+          );
+        }
+      }
+    } else {
+      logger.e(
+          "Analysis call was not successful or data was null for image ${imageInfo.id}: $analysisResponse");
+      // Optionally, show an error to the user via ScaffoldMessenger or another way
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  'Failed to get analysis details: ${analysisResponse['message'] ?? 'Unknown error'}')),
+        );
+      }
+    }
+    // await Future.delayed(const Duration(seconds: 1)); // This might not be needed anymore
   }
 
   Future<void> handleDelete() async {

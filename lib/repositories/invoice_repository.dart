@@ -44,6 +44,17 @@ abstract class InvoiceRepository {
     Map<String, dynamic>? invoiceAnalysis,
   });
 
+  /// Updates image info with full analysis details from Gemini
+  Future<void> updateImageWithAnalysisDetails(
+    String projectId,
+    String invoiceId,
+    String imageId, {
+    required Map<String, dynamic> analysisData,
+    required bool isInvoiceConfirmed,
+    String?
+        status, // Optional: to set a specific status like 'analysis_complete'
+  });
+
   /// Deletes a project image
   Future<void> deleteInvoiceImage(
       String projectId, String invoiceId, String imageId);
@@ -609,5 +620,18 @@ class ProjectRepositoryImpl implements InvoiceRepository {
           error,
           stackTrace);
     });
+  }
+
+  @override
+  Future<void> updateImageWithAnalysisDetails(
+    String projectId,
+    String invoiceId,
+    String imageId, {
+    required Map<String, dynamic> analysisData,
+    required bool isInvoiceConfirmed,
+    String?
+        status, // Optional: to set a specific status like 'analysis_complete'
+  }) async {
+    // Implementation of updateImageWithAnalysisDetails method
   }
 }

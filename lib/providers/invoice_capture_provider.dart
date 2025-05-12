@@ -162,6 +162,52 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
     state = state.copyWith(scanError: newScanError);
   }
 
+  /// Updates the invoiceAnalysis data for a specific image.
+  void updateImageAnalysisData(
+      String imageId, Map<String, dynamic> newAnalysisData) {
+    _logger.d(
+        'Updating analysis data for image ID: $imageId with newAnalysisData: $newAnalysisData');
+    final imageIndex = state.images.indexWhere((img) => img.id == imageId);
+    if (imageIndex != -1) {
+      final oldImageInfo = state.images[imageIndex];
+      _logger.d(
+          '[ANALYSIS_UPDATE] Old imageInfo.invoiceAnalysis: ${oldImageInfo.invoiceAnalysis}');
+      _logger.d(
+          '[ANALYSIS_UPDATE] Old imageInfo.isInvoiceGuess: ${oldImageInfo.isInvoiceGuess}');
+      _logger.d(
+          '[ANALYSIS_UPDATE] newAnalysisData received from controller: $newAnalysisData');
+
+      // Extract the 'isInvoice' status from the analysis data to update 'isInvoiceGuess'
+      final bool? newIsInvoiceGuess = newAnalysisData['isInvoice'] as bool?;
+
+      final newImageInfo = oldImageInfo.copyWith(
+          invoiceAnalysis: newAnalysisData, // Store the full analysis map
+          isInvoiceGuess:
+              newIsInvoiceGuess, // Update isInvoiceGuess based on analysis
+          lastProcessedAt: DateTime.now() // Mark as processed now
+          );
+
+      _logger.d(
+          '[ANALYSIS_UPDATE] newImageInfo.invoiceAnalysis after copyWith: ${newImageInfo.invoiceAnalysis}');
+      _logger.d(
+          '[ANALYSIS_UPDATE] newImageInfo.isInvoiceGuess after copyWith: ${newImageInfo.isInvoiceGuess}');
+
+      final updatedImages = List<InvoiceImageProcess>.from(state.images);
+      updatedImages[imageIndex] = newImageInfo;
+
+      state = state.copyWith(images: updatedImages);
+      _logger.d(
+          'Successfully updated analysis data in state for image ID: $imageId');
+      _logger.d(
+          '[ANALYSIS_UPDATE] State after update - image.invoiceAnalysis: ${state.images[imageIndex].invoiceAnalysis}');
+      _logger.d(
+          '[ANALYSIS_UPDATE] State after update - image.isInvoiceGuess: ${state.images[imageIndex].isInvoiceGuess}');
+    } else {
+      _logger
+          .w('Could not find image with ID: $imageId to update analysis data.');
+    }
+  }
+
   @override
   void dispose() {
     _logger.d(

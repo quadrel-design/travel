@@ -307,14 +307,15 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
             final data = doc.data();
             data['id'] = doc.id;
             if (!data.containsKey('imagePath')) {
-              _logger.w(
-                  '[DEBUG] Skipping doc \${doc.id} due to missing imagePath');
+              _logger
+                  .w('[DEBUG] Skipping doc ${doc.id} due to missing imagePath');
               return null;
             }
-            // Fetch latest analysis
-            final analysis =
-                await _getLatestAnalysis(userId, projectId, invoiceId, doc.id);
-            data['invoiceAnalysis'] = analysis?['invoiceAnalysis'];
+            // The invoiceAnalysis field is now directly on the main document and correctly populated.
+            // No need to fetch from a subcollection.
+
+            _logger.d(
+                '[DEBUG] Data before InvoiceImageProcess.fromJson for doc ${doc.id}: $data');
             return InvoiceImageProcess.fromJson(data);
           } catch (e) {
             _logger.e('[DEBUG] Error parsing doc ${doc.id}: $e');
@@ -464,40 +465,109 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
     bool? isInvoice,
     Map<String, dynamic>? invoiceAnalysis,
   }) async {
+    final userId = _getCurrentUserId();
+    _logger.i(
+        'Updating OCR results for image $imageId in project $projectId, invoice $invoiceId');
     try {
-      final userId = _getCurrentUserId();
-      final data = <String, dynamic>{
-        'updatedAt': FieldValue.serverTimestamp(),
+      final Map<String, dynamic> updateData = {
+        'lastProcessedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(), // General update timestamp
       };
+      if (isInvoice != null) {
+        updateData['isInvoiceGuess'] =
+            isInvoice; // Assuming this maps to isInvoiceGuess
+      }
+      if (invoiceAnalysis != null) {
+        updateData['invoiceAnalysis'] = invoiceAnalysis;
+      }
+      // Optionally update status here if needed
+      // updateData['status'] = 'ocr_complete';
+
       await _getInvoiceImagesCollection(userId, projectId, invoiceId)
           .doc(imageId)
-          .update(data);
-      if (invoiceAnalysis != null) {
-        await _getInvoiceImagesCollection(userId, projectId, invoiceId)
-            .doc(imageId)
-            .collection('analyses')
-            .doc('latest')
-            .set({
-          'invoiceAnalysis': invoiceAnalysis,
-          'updatedAt': FieldValue.serverTimestamp()
-        }, SetOptions(merge: true));
-      }
-    } catch (e, stackTrace) {
+          .update(updateData);
+      _logger.i('Successfully updated OCR results for image $imageId.');
+    } on FirebaseException catch (e, s) {
+      _logger.e(
+          'FirebaseException updating OCR results for image $imageId: ${e.message}',
+          error: e,
+          stackTrace: s);
       throw DatabaseOperationException(
-          'Failed to update OCR results', e, stackTrace);
+          'Failed to update OCR results: ${e.code}', e, s);
+    } catch (e, s) {
+      _logger.e('Unknown error updating OCR results for image $imageId',
+          error: e, stackTrace: s);
+      throw DatabaseOperationException(
+          'An unexpected error occurred while updating OCR results.', e, s);
     }
   }
 
-  // Helper to get the latest analysis for an image
-  Future<Map<String, dynamic>?> _getLatestAnalysis(
-      String userId, String projectId, String invoiceId, String imageId) async {
-    final analysisDoc =
-        await _getInvoiceImagesCollection(userId, projectId, invoiceId)
-            .doc(imageId)
-            .collection('analyses')
-            .doc('latest')
-            .get();
-    return analysisDoc.exists ? analysisDoc.data() : null;
+  @override
+  Future<void> updateImageWithAnalysisDetails(
+    String projectId,
+    String invoiceId,
+    String imageId, {
+    required Map<String, dynamic> analysisData,
+    required bool isInvoiceConfirmed,
+    String?
+        status, // Optional: to set a specific status like 'analysis_complete'
+  }) async {
+    final userId = _getCurrentUserId();
+    _logger.i(
+        'Updating FULL analysis details for image $imageId in project $projectId, invoice $invoiceId');
+    _logger.d(
+        'Analysis data to save: $analysisData, isInvoiceConfirmed: $isInvoiceConfirmed, status: $status');
+    try {
+      final Map<String, dynamic> updateData = {
+        'invoiceAnalysis': analysisData,
+        'isInvoiceGuess':
+            isInvoiceConfirmed, // Store the confirmed invoice status
+        'lastProcessedAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (status != null) {
+        updateData['status'] = status;
+      } else {
+        // Default status if not provided, can be based on isInvoiceConfirmed
+        updateData['status'] = isInvoiceConfirmed
+            ? 'analysis_complete_invoice'
+            : 'analysis_complete_not_invoice';
+      }
+
+      // Optionally, extract and update top-level date if available and valid
+      if (analysisData.containsKey('date') && analysisData['date'] is String) {
+        final DateTime? parsedDate =
+            DateTime.tryParse(analysisData['date'] as String);
+        if (parsedDate != null) {
+          updateData['invoiceDate'] = Timestamp.fromDate(parsedDate);
+          _logger.d('Parsed and adding invoiceDate to update: $parsedDate');
+        } else {
+          _logger.w(
+              'Could not parse date from analysisData: ${analysisData['date']}');
+        }
+      }
+
+      await _getInvoiceImagesCollection(userId, projectId, invoiceId)
+          .doc(imageId)
+          .update(updateData);
+      _logger
+          .i('Successfully updated full analysis details for image $imageId.');
+    } on FirebaseException catch (e, s) {
+      _logger.e(
+          'FirebaseException updating analysis details for image $imageId: ${e.message}',
+          error: e,
+          stackTrace: s);
+      throw DatabaseOperationException(
+          'Failed to update analysis details: ${e.code}', e, s);
+    } catch (e, s) {
+      _logger.e('Unknown error updating analysis details for image $imageId',
+          error: e, stackTrace: s);
+      throw DatabaseOperationException(
+          'An unexpected error occurred while updating analysis details.',
+          e,
+          s);
+    }
   }
 
   /// Returns a stream of all invoice images for all invoices in a project.

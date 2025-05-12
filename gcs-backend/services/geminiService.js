@@ -13,15 +13,15 @@ async function analyzeDetectedText(ocrText) {
   if (!geminiApiKey) {
     console.error("GEMINI_API_KEY is not set. Gemini analysis will be skipped.");
     return {
-      success: false, // Changed to false as analysis cannot proceed
+      success: false,
       isInvoice: false,
-      status: "ConfigurationError", // More specific status
+      invoiceAnalysis: null,
+      status: "ConfigurationError",
       error: "No API key available for analysis. Gemini service not configured."
     };
   }
-  // Consider verifying model name here or making it configurable
   const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash-latest", // Updated to a common, valid model name
+    model: "gemini-1.5-flash-latest",
     generationConfig: {
       temperature: 0.1,
       topK: 1,
@@ -44,7 +44,7 @@ async function analyzeDetectedText(ocrText) {
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const analysisText = response.text();
-    let invoiceAnalysis;
+    let invoiceAnalysis = null;
     try {
       const jsonText = analysisText.replace(/```json\n?|\n?```/g, "").trim();
       try {
@@ -53,23 +53,31 @@ async function analyzeDetectedText(ocrText) {
         console.warn("Initial JSON.parse failed for Gemini response. Attempting cleanup...", parseError);
         console.warn("Original text from Gemini:", analysisText);
         console.warn("Trimmed text:", jsonText);
-        // Attempt to clean up malformed JSON
         const cleanedJson = jsonText
-          .replace(/[\u0000-\u001F\u007F-\u009F]/gu, "") // Remove control characters
-          // .replace(/[^\x20-\x7E]/g, "") // This might be too aggressive, removes non-ASCII like €
+          .replace(/[\u0000-\u001F\u007F-\u009F]/gu, "")
           .trim();
         console.warn("Cleaned text for parsing:", cleanedJson);
         invoiceAnalysis = JSON.parse(cleanedJson);
       }
-      // Ensure totalAmount is a number
-      if (typeof invoiceAnalysis.totalAmount === "string") {
-        const parsed = parseFloat(invoiceAnalysis.totalAmount.replace(/[^\d.-]/g, '')); // More robust parsing for numbers
-        if (!isNaN(parsed)) {
-          invoiceAnalysis.totalAmount = parsed;
+
+      let numericTotalAmount;
+      if (invoiceAnalysis && typeof invoiceAnalysis.totalAmount !== 'undefined') {
+        if (typeof invoiceAnalysis.totalAmount === 'string') {
+          const parsed = parseFloat(invoiceAnalysis.totalAmount.replace(/[^\d.-]/g, ''));
+          if (!isNaN(parsed)) {
+            invoiceAnalysis.totalAmount = parsed;
+            numericTotalAmount = parsed;
+          }
+        } else if (typeof invoiceAnalysis.totalAmount === 'number' && !isNaN(invoiceAnalysis.totalAmount)) {
+          numericTotalAmount = invoiceAnalysis.totalAmount;
         }
       }
-      const isInvoice = !!(invoiceAnalysis.totalAmount && invoiceAnalysis.currency);
-      invoiceAnalysis.isInvoice = isInvoice;
+
+      const isInvoice = !!(numericTotalAmount !== undefined && invoiceAnalysis && invoiceAnalysis.currency);
+      if (invoiceAnalysis) {
+        invoiceAnalysis.isInvoice = isInvoice;
+      }
+
       return {
         success: true,
         invoiceAnalysis,
@@ -80,8 +88,9 @@ async function analyzeDetectedText(ocrText) {
       console.error("Failed to parse Gemini analysis results into JSON:", e);
       console.error("Original text from Gemini that failed parsing:", analysisText);
       return {
-        success: true, // Or false, depending on how critical the parsing is
-        status: "Text", // Or "ParsingError"
+        success: false,
+        invoiceAnalysis: null,
+        status: "ParsingError",
         isInvoice: false,
         error: "Failed to parse analysis results from Gemini. Content may be malformed."
       };
@@ -90,7 +99,8 @@ async function analyzeDetectedText(ocrText) {
     console.error("Error during Gemini content generation:", error);
     return {
       success: false,
-      status: "ApiError", // More specific status
+      invoiceAnalysis: null,
+      status: "ApiError",
       isInvoice: false,
       error: error instanceof Error ? error.message : "Unknown error occurred during Gemini API call",
     };

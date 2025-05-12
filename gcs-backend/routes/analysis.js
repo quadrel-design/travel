@@ -1,3 +1,5 @@
+console.log('[ANALYSIS.JS MODULE] File loaded by Node.js');
+
 /**
  * Analysis Routes.
  * Handles invoice text analysis using Gemini AI.
@@ -5,7 +7,8 @@
 
 const express = require('express');
 const router = express.Router();
-const { analyzeDetectedText } = require('../services/geminiService');
+const geminiService = require('../services/geminiService');
+const firestoreService = require('../services/firestoreService');
 // visionService might also need refactoring if it uses Firestore and isn't passed the db instance
 // const { detectTextInImage } = require('../services/visionService'); 
 
@@ -15,7 +18,7 @@ module.exports = function(dbInstance) {
     console.error(errorMessage);
     throw new Error(errorMessage);
   }
-  const firestoreService = require('../services/firestoreService')(dbInstance);
+  const firestoreServiceInstance = require('../services/firestoreService')(dbInstance);
 
   /**
    * Analyze detected OCR text for invoice data.
@@ -27,16 +30,26 @@ module.exports = function(dbInstance) {
    * @body {string} userId
    */
   router.post('/analyze-invoice', async (req, res) => {
-    const { ocrText, projectId, invoiceId, imageId, userId } = req.body;
+    console.log('[ANALYSIS.JS] /analyze-invoice hit');
+    console.log('[ANALYSIS.JS] Full req.body:', JSON.stringify(req.body)); // Log the full body
+    console.log('[ANALYSIS.JS] req.body.ocrText raw:', req.body.ocrText); // Log raw ocrText
+    console.log('[ANALYSIS.JS] typeof req.body.ocrText:', typeof req.body.ocrText); // Log its type
+    if (req.body.ocrText) {
+      console.log('[ANALYSIS.JS] req.body.ocrText length:', req.body.ocrText.length); // Log its length
+    }
+
+    const { projectId, invoiceId, imageId, ocrText, userId } = req.body;
     if (!projectId || !invoiceId || !imageId || !userId) {
       return res.status(400).json({ error: 'projectId, invoiceId, imageId, and userId are required' });
     }
     console.log(`[ANALYSIS ROUTE] Received /analyze-invoice for imageId: ${imageId}, userId: ${userId}`);
+    console.log(`[ANALYSIS ROUTE] ocrText received in request body:`, ocrText);
+    console.log(`[ANALYSIS ROUTE] Full request body for /analyze-invoice:`, req.body);
 
     try {
-      await firestoreService.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_running');
+      await firestoreServiceInstance.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_running');
 
-      const analysisResult = await analyzeDetectedText(ocrText);
+      const analysisResult = await geminiService.analyzeDetectedText(ocrText);
       console.log(`[ANALYSIS ROUTE] analysisResult for ${imageId}:`, analysisResult);
 
       let finalStatus = "analysis_failed";
@@ -57,14 +70,32 @@ module.exports = function(dbInstance) {
         updateData.merchantLocation = ia.location;
         updateData.invoiceDate = ia.date;
       }
-      await firestoreService.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, updateData);
+      await firestoreServiceInstance.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, updateData);
 
-      res.json(analysisResult);
+      // Firestore update successful
+      console.log(`Firestore update successful for imageId: ${imageId}`);
+
+      // Add this log:
+      console.log('[ANALYSIS_ROUTE] Data being sent to client:', JSON.stringify({
+          success: analysisResult.success,
+          message: analysisResult.message || (analysisResult.isInvoice ? 'Analysis successful' : 'Analyzed, not an invoice'),
+          isInvoice: analysisResult.isInvoice,
+          data: analysisResult.invoiceAnalysis,
+          status: analysisResult.status
+      }, null, 2));
+
+      res.status(200).json({
+        success: analysisResult.success,
+        message: analysisResult.message || (analysisResult.isInvoice ? 'Analysis successful' : 'Analyzed, not an invoice'),
+        isInvoice: analysisResult.isInvoice,
+        data: analysisResult.invoiceAnalysis,
+        status: analysisResult.status
+      });
     } catch (error) {
       console.error(`[ANALYSIS ROUTE] CATCH BLOCK for imageId ${imageId}. Error:`, error.message, error.stack);
       try {
-        await firestoreService.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_failed');
-        await firestoreService.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, {
+        await firestoreServiceInstance.setInvoiceImageStatus(userId, projectId, invoiceId, imageId, 'analysis_failed');
+        await firestoreServiceInstance.updateInvoiceImageFirestore(userId, projectId, invoiceId, imageId, {
           status: 'analysis_failed',
           lastProcessedAt: new Date(),
           ocrText: ocrText, // Persist the original OCR text
