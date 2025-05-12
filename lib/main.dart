@@ -7,7 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/foundation.dart'
-    show defaultTargetPlatform, kDebugMode, kIsWeb, TargetPlatform;
+    show kDebugMode; // Removed defaultTargetPlatform, kIsWeb, TargetPlatform
 import 'package:go_router/go_router.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async'; // For StreamSubscription
@@ -38,19 +38,21 @@ import 'models/project.dart';
 Future<void> main() async {
   // Ensure Flutter bindings are initialized.
   WidgetsFlutterBinding.ensureInitialized();
+  // It's tricky to use the Riverpod logger here before ProviderScope is initialized.
+  // These print statements are for initial debug and can be removed for cleaner startup.
+  // print('DEBUG: Firebase initialized.');
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  print('DEBUG: Firebase initialized.');
 
   // Load environment variables from .env file.
+  // print('DEBUG: dotenv loaded.');
   await dotenv.load();
-  print('DEBUG: dotenv loaded.');
 
   // Run the app within a ProviderScope for Riverpod state management.
-  print('DEBUG: Calling runApp()...');
+  // print('DEBUG: Calling runApp()...');
   runApp(const ProviderScope(child: MyApp()));
-  print('DEBUG: runApp() finished.');
+  // print('DEBUG: runApp() finished.');
 }
 
 // Update redirect function to accept repository
@@ -202,7 +204,8 @@ class MyApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    print('DEBUG: MyApp build() called');
+    final logger = ref.read(loggerProvider);
+    logger.d('MyApp build() called');
     return MaterialApp.router(
       routerConfig: ref.watch(routerProvider),
       debugShowCheckedModeBanner: false,
@@ -218,10 +221,11 @@ class DebugHomeScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    print('DEBUG: DebugHomeScreen build() called');
+    final logger = ref.read(loggerProvider);
+    logger.d('DebugHomeScreen build() called');
     // Example: If you use a provider for data
     // final data = ref.watch(yourProvider);
-    // print('DEBUG: DebugHomeScreen provider data: $data');
+    // logger.d('DebugHomeScreen provider data: $data');
 
     return Scaffold(
       appBar: AppBar(title: const Text('Debug Home')),

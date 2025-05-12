@@ -2,17 +2,15 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
+import 'package:travel/providers/service_providers.dart' as service;
 import 'package:travel/models/project.dart';
 import '../../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
-import 'package:http/http.dart' as http;
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:travel/utils/invoice_scan_util.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
@@ -28,16 +26,12 @@ class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
 class _InvoiceCaptureOverviewScreenState
     extends ConsumerState<InvoiceCaptureOverviewScreen> {
   late final Logger _logger;
-  late final Map<String, String> _invoiceImagesProviderParams;
   int _reloadKey = 0;
 
   @override
   void initState() {
     super.initState();
     _logger = ref.read(loggerProvider);
-    _invoiceImagesProviderParams = {
-      'projectId': widget.project.id,
-    };
   }
 
   @override
@@ -45,35 +39,9 @@ class _InvoiceCaptureOverviewScreenState
     super.dispose();
   }
 
-  Future<bool> _validateImageUrl(String url) async {
-    try {
-      final response = await http.head(Uri.parse(url));
-      _logger.d(
-          '[URL_VALIDATION] Status code: ${response.statusCode} for URL: $url');
-      _logger.d('[URL_VALIDATION] Headers: ${response.headers}');
-      return response.statusCode == 200 &&
-          response.headers['content-type']?.startsWith('image/') == true;
-    } catch (e) {
-      _logger.e('[URL_VALIDATION] Error validating URL: $url', error: e);
-      return false;
-    }
-  }
-
-  Future<Map<String, String>> _getAuthHeaders() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw Exception('User not authenticated');
-    }
-    final token = await user.getIdToken();
-    return {
-      'Authorization': 'Bearer $token',
-    };
-  }
-
   @override
   Widget build(BuildContext context) {
-    print('🔥 InvoiceCaptureOverviewScreen build called');
-    final l10n = AppLocalizations.of(context)!;
+    _logger.d('🔥 InvoiceCaptureOverviewScreen build called');
 
     final projectImagesAsyncValue = ref
         .watch(projectImagesStreamProvider('${widget.project.id}|$_reloadKey'));
@@ -98,7 +66,7 @@ class _InvoiceCaptureOverviewScreenState
 
     return FutureBuilder<String>(
       future: ref
-          .read(gcsFileServiceProvider)
+          .read(service.gcsFileServiceProvider)
           .getSignedDownloadUrl(fileName: imageInfo.imagePath),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -108,7 +76,7 @@ class _InvoiceCaptureOverviewScreenState
           return const Center(child: Icon(Icons.error, color: Colors.red));
         }
         final signedUrl = snapshot.data!;
-        print('[DEBUG] Displaying image with signed URL: $signedUrl');
+        _logger.d('[DEBUG] Displaying image with signed URL: $signedUrl');
         return CachedNetworkImage(
           imageUrl: signedUrl,
           fit: BoxFit.cover,
@@ -150,10 +118,7 @@ class _InvoiceCaptureOverviewScreenState
       data: (images) {
         _logger.d(
             '[INVOICE_CAPTURE] Received \\${images.length} images from stream');
-        print('[UI] Images received: \\${images.length}');
-        for (final img in images) {
-          print('[UI] Image: id=\${img.id}, url=\${img.url}');
-        }
+        _logger.d('[UI] Images received: \\${images.length}');
 
         if (images.isEmpty) {
           return const Center(child: Text("No invoices captured yet."));
@@ -170,18 +135,20 @@ class _InvoiceCaptureOverviewScreenState
           itemBuilder: (context, index) {
             final imageInfo = images[index];
 
-            Widget trailingWidget;
-            trailingWidget = IconButton(
-              icon: const Icon(Icons.delete, color: Colors.white),
-              onPressed: () => _deleteImage(context, imageInfo),
-              tooltip: 'Delete Invoice',
-              iconSize: 20,
-            );
-
             return GridTile(
+              footer: GridTileBar(
+                backgroundColor: Colors.black45,
+                title: Container(),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.white),
+                  onPressed: () => _deleteImage(context, imageInfo),
+                  tooltip: 'Delete Invoice',
+                  iconSize: 20,
+                ),
+              ),
               child: GestureDetector(
                 onTap: () {
-                  print(
+                  _logger.d(
                       'Navigating to InvoiceCaptureDetailView for project: \\${widget.project.id}');
                   Navigator.push(
                     context,
@@ -219,7 +186,7 @@ class _InvoiceCaptureOverviewScreenState
               SizedBox(
                 height: 100,
                 child: SingleChildScrollView(
-                  child: Text(stack.toString() ?? 'No stack trace'),
+                  child: Text(stack.toString()),
                 ),
               ),
               const SizedBox(height: 8),
@@ -233,7 +200,7 @@ class _InvoiceCaptureOverviewScreenState
 
   Future<void> _deleteImage(
       BuildContext context, InvoiceImageProcess imageInfo) async {
-    final repo = ref.read(projectRepositoryProvider);
+    final repo = ref.read(invoiceRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -304,7 +271,7 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Future<void> _pickAndUploadImage(BuildContext context) async {
-    final repo = ref.read(projectRepositoryProvider);
+    final repo = ref.read(invoiceRepositoryProvider);
     final picker = ImagePicker();
 
     try {
@@ -356,13 +323,5 @@ class _InvoiceCaptureOverviewScreenState
         );
       }
     }
-  }
-
-  // Helper function to call the OCR scan function in invoice_capture_screen.dart
-  Future<void> _scanImage(BuildContext context, WidgetRef ref,
-      InvoiceImageProcess imageInfo) async {
-    // Use the utility class to scan the image
-    await InvoiceScanUtil.scanImage(
-        context, ref, widget.project.id, imageInfo.id, imageInfo);
   }
 }

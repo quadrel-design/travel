@@ -120,5 +120,5 @@ class ProjectFormNotifier extends StateNotifier<ProjectFormState> {
 /// Usage: `final formState = ref.watch(projectFormProvider);`
 final projectFormProvider =
     StateNotifierProvider.autoDispose<ProjectFormNotifier, ProjectFormState>(
-  (ref) => ProjectFormNotifier(ref.watch(projectRepositoryProvider)),
+  (ref) => ProjectFormNotifier(ref.watch(invoiceRepositoryProvider)),
 );

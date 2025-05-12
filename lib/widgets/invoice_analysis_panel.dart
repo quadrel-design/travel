@@ -25,8 +25,8 @@ class InvoiceAnalysisPanel extends StatelessWidget {
     logger.d('- lastProcessedAt: ${imageInfo.lastProcessedAt}');
     logger.d('- isInvoiceGuess: ${imageInfo.isInvoiceGuess}');
     logger.d(
-        '- ocrText: \\${imageInfo.ocrText != null ? 'Available (\\${imageInfo.ocrText!.length} chars)' : 'Not available'}');
-    print('DEBUG: invoiceAnalysis = \\${imageInfo.invoiceAnalysis}');
+        '- ocrText: \\\\${imageInfo.ocrText != null ? 'Available (\\\\${imageInfo.ocrText!.length} chars)' : 'Not available'}');
+    logger.d('DEBUG: invoiceAnalysis = ${imageInfo.invoiceAnalysis}');
 
     return Container(
       color: UIConstants.kPanelBackgroundColor,
@@ -101,34 +101,6 @@ class InvoiceAnalysisPanel extends StatelessWidget {
           ),
         ),
         SizedBox(height: UIConstants.kSectionSpacing),
-      ],
-    );
-  }
-
-  Widget _buildExtractedText() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Extracted Text:',
-          style: UIConstants.kPanelLabelStyle,
-        ),
-        const SizedBox(height: UIConstants.kElementSpacing),
-        Container(
-          constraints: const BoxConstraints(maxHeight: 200),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: Colors.black.withOpacity(0.2),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: SingleChildScrollView(
-            child: Text(
-              imageInfo.ocrText!,
-              style: UIConstants.kPanelValueStyle,
-            ),
-          ),
-        ),
-        const SizedBox(height: UIConstants.kSectionSpacing),
       ],
     );
   }

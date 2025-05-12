@@ -3,8 +3,6 @@ import 'package:go_router/go_router.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/models/project.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 
 class ProjectDetailOverviewScreen extends StatelessWidget {
   final Project project;
@@ -17,8 +15,8 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
   // Helper function to build styled link cards
   Widget _buildOverviewLinkCard(BuildContext context,
       {required String label, required VoidCallback onTap}) {
-    // L10n instance
-    final l10n = AppLocalizations.of(context)!;
+    // L10n instance (THIS ONE IS UNUSED AND SHADOWING)
+    // final l10n = AppLocalizations.of(context)!;
 
     return Card(
       clipBehavior: Clip.antiAlias, // Keep clipBehavior

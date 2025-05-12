@@ -5,7 +5,6 @@ import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
 import '../providers/invoice_capture_provider.dart';
 import '../providers/repository_providers.dart';
-import '../providers/location_service_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:travel/utils/invoice_scan_util.dart';
 import '../providers/service_providers.dart' as service_providers;
@@ -48,6 +47,7 @@ class InvoiceCaptureController {
     timeoutTimer = Timer(const Duration(seconds: 60), () {
       logger.e('[INVOICE_CAPTURE] OCR timed out after 60 seconds');
       ref.read(provider.notifier).setScanError(imageId, "OCR timed out");
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('OCR process timed out')),
       );
@@ -79,49 +79,11 @@ class InvoiceCaptureController {
       logger.e('[INVOICE_CAPTURE] Error during scan process:',
           error: e, stackTrace: stackTrace);
       ref.read(provider.notifier).setScanError(imageId, e.toString());
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error scanning image: ${e.toString()}')),
       );
     }
-  }
-
-  Future<void> _processAndStoreScanResults(
-      Map<String, dynamic> result, String imageId) async {
-    final repository = ref.read(projectRepositoryProvider);
-    Map<String, dynamic>? invoiceAnalysis;
-    if (result.containsKey('invoiceAnalysis') &&
-        result['invoiceAnalysis'] != null) {
-      invoiceAnalysis = result['invoiceAnalysis'] as Map<String, dynamic>;
-      logger.d('Invoice analysis data: $invoiceAnalysis');
-    }
-    String? validatedLocation;
-    if (invoiceAnalysis?['location'] != null) {
-      final locationService = ref.read(locationServiceProvider);
-      final placeId =
-          await locationService.findPlaceId(invoiceAnalysis!['location']);
-      if (placeId != null) {
-        final placeDetails = await locationService.getPlaceDetails(placeId);
-        if (placeDetails != null) {
-          validatedLocation = placeDetails['formatted_address'] as String;
-          logger.i('Location validated: $validatedLocation');
-        }
-      }
-    }
-    bool isInvoice = false;
-    if (invoiceAnalysis != null && invoiceAnalysis['isInvoice'] is bool) {
-      isInvoice = invoiceAnalysis['isInvoice'];
-    }
-    logger.i('Updating image with status: $isInvoice');
-    await repository.updateImageWithOcrResults(
-      projectId,
-      invoiceId,
-      imageId,
-      isInvoice: isInvoice,
-    );
-    if (validatedLocation != null) {
-      logger.i('Validated location found but not stored: $validatedLocation');
-    }
-    logger.i('OCR results stored for image $imageId with status: $isInvoice');
   }
 
   Future<void> handleAnalyze() async {
@@ -159,7 +121,7 @@ class InvoiceCaptureController {
 
       // Now, persist these results to Firestore
       try {
-        final projectRepo = ref.read(projectRepositoryProvider);
+        final projectRepo = ref.read(invoiceRepositoryProvider);
         final bool isConfirmed =
             newInvoiceAnalysisData['isInvoice'] as bool? ?? false;
 
@@ -207,7 +169,7 @@ class InvoiceCaptureController {
     final imageToDelete = images[currentIndex];
     final imageIdToDelete = imageToDelete.id;
     final imagePathToDelete = imageToDelete.imagePath;
-    final repository = ref.read(projectRepositoryProvider);
+    final repository = ref.read(invoiceRepositoryProvider);
     final bool? confirmed = await _showDeleteConfirmationDialog();
     if (confirmed != true) {
       logger.d('Deletion cancelled by user.');
@@ -231,9 +193,11 @@ class InvoiceCaptureController {
       );
       logger.i(
           'Repository delete successful for image ID: $imageIdToDelete, filename: $fileName');
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Image deleted successfully')),
       );
+      if (!context.mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       _handleDeleteError('Error deleting image: ${e.toString()}');
@@ -246,6 +210,7 @@ class InvoiceCaptureController {
 
   void _handleDeleteError(String message) {
     logger.e('[INVOICE_CAPTURE] $message', error: message);
+    if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message)),
     );

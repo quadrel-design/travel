@@ -60,9 +60,9 @@ class User extends Equatable {
             .toList(),
       );
     } catch (e) {
-      // In production code, use a proper logger
-      print('Error parsing User from JSON: $e');
-      print('JSON data: $json');
+      // In production code, use a proper logger. For now, removing print.
+      // print('Error parsing User from JSON: $e');
+      // print('JSON data: $json');
 
       // Return a basic user with error info rather than throwing
       return User(

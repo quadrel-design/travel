@@ -2,17 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
+import 'package:travel/providers/service_providers.dart' as service;
 import '../../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:travel/utils/invoice_scan_util.dart';
 import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import 'package:travel/services/gcs_file_service.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
@@ -31,7 +28,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
       'invoiceId': invoiceId,
     }));
 
-    final projectAsyncValue = ref.watch(projectStreamProvider(projectId));
+    final projectAsyncValue = ref.watch(invoiceStreamProvider(projectId));
 
     return Scaffold(
       appBar: AppBar(
@@ -67,7 +64,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
     return FutureBuilder<String>(
       future: ref
-          .read(gcsFileServiceProvider)
+          .read(service.gcsFileServiceProvider)
           .getSignedDownloadUrl(fileName: imageInfo.imagePath),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -190,7 +187,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
   Future<void> _deleteImage(BuildContext context, WidgetRef ref,
       InvoiceImageProcess imageInfo) async {
-    final repo = ref.read(projectRepositoryProvider);
+    final repo = ref.read(invoiceRepositoryProvider);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -228,7 +225,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _pickAndUploadImage(BuildContext context, WidgetRef ref) async {
-    final repo = ref.read(projectRepositoryProvider);
+    final repo = ref.read(invoiceRepositoryProvider);
     final picker = ImagePicker();
 
     try {
@@ -251,17 +248,10 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
           projectId, invoiceId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
-      ref
-          .read(loggerProvider)
-          .d("📸 Upload result: ${uploadResult.id} - ${uploadResult.url}");
+      ref.read(loggerProvider).d('📸 Upload result: ${uploadResult.id}');
     } catch (e) {
-      ref.read(loggerProvider).e("📸 ERROR DURING UPLOAD: $e", error: e);
+      ref.read(loggerProvider).e("📸 Error picking/uploading image", error: e);
+      // TODO: Show user-friendly error message
     }
-  }
-
-  Future<void> _scanImage(BuildContext context, WidgetRef ref,
-      InvoiceImageProcess imageInfo) async {
-    await InvoiceScanUtil.scanImage(
-        context, ref, projectId, invoiceId, imageInfo);
   }
 }

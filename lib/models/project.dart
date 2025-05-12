@@ -156,7 +156,7 @@ class Project extends Equatable {
         isCompleted,
       ];
 
-  /// Creates a Project instance from a Map<String, dynamic>.
+  /// Creates a Project instance from a Map&lt;String, dynamic&gt;.
   ///
   /// This method handles error cases gracefully, returning a default Project
   /// with error indicators if parsing fails.

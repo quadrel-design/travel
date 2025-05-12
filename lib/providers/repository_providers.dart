@@ -18,17 +18,15 @@ import 'package:travel/repositories/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../repositories/firestore_invoice_repository.dart';
-import '../services/gcs_file_service.dart';
+import '../repositories/invoice_repository.dart';
 import 'service_providers.dart' as service;
 
 import '../providers/logging_provider.dart';
 import 'package:travel/repositories/firebase_auth_repository.dart';
-import 'package:travel/repositories/project_repository.dart';
 import 'package:travel/models/project.dart';
 import 'package:travel/models/expense.dart';
 import 'package:travel/repositories/expense_repository.dart';
 import 'package:travel/models/invoice_image_process.dart';
-import 'package:travel/config/service_config.dart';
 
 /// Provider for accessing the Firestore database instance.
 ///
@@ -146,21 +144,6 @@ final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
   return ExpenseRepository(firestore: firestore, auth: auth, logger: logger);
 });
 
-// TODO: Refactor codebase to use `invoice*Provider` names directly and remove these legacy aliases.
-// Legacy providers for backwards compatibility
-final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  final auth = ref.watch(firebaseAuthProvider);
-  final logger = ref.watch(loggerProvider);
-  final gcsFileService = ref.watch(service.gcsFileServiceProvider);
-
-  return FirestoreInvoiceRepository(firestore, auth, logger, gcsFileService);
-});
-final userProjectsStreamProvider = Provider<AsyncValue<List<Project>>>(
-    (ref) => ref.watch(userInvoicesStreamProvider));
-final projectStreamProvider = Provider.family<AsyncValue<Project?>, String>(
-    (ref, id) => ref.watch(invoiceStreamProvider(id)));
-
 /// Stream provider for all images associated with a project (not a specific invoice).
 ///
 /// This provider delivers a real-time stream of all images for a specific project.
@@ -177,11 +160,6 @@ final projectImagesStreamProvider = StreamProvider.autoDispose
   logger.d(
       '[PROVIDER] projectImagesStreamProvider executing for projectId: $projectId');
   return repository.getProjectImagesStream(projectId);
-});
-
-final gcsFileServiceProvider = Provider<GcsFileService>((ref) {
-  // Use your backend base URL here
-  return GcsFileService(backendBaseUrl: ServiceConfig.gcsApiBaseUrl);
 });
 
 final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {

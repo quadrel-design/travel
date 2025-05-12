@@ -32,10 +32,12 @@ class AuthWaitScreen extends ConsumerWidget {
     if (user != null && !user.emailVerified) {
       try {
         await authRepo.sendVerificationEmail();
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(l10n.verificationEmailResent)), // Use l10n
         );
       } catch (e) {
+        if (!context.mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content:
@@ -50,8 +52,10 @@ class AuthWaitScreen extends ConsumerWidget {
     final authRepo = ref.read(authRepositoryProvider);
     try {
       await authRepo.signOut();
+      if (!context.mounted) return;
       context.go(AppRoutes.auth); // Go back to auth screen
     } catch (e) {
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Sign out failed: $e')), // Placeholder
       );

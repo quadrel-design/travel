@@ -27,7 +27,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     // Watch the new stream provider
-    final projectsAsyncValue = ref.watch(userProjectsStreamProvider);
+    final projectsAsyncValue = ref.watch(userInvoicesStreamProvider);
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final dateFormat = DateFormat('dd/MM/yyyy'); // Local instance if needed
@@ -96,7 +96,7 @@ class HomeScreen extends ConsumerWidget {
                 const SizedBox(height: 10),
                 ElevatedButton(
                   // Refresh logic might need reconsideration - ref.refresh might work
-                  onPressed: () => ref.refresh(userProjectsStreamProvider),
+                  onPressed: () => ref.refresh(userInvoicesStreamProvider),
                   child: Text(l10n.homeScreenRetryButton),
                 )
               ],

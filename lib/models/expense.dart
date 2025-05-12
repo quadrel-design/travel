@@ -74,7 +74,7 @@ class Expense extends Equatable {
         expense.sharedWith.isNotEmpty;
   }
 
-  /// Creates an Expense instance from a Map<String, dynamic>.
+  /// Creates an Expense instance from a Map&lt;String, dynamic&gt;.
   ///
   /// This method handles parsing dates and list fields from the map.
   /// Includes try-catch handling to provide better error messages.
@@ -99,9 +99,9 @@ class Expense extends Equatable {
         receiptUrl: map['receiptUrl'] as String?,
       );
     } catch (e) {
-      // In production code, use a proper logger
-      print('Error parsing Expense from map: $e');
-      print('Map data: $map');
+      // In production code, use a proper logger. For now, removing print.
+      // print('Error parsing Expense from map: $e');
+      // print('Map data: $map');
 
       // Return a minimal valid expense rather than throwing
       return Expense(

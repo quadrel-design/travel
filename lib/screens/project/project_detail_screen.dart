@@ -33,7 +33,7 @@ class ProjectDetailScreen extends ConsumerWidget {
     final l10n = AppLocalizations.of(context)!;
 
     // Watch the project stream for real-time updates
-    final projectStream = ref.watch(projectStreamProvider(project.id));
+    final projectStream = ref.watch(invoiceStreamProvider(project.id));
 
     final imagesStream = ref.watch(
       invoiceImagesStreamProvider(

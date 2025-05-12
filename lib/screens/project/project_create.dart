@@ -36,7 +36,7 @@ import 'package:go_router/go_router.dart';
 // import 'package:travel/utils/validators.dart'; // Remove this non-existent import
 import 'package:travel/constants/app_routes.dart';
 // import 'package:travel/providers/location_service_provider.dart'; // Removed location service import
-import 'package:travel/providers/project_form_provider.dart';
+import 'package:travel/providers/journey_form_provider.dart'; // UPDATED IMPORT
 // import 'package:travel/providers/auth_repository_provider.dart';
 
 /// A screen widget for creating new projects/invoices.
@@ -50,9 +50,6 @@ class ProjectCreateScreen extends ConsumerStatefulWidget {
 
 /// State class for the [ProjectCreateScreen].
 class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
-  static const Duration _kAutocompleteDebounceDuration =
-      Duration(milliseconds: 300);
-
   // Constants for form field names
   /// Form field name for the project title.
   static const _fieldName = 'name';
@@ -105,7 +102,6 @@ class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
   // Helper function to show error SnackBar
   /// Displays a floating SnackBar with an error message.
   void _showErrorSnackBar(BuildContext context, String title, String message) {
-    final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
 
     final snackBar = SnackBar(
@@ -117,7 +113,7 @@ class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
           Text(message),
         ],
       ),
-      backgroundColor: theme.colorScheme.error,
+      backgroundColor: Theme.of(context).colorScheme.error,
       behavior: SnackBarBehavior.floating,
       margin: EdgeInsets.symmetric(
         horizontal: screenWidth > 600 ? (screenWidth - 600) / 2 : 16.0,
@@ -247,75 +243,58 @@ class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
 
       // Call the notifier to create the project
       // The listen callback will handle success/error feedback and navigation
-      await ref.read(projectFormProvider.notifier).createProject(newProject);
+      await ref.read(journeyFormProvider.notifier).createProject(newProject);
     }
   }
 
   /// Builds the UI for the Create Project screen.
   @override
   Widget build(BuildContext context) {
+    final journeyFormState = ref.watch(journeyFormProvider); // UPDATED
+    final isLoading = journeyFormState.isLoading; // UPDATED
     final l10n = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
 
-    // Watch the form state provider
-    final formState = ref.watch(projectFormProvider);
-    final isLoading = formState.isLoading; // Get loading state from provider
+    // Set up the listener for side effects (navigation, SnackBar)
+    ref.listen<JourneyFormState>(journeyFormProvider, (previous, next) {
+      final l10n = AppLocalizations.of(context)!;
 
-    // Listen to the form provider for side effects (navigation, snackbars)
-    ref.listen<ProjectFormState>(projectFormProvider, (previous, next) {
-      // Handle errors shown via SnackBar
-      if (next.error != null && next.error != previous?.error) {
-        _showErrorSnackBar(context, l10n.projectSaveErrorTitle, next.error!);
-        // Optionally reset the error in the provider after showing it
-        // This prevents the snackbar from reappearing on rebuild
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) {
-            // Check mounted before interacting with ref post-frame
-            ref.read(projectFormProvider.notifier).state =
-                next.copyWith(clearError: true);
-          }
-        });
+      if (!mounted) return;
+
+      if (next.error != null) {
+        _showErrorSnackBar(context, l10n.errorTitle, next.error!);
+        ref.read(journeyFormProvider.notifier).resetState();
       }
-      // Handle navigation on success
-      if (next.isSuccess && previous?.isSuccess == false) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      if (next.isSuccess && next.journey != null) {
+        final scaffoldMessenger = ScaffoldMessenger.of(context);
+        final router = GoRouter.of(context);
+
+        scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text(l10n.projectSaveSuccessDesc),
-            backgroundColor: Colors.green,
+            content:
+                Text("Project '${next.journey!.title}' created successfully."),
+            backgroundColor: Theme.of(context).colorScheme.primary,
           ),
         );
-        // Navigate on success, passing the created project if available
-        if (next.project != null) {
-          context.pushReplacement(
-              '${AppRoutes.home}/${AppRoutes.projectDetail.split('/').last}/${next.project!.id}',
-              extra: next.project);
-        } else {
-          // Fallback navigation if project data isn't in state
-          context.pop();
-        }
-        // Reset provider state after navigation completes (optional, depends on desired behavior)
-        // WidgetsBinding.instance.addPostFrameCallback((_) {
-        //   if (mounted) {
-        //      ref.read(projectFormProvider.notifier).resetState();
-        //   }
-        // });
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+            final createdProjectId = next.journey!.id;
+            router.go(
+                '${AppRoutes.home}/${AppRoutes.projectDetail.split('/').last}/$createdProjectId',
+                extra: next.journey);
+            ref.read(journeyFormProvider.notifier).resetState();
+          }
+        });
       }
     });
 
     return Scaffold(
-      key: _scaffoldMessengerKey, // Use the key here
+      key: _scaffoldMessengerKey,
       appBar: AppBar(
         title: Text(l10n.createProjectTitle),
         leading: IconButton(
           icon: const Icon(Icons.close),
           onPressed: () => context.pop(),
         ),
-        actions: [
-          TextButton(
-            onPressed: isLoading ? null : _saveProject,
-            child: Text(l10n.save),
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
@@ -339,6 +318,17 @@ class _ProjectCreateScreenState extends ConsumerState<ProjectCreateScreen> {
             ],
           ),
         ),
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: isLoading ? null : _saveProject,
+        label: isLoading
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: Colors.white))
+            : const Text("Create Project"),
+        icon: isLoading ? null : const Icon(Icons.save),
       ),
     );
   }

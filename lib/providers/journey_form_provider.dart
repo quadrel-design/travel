@@ -1,8 +1,8 @@
 /*
- * Project Form Provider
+ * Journey Form Provider
  * 
- * This file contains state management for the project creation and editing form.
- * It handles the loading states, error handling, and success states for project
+ * This file contains state management for the journey creation and editing form.
+ * It handles the loading states, error handling, and success states for journey
  * CRUD operations.
  */
 
@@ -12,11 +12,11 @@ import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
 import 'package:travel/repositories/invoice_repository.dart';
 
-/// State class representing the current state of project form operations.
+/// State class representing the current state of journey form operations.
 ///
-/// This class encapsulates all the state information needed for creating or editing projects,
-/// including loading state, error messages, success state, and the project object itself.
-class ProjectFormState {
+/// This class encapsulates all the state information needed for creating or editing journeys,
+/// including loading state, error messages, success state, and the journey object itself.
+class JourneyFormState {
   /// Whether a form submission operation is in progress
   final bool isLoading;
 
@@ -26,46 +26,46 @@ class ProjectFormState {
   /// Whether the operation completed successfully
   final bool isSuccess;
 
-  /// The project object being created or edited
-  final Project? project;
+  /// The project object being created or edited (ideally Journey)
+  final Project? journey;
 
-  const ProjectFormState({
+  const JourneyFormState({
     this.isLoading = false,
     this.error,
     this.isSuccess = false,
-    this.project,
+    this.journey,
   });
 
   /// Creates a copy of this state with the specified fields replaced with new values.
   ///
-  /// The [clearError] and [clearProject] flags can be used to reset those fields to null.
-  ProjectFormState copyWith({
+  /// The [clearError] and [clearJourney] flags can be used to reset those fields to null.
+  JourneyFormState copyWith({
     bool? isLoading,
     String? error,
     bool? isSuccess,
-    Project? project,
+    Project? journey,
     bool clearError = false,
-    bool clearProject = false,
+    bool clearJourney = false,
   }) {
-    return ProjectFormState(
+    return JourneyFormState(
       isLoading: isLoading ?? this.isLoading,
       error: clearError ? null : error ?? this.error,
       isSuccess: isSuccess ?? this.isSuccess,
-      project: clearProject ? null : project ?? this.project,
+      journey: clearJourney ? null : journey ?? this.journey,
     );
   }
 }
 
-/// StateNotifier that manages the project form state and operations.
+/// StateNotifier that manages the journey form state and operations.
 ///
-/// Provides methods for creating projects and handling the related state transitions.
-/// Consider adding `updateProject` method if form is used for editing.
-class ProjectFormNotifier extends StateNotifier<ProjectFormState> {
+/// Provides methods for creating journeys and handling the related state transitions.
+/// Consider adding `updateJourney` method if form is used for editing.
+class JourneyFormNotifier extends StateNotifier<JourneyFormState> {
   final InvoiceRepository _repository;
 
-  ProjectFormNotifier(this._repository) : super(const ProjectFormState());
+  JourneyFormNotifier(this._repository) : super(const JourneyFormState());
 
-  /// Creates a new project in the repository.
+  /// Creates a new project (ideally journey) in the repository.
   ///
   /// Updates the state to reflect loading, error, and success states throughout the process.
   /// Handles various exception types with appropriate error messages.
@@ -83,17 +83,17 @@ class ProjectFormNotifier extends StateNotifier<ProjectFormState> {
       state = state.copyWith(
         isLoading: false,
         isSuccess: true,
-        project: createdProject,
+        journey: createdProject,
       );
     } on NotAuthenticatedException {
       state = state.copyWith(
         isLoading: false,
-        error: 'You must be logged in to create a project',
+        error: 'You must be logged in to create a journey',
       );
     } on DatabaseOperationException catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Failed to create project: ${e.message}',
+        error: 'Failed to create journey: ${e.message}',
       );
     } catch (e) {
       state = state.copyWith(
@@ -107,18 +107,18 @@ class ProjectFormNotifier extends StateNotifier<ProjectFormState> {
   ///
   /// Useful when navigating away from a form or starting fresh.
   void resetState() {
-    state = const ProjectFormState();
+    state = const JourneyFormState();
   }
 }
 
-/// Provider for the project form state and operations.
+/// Provider for the journey form state and operations.
 ///
-/// This provider creates and maintains a ProjectFormNotifier that manages the state
-/// of project creation and editing operations. It uses the projectRepositoryProvider
+/// This provider creates and maintains a JourneyFormNotifier that manages the state
+/// of journey creation and editing operations. It uses the invoiceRepositoryProvider
 /// to perform the actual data operations.
 ///
-/// Usage: `final formState = ref.watch(projectFormProvider);`
-final projectFormProvider =
-    StateNotifierProvider.autoDispose<ProjectFormNotifier, ProjectFormState>(
-  (ref) => ProjectFormNotifier(ref.watch(projectRepositoryProvider)),
+/// Usage: `final formState = ref.watch(journeyFormProvider);`
+final journeyFormProvider =
+    StateNotifierProvider.autoDispose<JourneyFormNotifier, JourneyFormState>(
+  (ref) => JourneyFormNotifier(ref.watch(invoiceRepositoryProvider)),
 );

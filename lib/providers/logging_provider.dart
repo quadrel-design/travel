@@ -33,7 +33,7 @@ final loggerProvider = Provider<Logger>((ref) {
       lineLength: 120,
       colors: true,
       printEmojis: true,
-      printTime: true,
+      dateTimeFormat: DateTimeFormat.onlyTimeAndSinceStart,
     ),
     // In production, you might want to change this to Level.warning or higher
     level: Level.debug,

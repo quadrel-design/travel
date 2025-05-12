@@ -144,8 +144,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               email: _emailController.text.trim(),
               password: _passwordController.text.trim(),
             );
-        print(
-            'DEBUG: Current user after login: ${FirebaseAuth.instance.currentUser}');
+        _logger.d(
+            'Current user after login: ${FirebaseAuth.instance.currentUser}');
         _logger.i(
             'Sign in attempt successful for ${_emailController.text.trim()}');
       } on FirebaseAuthException catch (e) {

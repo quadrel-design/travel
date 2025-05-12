@@ -1,12 +1,14 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:logger/logger.dart';
 
 Future<void> main() async {
+  final logger = Logger();
   await Firebase.initializeApp();
-  await migrateInvoicesToBudgets();
+  await migrateInvoicesToBudgets(logger);
 }
 
-Future<void> migrateInvoicesToBudgets() async {
+Future<void> migrateInvoicesToBudgets(Logger logger) async {
   final firestore = FirebaseFirestore.instance;
 
   final users = await firestore.collection('users').get();
@@ -31,7 +33,7 @@ Future<void> migrateInvoicesToBudgets() async {
         final data = invoiceDoc.data();
         final budgetId = data['budgetId'];
         if (budgetId == null) {
-          print(
+          logger.w(
               'Invoice ${invoiceDoc.id} in project $projectId has no budgetId. Skipping.');
           continue;
         }
@@ -48,12 +50,12 @@ Future<void> migrateInvoicesToBudgets() async {
             .doc(invoiceDoc.id);
 
         await newInvoiceRef.set(data);
-        print('Migrated invoice ${invoiceDoc.id} to budget $budgetId');
+        logger.i('Migrated invoice ${invoiceDoc.id} to budget $budgetId');
 
         // Optionally, delete from old location
         await invoiceDoc.reference.delete();
       }
     }
   }
-  print('Migration complete!');
+  logger.i('Migration complete!');
 }

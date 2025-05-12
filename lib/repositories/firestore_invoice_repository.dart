@@ -8,15 +8,10 @@ import 'dart:async';
 import 'dart:typed_data'; // Add this import for Uint8List
 // dart:html is web-only, replaced by cross-platform alternative
 // import 'dart:html' show MediaSource;
-import 'dart:math';
 import 'package:uuid/uuid.dart';
-import 'package:image/image.dart' as image_lib;
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_image_compress/flutter_image_compress.dart';
 // Conditionally import html only for web platform
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-// import 'package:firebase_storage/firebase_storage.dart'; // Remove this line
 import 'package:logger/logger.dart';
 
 // Conditionally import dart:html for web platform only
@@ -338,47 +333,6 @@ class FirestoreInvoiceRepository implements InvoiceRepository {
           error: e, stackTrace: stackTrace);
       return Stream<List<InvoiceImageProcess>>.error(DatabaseFetchException(
           'Failed to create image stream', e, stackTrace));
-    }
-  }
-
-  Future<Uint8List> _compressImage(Uint8List bytes) async {
-    try {
-      if (kIsWeb) {
-        final image = image_lib.decodeImage(bytes);
-        if (image == null) {
-          throw FirestoreException(
-              message: 'Failed to decode image', error: null);
-        }
-
-        var resized = image;
-        if (image.width > 2048 || image.height > 2048) {
-          final scale = 2048 / max(image.width, image.height);
-          resized = image_lib.copyResize(
-            image,
-            width: (image.width * scale).round(),
-            height: (image.height * scale).round(),
-          );
-        }
-
-        return Uint8List.fromList(image_lib.encodeJpg(resized, quality: 85));
-      } else {
-        final result = await FlutterImageCompress.compressWithList(
-          bytes,
-          quality: 85,
-          minHeight: 1024,
-          minWidth: 1024,
-        );
-
-        if (result.isEmpty) {
-          throw FirestoreException(
-              message: 'Failed to compress image', error: null);
-        }
-
-        return result;
-      }
-    } catch (e, stackTrace) {
-      _logger.e('Error compressing image', error: e, stackTrace: stackTrace);
-      throw FirestoreException(message: 'Failed to compress image', error: e);
     }
   }
 
