@@ -1,4 +1,6 @@
 const admin = require('firebase-admin');
+const { Pool } = require('pg'); // Add this for PostgreSQL
+
 let dbAdminInstance = null;
 const ADMIN_APP_NAME = 'splitbaseAdminApp'; // Define a name for the app
 
@@ -46,6 +48,36 @@ try {
 } catch (e) {
   console.error('❌ CRITICAL ERROR initializing Firebase Admin SDK with named app:', e);
   // If dbAdminInstance is critical for app operation, consider throwing e to halt startup
+}
+
+// NEW: PostgreSQL Pool Initialization
+let pgPool = null;
+try {
+  pgPool = new Pool({
+    user: process.env.DB_USER,
+    host: process.env.DB_HOST,
+    database: process.env.DB_NAME,
+    password: process.env.DB_PASSWORD,
+    port: process.env.DB_PORT || 5432, // Default PostgreSQL port
+    // Optional: connection timeout, max connections in pool, etc.
+    // max: 20,
+    // idleTimeoutMillis: 30000,
+    // connectionTimeoutMillis: 2000,
+  });
+
+  // Test the PostgreSQL connection (optional, but recommended)
+  pgPool.query('SELECT NOW()', (err, res) => {
+    if (err) {
+      console.error('❌ PostgreSQL Pool: Error connecting to database:', err);
+    } else {
+      console.log('✅ PostgreSQL Pool: Successfully connected. Current time from DB:', res.rows[0].now);
+    }
+  });
+  console.log('✅ PostgreSQL Pool initialized.');
+
+} catch (e) {
+  console.error('❌ CRITICAL ERROR initializing PostgreSQL Pool:', e);
+  // If pgPool is critical, consider throwing e to halt startup
 }
 
 // For debugging, let's ensure these are still logged to see what Cloud Run provides:
