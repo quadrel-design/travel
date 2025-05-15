@@ -23,7 +23,10 @@ const authenticateUser = async (req, res, next) => {
     }
     const token = authHeader.split(' ')[1];
     const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
-    req.user = decodedToken; // Attach user to request object (req.user.id, req.user.email)
+    req.user = { // Attach user to request object with a consistent structure
+      id: decodedToken.uid, 
+      email: decodedToken.email
+    }; 
     next();
   } catch (error) {
     console.error('[Routes/OCR][AuthMiddleware] Error authenticating user:', error);
@@ -69,19 +72,17 @@ if (!projectService) {
 
     try {
     // Update DB: Set status to pending_ocr for the imageId
-    // This step might be optional if the image record is already created elsewhere with a pending status.
-    // For now, we assume it might be the first time we are associating this imageId with OCR processing.
     try {
       if (typeof projectService.updateImageMetadata !== 'function') {
-        console.warn('[Routes/OCR] projectService.updateImageMetadata not available. Skipping status update to pending_ocr.');
+        console.warn('[Routes/OCR] projectService.updateImageMetadata not available. OCR cannot proceed.');
+        throw new Error('projectService.updateImageMetadata is not a function, OCR aborted.');
       } else {
-        // Use updateImageMetadata; if image doesn't exist, it might fail or do nothing depending on service logic.
-        // Consider if an addInitialInvoiceImage or similar is more appropriate if the record might not exist.
-        await projectService.updateImageMetadata(imageId, { status: 'pending_ocr' }, userId);
+        await projectService.updateImageMetadata(imageId, { status: 'pending_ocr', ocr_processed_at: new Date() }, userId);
         console.log(`[Routes/OCR] Status set to 'pending_ocr' in DB for imageId: ${imageId}`);
       }
     } catch (dbError) {
-      console.error(`[Routes/OCR] Error setting status to 'pending_ocr' for imageId: ${imageId}. Continuing...`, dbError);
+      console.error(`[Routes/OCR] CRITICAL: Failed to set status to 'pending_ocr' for imageId: ${imageId}. Aborting OCR.`, dbError);
+      throw dbError; // Re-throw to be caught by the main catch block
     }
       
       let detectResult = null;
@@ -150,16 +151,28 @@ if (!projectService) {
     try {
       if (typeof projectService.updateImageMetadata !== 'function') {
         console.warn('[Routes/OCR] projectService.updateImageMetadata not available. Cannot save OCR results to DB.');
+        throw new Error('projectService.updateImageMetadata is not a function, cannot save OCR results.');
       } else {
         await projectService.updateImageMetadata(imageId, dbUpdatePayload, userId);
         console.log(`[Routes/OCR] OCR data updated in DB for imageId: ${imageId}`);
       }
     } catch (dbUpdateError) {
-      console.error(`[Routes/OCR] Error updating DB with OCR data for imageId: ${imageId}. Client will still get vision result.`, dbUpdateError);
-          }
+      console.error(`[Routes/OCR] CRITICAL: Error updating DB with OCR data for imageId: ${imageId}.`, dbUpdateError);
+      throw dbUpdateError; // Re-throw to be caught by the main catch block
+    }
 
-    res.json(detectResult); // Send the raw result from visionService back to the client
-    } catch (error) {
+    // Construct a standardized response
+    const responsePayload = {
+      success: detectResult.success,
+      status: dbUpdatePayload.status, // This is our application-defined status
+      message: detectResult.success ? (detectResult.extractedText ? 'OCR successful' : 'OCR successful, no text detected') : (detectResult.error || 'OCR failed'),
+      ocrText: detectResult.extractedText || null,
+      ocrConfidence: detectResult.confidence || null,
+      // rawVisionResult: detectResult // Optionally include the full vision result if client needs it
+    };
+    res.json(responsePayload);
+
+  } catch (error) {
     console.error(`[Routes/OCR] Overall CATCH BLOCK for imageId: ${imageId}. Error: ${error.message}`, error.stack);
       const errorTimestamp = new Date();
       try {

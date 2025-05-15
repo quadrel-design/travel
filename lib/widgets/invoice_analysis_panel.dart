@@ -184,8 +184,7 @@ class InvoiceAnalysisPanel extends ConsumerWidget {
         ),
         const SizedBox(height: UIConstants.kElementSpacing),
         if (analysis.totalAmount != null)
-          Text(
-              'Total Amount: ${analysis.totalAmount} ${analysis.currency ?? ""}',
+          Text('Total Amount: ${analysis.totalAmount}',
               style: UIConstants.kPanelValueStyle),
         if (analysis.currency != null)
           Text('Currency: ${analysis.currency}',
@@ -334,7 +333,7 @@ class InvoiceAnalysisPanel extends ConsumerWidget {
 
       // Extract project and invoice IDs from the image path
       // Format: users/{userId}/projects/{projectId}/invoices/{invoiceId}/invoice_images/{filename}
-      final pathComponents = imageInfo.imagePath?.split('/') ?? [];
+      final pathComponents = imageInfo.imagePath.split('/') ?? [];
       String? projectId, invoiceId;
 
       if (pathComponents.length >= 6) {
@@ -391,7 +390,7 @@ class InvoiceAnalysisPanel extends ConsumerWidget {
 
       // Extract project and invoice IDs from the image path
       // Format: users/{userId}/projects/{projectId}/invoices/{invoiceId}/invoice_images/{filename}
-      final pathComponents = imageInfo.imagePath?.split('/') ?? [];
+      final pathComponents = imageInfo.imagePath.split('/') ?? [];
       String? projectId, invoiceId;
 
       if (pathComponents.length >= 6) {

@@ -49,9 +49,40 @@ async function analyzeDetectedText(ocrText) {
     - Respond ONLY with the JSON object, no additional text, explanations, or markdown formatting`;
 
   try {
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const analysisText = response.text();
+    let result;
+    let response;
+    let analysisText = '';
+    const maxRetries = 2; // Max 2 retries (total 3 attempts)
+    const retryDelay = 1500; // 1.5 seconds delay
+    let lastApiError = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[GeminiService] Attempting to generate content (Attempt ${attempt + 1}/${maxRetries + 1})`);
+        result = await model.generateContent(prompt);
+        response = await result.response; // Assuming result.response is synchronous or a fast promise
+        analysisText = response.text();   // Assuming response.text() is synchronous or a fast promise
+        lastApiError = null; // Clear last error on success
+        console.log("[GeminiService] Content generated successfully.");
+        break; // Success, exit retry loop
+      } catch (apiError) {
+        lastApiError = apiError;
+        console.error(`[GeminiService] API call failed (Attempt ${attempt + 1}/${maxRetries + 1}):`, apiError.message);
+        if (attempt < maxRetries) {
+          console.log(`[GeminiService] Retrying in ${retryDelay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+        } else {
+          console.error("[GeminiService] Max retries reached for Gemini API call.");
+        }
+      }
+    }
+
+    if (lastApiError) {
+      // If all retries failed, throw the last error to be caught by the outer try-catch
+      throw lastApiError;
+    }
+
+    // Continue with parsing if API call was successful
     let invoiceAnalysis = null;
     try {
       const jsonText = analysisText.replace(/```json\n?|\n?```/g, "").trim();

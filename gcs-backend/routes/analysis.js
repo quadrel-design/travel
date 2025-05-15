@@ -79,17 +79,21 @@ router.post('/analyze-invoice', async (req, res) => {
 
   try {
     // Update PostgreSQL status to analysis_running using projectService
-    if (projectService && typeof projectService.updateImageMetadata === 'function') { // Verify method exists
+    if (typeof projectService.updateImageMetadata === 'function') { // Verify method exists, removed redundant projectService &&
       try {
-        // Assuming updateImageMetadata can handle updating status and analysis_processed_at
-        await projectService.updateImageMetadata(imageId, { status: 'analysis_running' }, userId);
+        await projectService.updateImageMetadata(imageId, { status: 'analysis_running', analysis_processed_at: new Date() }, userId);
         console.log(`[Routes/Analysis] Status set to 'analysis_running' in PostgreSQL for imageId: ${imageId}`);
       } catch (pgErr) {
-        console.error(`[Routes/Analysis] Error setting status to 'analysis_running' in PostgreSQL for imageId: ${imageId}.`, pgErr);
-        // Decide if this should be a fatal error for the request
+        console.error(`[Routes/Analysis] CRITICAL: Failed to set status to 'analysis_running' for imageId: ${imageId}. Aborting analysis.`, pgErr);
+        // Re-throw to be caught by the main catch block, which will set status to 'analysis_failed'
+        // and return a 500 error to the client.
+        throw pgErr; 
       }
     } else {
-      console.warn('[Routes/Analysis] projectService.updateImageMetadata is not available. Cannot update status before analysis.');
+      console.warn('[Routes/Analysis] projectService.updateImageMetadata is not available. Cannot update status before analysis. This is unexpected if initial checks passed.');
+      // This case should ideally not be reached if the startup check for projectService is effective.
+      // Consider throwing an error here as well, as it indicates a broken state.
+      throw new Error('projectService not available mid-request, cannot update image status.');
     }
 
     const analysisResult = await geminiService.analyzeDetectedText(ocrText);
@@ -98,7 +102,7 @@ router.post('/analyze-invoice', async (req, res) => {
     let finalStatus = analysisResult.success ? (analysisResult.isInvoice ? 'analysis_complete' : 'analysis_not_invoice') : 'analysis_failed';
     const analysisTimestamp = new Date();
 
-    if (projectService && typeof projectService.updateImageMetadata === 'function') {
+    if (typeof projectService.updateImageMetadata === 'function') { // Removed redundant projectService &&
       try {
         const analysisDataForPg = {
           status: finalStatus,
@@ -112,7 +116,35 @@ router.post('/analyze-invoice', async (req, res) => {
           const ia = analysisResult.invoiceAnalysis;
           const ensureNumeric = (val) => {
             if (val === null || val === undefined) return null;
-            const num = parseFloat(String(val).replace(/[^\\d.-]/g, '')); // More robust parsing
+
+            let s = String(val).trim();
+            if (s === "") return null;
+
+            // Step 1: Remove common currency symbols (e.g., $, €, £). Add others if needed.
+            s = s.replace(/[$\u20AC\u00A3]/g, '');
+
+            // Step 2: Normalize number string for different decimal/thousand separators
+            const lastCommaIdx = s.lastIndexOf(',');
+            const lastPeriodIdx = s.lastIndexOf('.');
+
+            if (lastCommaIdx !== -1 && (lastPeriodIdx === -1 || lastCommaIdx > lastPeriodIdx)) {
+              // Comma is likely decimal separator (e.g., "1.234,50" or "123,45")
+              // Remove periods (as they would be thousand separators in this case)
+              s = s.replace(/\./g, '');
+              // Convert the (first encountered) comma to a period for parseFloat
+              s = s.replace(/,/, '.');
+            }
+            // If not European-style, commas are treated as thousand separators and will be removed in Step 3.
+            // Periods are treated as decimal points and will be kept by Step 3.
+
+            // Step 3: Clean the string to keep only digits, the decimal point, and a leading minus sign.
+            // This effectively removes any remaining thousand separators (commas) and other non-numeric characters.
+            s = s.replace(/[^\d.-]/g, '');
+
+            // After cleaning, if string is empty or just a minus (e.g. "abc" or "$" or "-" became ""), it's not a valid number.
+            if (s === "" || s === "-") return null;
+
+            const num = parseFloat(s);
             return isNaN(num) ? null : num;
           };
           analysisDataForPg.analyzed_invoice_date = ia.date ? new Date(ia.date) : null;
@@ -130,11 +162,16 @@ router.post('/analyze-invoice', async (req, res) => {
         await projectService.updateImageMetadata(imageId, analysisDataForPg, userId);
         console.log(`[Routes/Analysis] Analysis data updated in PostgreSQL for imageId: ${imageId}`);
       } catch (pgErr) {
-        console.error(`[Routes/Analysis] Error updating PostgreSQL with analysis data for imageId: ${imageId}.`, pgErr);
-        // Log this error but still attempt to return Gemini result to client if available
+        console.error(`[Routes/Analysis] CRITICAL: Failed to save final analysis data to PostgreSQL for imageId: ${imageId}.`, pgErr);
+        // Re-throw to be caught by the main catch block, which will attempt to set status to 'analysis_failed'
+        // and return a 500 error to the client.
+        throw pgErr; 
       }
     } else {
-      console.warn('[Routes/Analysis] projectService.updateImageMetadata is not available. Cannot save analysis results to DB.');
+      console.warn('[Routes/Analysis] projectService.updateImageMetadata is not available. Cannot save analysis results to DB. This is unexpected.');
+      // This indicates a problem, data will be lost. Client will get Gemini result but DB won't be updated.
+      // To make this stricter, we should throw an error here as well.
+      throw new Error('projectService not available mid-request, cannot save analysis results.');
     }
 
     console.log('[Routes/Analysis] Data being sent to client for imageId ${imageId}:', JSON.stringify({
@@ -142,7 +179,7 @@ router.post('/analyze-invoice', async (req, res) => {
         message: analysisResult.message || (analysisResult.isInvoice ? 'Analysis successful' : 'Analyzed, not an invoice'),
         isInvoice: analysisResult.isInvoice,
         data: analysisResult.invoiceAnalysis,
-        status: analysisResult.status // This might be Gemini's status (e.g. Invoice, Text) or your finalStatus
+        status: finalStatus
     }, null, 2));
 
     res.status(200).json({
@@ -150,13 +187,13 @@ router.post('/analyze-invoice', async (req, res) => {
       message: analysisResult.message || (analysisResult.isInvoice ? 'Analysis successful' : 'Analyzed, not an invoice'),
       isInvoice: analysisResult.isInvoice,
       data: analysisResult.invoiceAnalysis,
-      status: analysisResult.status
+      status: finalStatus
     });
   } catch (error) {
     console.error(`[Routes/Analysis] CATCH BLOCK for imageId ${imageId}. Error:`, error.message, error.stack);
     const errorTimestamp = new Date();
     try {
-      if (projectService && typeof projectService.updateImageMetadata === 'function') {
+      if (typeof projectService.updateImageMetadata === 'function') { // Removed redundant projectService &&
         const errorDbPayload = {
           status: 'analysis_failed',
           analysis_processed_at: errorTimestamp,
