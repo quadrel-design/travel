@@ -18,6 +18,8 @@ try {
 }
 
 // PostgreSQL Pool is initialized in config/db.js and imported by services as needed.
+const pool = require('./config/db'); // Import the pool to pass to init or check status
+const initializeDatabase = require('./config/db-init');
 
 // For debugging, let's ensure these are still logged to see what Cloud Run provides:
 console.log('[ENV CHECK] GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
@@ -83,4 +85,23 @@ app.get('/', (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+// Initialize Database and Start Server
+async function startServer() {
+  if (pool) { // Check if pool was created successfully in db.js
+    console.log('[INDEX.JS] Database pool available. Initializing schema...');
+    const dbInitialized = await initializeDatabase(pool);
+    if (dbInitialized) {
+      console.log('[INDEX.JS] Database schema initialization successful or already up-to-date.');
+      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+    } else {
+      console.error('[INDEX.JS] CRITICAL: Database schema initialization failed. Server will not start.');
+      // process.exit(1); // Or handle more gracefully, e.g. keep trying or enter maintenance mode
+    }
+  } else {
+    console.error('[INDEX.JS] CRITICAL: Database pool not available. Server will not start.');
+    // process.exit(1);
+  }
+}
+
+startServer();

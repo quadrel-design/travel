@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS invoice_images (
     ocr_text_blocks JSONB,
     ocr_processed_at TIMESTAMP WITH TIME ZONE,
     analysis_processed_at TIMESTAMP WITH TIME ZONE,
-    invoice_date TIMESTAMP WITH TIME ZONE,
+    analyzed_invoice_date TIMESTAMP WITH TIME ZONE,
     invoice_sum DECIMAL(10, 2),
     invoice_currency TEXT,
     invoice_taxes DECIMAL(10, 2),
