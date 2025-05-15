@@ -126,12 +126,10 @@ class InvoiceCaptureController {
             newInvoiceAnalysisData['isInvoice'] as bool? ?? false;
 
         await projectRepo.updateImageWithAnalysisDetails(
-            projectId, invoiceId, imageInfo.id,
+            projectId, imageInfo.id,
             analysisData: newInvoiceAnalysisData,
             isInvoiceConfirmed: isConfirmed,
-            // You can pass a specific status string if your backend provides one,
-            // or rely on the default in the repository method
-            status: analysisResponse['status'] as String?);
+            status: 'analysis_complete');
         logger.i(
             "Successfully PERSISTED analysis data to Firestore for image ${imageInfo.id}");
       } catch (e, s) {
@@ -188,11 +186,10 @@ class InvoiceCaptureController {
     try {
       await repository.deleteInvoiceImage(
         projectId,
-        invoiceId,
         imageIdToDelete,
       );
       logger.i(
-          'Repository delete successful for image ID: $imageIdToDelete, filename: $fileName');
+          'Image $imageIdToDelete deleted successfully locally and from backend');
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Image deleted successfully')),

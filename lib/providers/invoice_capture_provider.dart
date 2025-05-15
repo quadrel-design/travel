@@ -101,7 +101,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
           '[INVOICE_CAPTURE] Loading initial images for project $_projectId, invoice $_invoiceId');
       final repository = _ref.read(invoiceRepositoryProvider);
       _imageStreamSubscription =
-          repository.getInvoiceImagesStream(_projectId, _invoiceId).listen(
+          repository.getProjectImagesStream(_projectId).listen(
         (images) {
           _logger
               .d('[INVOICE_CAPTURE] Stream received ${images.length} images');

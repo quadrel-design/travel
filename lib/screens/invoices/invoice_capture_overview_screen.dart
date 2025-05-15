@@ -11,8 +11,12 @@ import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:logger/logger.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:travel/repositories/repository_exceptions.dart';
+import 'dart:typed_data';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:uuid/uuid.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
   final Project project;
@@ -25,13 +29,17 @@ class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
 
 class _InvoiceCaptureOverviewScreenState
     extends ConsumerState<InvoiceCaptureOverviewScreen> {
-  late final Logger _logger;
+  final Logger _logger = Logger();
   int _reloadKey = 0;
+  XFile? _imageFile; // Store the picked image file
+  bool _isUploading = false;
+  bool _isProcessing = false; // For OCR/Analysis
+  String? _uploadError;
+  InvoiceImageProcess? _uploadedImageInfo; // Store info of last uploaded image
 
   @override
   void initState() {
     super.initState();
-    _logger = ref.read(loggerProvider);
   }
 
   @override
@@ -52,7 +60,7 @@ class _InvoiceCaptureOverviewScreenState
       ),
       body: _buildBody(context, projectImagesAsyncValue),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _pickAndUploadImage(context),
+        onPressed: () => _pickAndUploadImage(ImageSource.gallery),
         heroTag: 'upload',
         child: const Icon(Icons.add_a_photo),
       ),
@@ -60,36 +68,73 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Widget _buildImageTile(BuildContext context, InvoiceImageProcess imageInfo) {
+    // Check if imagePath is empty
     if (imageInfo.imagePath.isEmpty) {
-      return const Center(child: Icon(Icons.broken_image, color: Colors.grey));
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.broken_image, color: Colors.grey),
+            SizedBox(height: 4),
+            Text(
+              'No image',
+              style: TextStyle(fontSize: 10, color: Colors.grey),
+            ),
+          ],
+        ),
+      );
     }
 
     return FutureBuilder<String>(
       future: ref
           .read(service.gcsFileServiceProvider)
-          .getSignedDownloadUrl(fileName: imageInfo.imagePath),
+          .getSignedDownloadUrl(fileName: imageInfo.imagePath)
+          .catchError((error) {
+        _logger.e('[INVOICE_CAPTURE] Error getting signed URL:', error: error);
+        return ''; // Return empty string to trigger error widget
+      }),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
-        if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(child: Icon(Icons.error, color: Colors.red));
+
+        // Handle missing data or errors
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          _logger.w(
+              '[INVOICE_CAPTURE] No valid URL for image: ${imageInfo.id}, path: ${imageInfo.imagePath}');
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.image_not_supported, color: Colors.orange),
+                const SizedBox(height: 4),
+                Text(
+                  'Image not found',
+                  style: TextStyle(fontSize: 10, color: Colors.grey),
+                ),
+                const SizedBox(height: 4),
+                ElevatedButton(
+                  onPressed: () => _deleteImage(context, imageInfo),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(10, 24),
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                  ),
+                  child: const Text('Remove', style: TextStyle(fontSize: 9)),
+                ),
+              ],
+            ),
+          );
         }
+
         final signedUrl = snapshot.data!;
         _logger.d('[DEBUG] Displaying image with signed URL: $signedUrl');
+
         return CachedNetworkImage(
           imageUrl: signedUrl,
           fit: BoxFit.cover,
           httpHeaders: const {
             'Accept': 'image/*',
             'Cache-Control': 'no-cache',
-          },
-          progressIndicatorBuilder: (context, url, progress) {
-            return Center(
-              child: CircularProgressIndicator(
-                value: progress.progress,
-              ),
-            );
           },
           errorWidget: (context, url, error) {
             _logger.e('[INVOICE_CAPTURE] Error loading image:', error: error);
@@ -101,9 +146,20 @@ class _InvoiceCaptureOverviewScreenState
                   const SizedBox(height: 4),
                   ElevatedButton(
                     onPressed: () => setState(() {}),
-                    child: const Text('Retry', style: TextStyle(fontSize: 10)),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(10, 24),
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                    ),
+                    child: const Text('Retry', style: TextStyle(fontSize: 9)),
                   ),
                 ],
+              ),
+            );
+          },
+          progressIndicatorBuilder: (context, url, progress) {
+            return Center(
+              child: CircularProgressIndicator(
+                value: progress.progress,
               ),
             );
           },
@@ -228,7 +284,6 @@ class _InvoiceCaptureOverviewScreenState
       _logger.d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         widget.project.id,
-        imageInfo.invoiceId,
         imageInfo.id,
       );
       _logger.i("🗑️ Invoice deleted successfully");
@@ -253,75 +308,83 @@ class _InvoiceCaptureOverviewScreenState
     }
   }
 
-  Future<String> _createInvoiceAndGetId() async {
-    final firestore = FirebaseFirestore.instance;
-    final userId = FirebaseAuth.instance.currentUser?.uid;
-    if (userId == null) throw Exception('User not authenticated');
-    final invoicesCollection = firestore
-        .collection('users')
-        .doc(userId)
-        .collection('projects')
-        .doc(widget.project.id)
-        .collection('invoices');
-    final newInvoiceDoc = await invoicesCollection.add({
-      'createdAt': FieldValue.serverTimestamp(),
-      // Add any other default fields for a new invoice here
-    });
-    return newInvoiceDoc.id;
+  String _getCurrentUserId() {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      throw NotAuthenticatedException('User not authenticated');
+    }
+    return currentUser.uid;
   }
 
-  Future<void> _pickAndUploadImage(BuildContext context) async {
-    final repo = ref.read(invoiceRepositoryProvider);
-    final picker = ImagePicker();
+  Future<void> _pickAndUploadImage(ImageSource source) async {
+    if (_isUploading) return;
+
+    setState(() {
+      _isUploading = true;
+      _uploadError = null;
+      _uploadedImageInfo = null;
+    });
 
     try {
-      _logger.d("📸 Starting image picker...");
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      final ImagePicker picker = ImagePicker();
+      final XFile? pickedFile = await picker.pickImage(source: source);
+
       if (pickedFile == null) {
-        _logger.d("📸 User canceled picking image");
+        _logger.i("📸 No image selected.");
+        setState(() => _isUploading = false);
         return;
       }
 
-      _logger.d("📸 Reading file bytes");
+      _imageFile = pickedFile;
       final fileBytes = await pickedFile.readAsBytes();
       final fileName = p.basename(pickedFile.path);
-      _logger.d("📸 File: $fileName, size: \\${fileBytes.length} bytes");
 
-      // Always create a new invoice and use its ID
-      final invoiceId = await _createInvoiceAndGetId();
-      _logger.d("📸 Created new invoice with ID: $invoiceId");
+      _logger.d("📸 Image selected: $fileName (${fileBytes.length} bytes)");
 
-      _logger.d("📸 Starting repository upload...");
-      final uploadResult = await repo.uploadInvoiceImage(
-          widget.project.id, invoiceId, fileBytes, fileName);
+      final repo = ref.read(invoiceRepositoryProvider);
 
-      _logger.i("📸 Repository upload completed successfully");
       _logger
-          .d("📸 Upload result: \\${uploadResult.id} - \\${uploadResult.url}");
+          .d("📸 Starting repository upload to project: ${widget.project.id}");
 
-      // No longer automatically starting OCR
-      if (context.mounted) {
-        ref.invalidate(
-            projectImagesStreamProvider('${widget.project.id}|$_reloadKey'));
-        setState(() {
-          _reloadKey++;
-        });
-        _logger.d("📸 Showing success message");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-              content: Text('Invoice uploaded! Click Scan to process.')),
-        );
-      }
-    } catch (e, stack) {
-      _logger.e("📸 ERROR DURING UPLOAD: $e", error: e, stackTrace: stack);
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error uploading invoice: $e'),
-            duration: const Duration(seconds: 5),
-          ),
-        );
-      }
+      // Call uploadInvoiceImage without invoiceId
+      final uploadResult =
+          await repo.uploadInvoiceImage(widget.project.id, fileBytes, fileName);
+
+      _logger.i(
+          "📸 Upload successful! Image ID: ${uploadResult.id}, Path: ${uploadResult.imagePath}");
+      setState(() {
+        _uploadedImageInfo = uploadResult;
+        _imageFile = null; // Clear the picked file after successful upload
+      });
+    } on RepositoryException catch (e, stackTrace) {
+      _logger.e("📸 Repository error during upload",
+          error: e, stackTrace: stackTrace);
+      setState(() {
+        _uploadError = e.message;
+      });
+    } catch (e, stackTrace) {
+      _logger.e("📸 General error during upload",
+          error: e, stackTrace: stackTrace);
+      setState(() {
+        _uploadError = "An unexpected error occurred: ${e.toString()}";
+      });
+    } finally {
+      setState(() {
+        _isUploading = false;
+      });
     }
+  }
+
+  Future<Map<String, String>> getAuthHeaders() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      _logger.e("User not authenticated to get headers.");
+      throw Exception("User not authenticated");
+    }
+    final idToken = await user.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $idToken',
+    };
   }
 }

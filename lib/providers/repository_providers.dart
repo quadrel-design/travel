@@ -3,37 +3,28 @@
  * 
  * This file defines providers for accessing repositories and data services.
  * These providers serve as the central access point for data operations throughout
- * the application, ensuring consistent access to Firebase services and repositories.
+ * the application, ensuring consistent access to PostgreSQL services and repositories.
  * 
  * The file includes providers for:
- * - Firebase service instances (Firestore, Auth, Storage)
+ * - Firebase Auth service instances
  * - Repository instances for different data domains
- * - Stream providers for reactive data access
+ * - Provider functions for data access (replacing Firestore streams)
  */
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/repositories/auth_repository.dart';
 
-// Import Firebase services
+// Import Firebase Auth services only (not Firestore)
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import '../repositories/firestore_invoice_repository.dart';
-import '../repositories/invoice_repository.dart';
+import '../repositories/invoice_images_repository.dart';
+import '../repositories/postgres_invoice_repository.dart';
 import 'service_providers.dart' as service;
 
 import '../providers/logging_provider.dart';
 import 'package:travel/repositories/firebase_auth_repository.dart';
 import 'package:travel/models/project.dart';
 import 'package:travel/models/expense.dart';
-import 'package:travel/repositories/expense_repository.dart';
 import 'package:travel/models/invoice_image_process.dart';
-
-/// Provider for accessing the Firestore database instance.
-///
-/// This provider delivers a singleton instance of FirebaseFirestore throughout the app.
-/// It serves as the foundation for all Firestore database operations.
-final firestoreProvider =
-    Provider<FirebaseFirestore>((ref) => FirebaseFirestore.instance);
 
 /// Provider for accessing the Firebase Authentication instance.
 ///
@@ -52,23 +43,23 @@ final authRepositoryProvider = Provider<AuthRepository>((ref) {
   return FirebaseAuthRepository(firebaseAuth, logger);
 });
 
-/// Provider for the invoice repository.
+/// Provider for the invoice image repository.
 ///
-/// This provider creates and delivers an implementation of the InvoiceRepository interface.
-/// It handles operations related to invoices, including invoice CRUD operations and image management.
-final invoiceRepositoryProvider = Provider<InvoiceRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
+/// This provider creates and delivers an implementation of the InvoiceImagesRepository interface.
+/// It handles operations related to invoice images, including CRUD operations and image management.
+/// Now uses PostgreSQL-based implementation instead of Firestore.
+final invoiceRepositoryProvider = Provider<InvoiceImagesRepository>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
   final logger = ref.watch(loggerProvider);
   final gcsFileService = ref.watch(service.gcsFileServiceProvider);
 
-  return FirestoreInvoiceRepository(firestore, auth, logger, gcsFileService);
+  return PostgresInvoiceImageRepository(auth, logger, gcsFileService);
 });
 
-/// Stream provider for accessing the current user's invoices.
+/// Provider for accessing the current user's invoices.
 ///
-/// This provider delivers a real-time stream of the authenticated user's invoices.
-/// The stream automatically updates when invoices are added, modified, or removed.
+/// This provider delivers data of the authenticated user's invoices.
+/// The data is fetched from the PostgreSQL database via REST API.
 final userInvoicesStreamProvider =
     StreamProvider.autoDispose<List<Project>>((ref) {
   // Get the repository
@@ -78,31 +69,40 @@ final userInvoicesStreamProvider =
   return repository.fetchUserProjects();
 });
 
-/// Stream provider for all images associated with an invoice.
+/// Provider for all images associated with an invoice.
 ///
-/// This provider delivers a real-time stream of all images for a specific invoice.
-/// The stream automatically updates when images are added, modified, or removed.
+/// This provider delivers data of all images for a specific invoice.
+/// The data is fetched from the PostgreSQL database via REST API.
 ///
 /// Parameters:
 ///   - params: A map containing 'projectId' and 'invoiceId'
-final invoiceImagesStreamProvider = StreamProvider.autoDispose
-    .family<List<InvoiceImageProcess>, Map<String, String>>((ref, params) {
-  final repository = ref.watch(invoiceRepositoryProvider);
-  final logger = ref.watch(loggerProvider);
-  final projectId = params['projectId']!;
-  final invoiceId = params['invoiceId']!;
-  logger.d(
-      '[PROVIDER] invoiceImagesStreamProvider executing for projectId: $projectId, invoiceId: $invoiceId');
-  return repository.getInvoiceImagesStream(projectId, invoiceId);
-});
+final invoiceImagesStreamProvider =
+    StreamProvider.autoDispose.family<List<InvoiceImageProcess>, String>(
+  (ref, identifiers) {
+    final parts = identifiers.split('|');
+    final projectId = parts[0];
+    // final invoiceId = parts.length > 1 ? parts[1] : ''; // invoiceId is no longer used for the repo call
+    // final reloadKey = parts.length > 2 ? parts[2] : ''; // Keep reloadKey if used
 
-/// Stream provider for a single invoice by ID.
+    final repository = ref.watch(invoiceRepositoryProvider);
+    // Call getProjectImagesStream instead
+    return repository.getProjectImagesStream(projectId);
+    // If filtering by a specific client-side invoiceId (grouping UUID) is still needed here,
+    // it would have to be done after fetching all project images.
+    // For example: return repository.getProjectImagesStream(projectId).map((images) =>
+    //    images.where((img) => img.invoiceId == invoiceId).toList());
+    // However, InvoiceImageProcess model itself no longer has invoiceId directly.
+    // The concept of invoiceId for grouping images was removed from the core data model.
+  },
+);
+
+/// Provider for a single invoice by ID.
 ///
-/// This provider delivers a real-time stream of a specific invoice's data.
-/// The stream automatically updates when the invoice is modified.
+/// This provider delivers data of a specific invoice.
+/// The data is fetched from the PostgreSQL database via REST API.
 ///
 /// Parameters:
-///   - invoiceId: The ID of the invoice to stream
+///   - invoiceId: The ID of the invoice to fetch
 final invoiceStreamProvider =
     StreamProvider.family<Project?, String>((ref, invoiceId) {
   final repository = ref.watch(invoiceRepositoryProvider);
@@ -112,22 +112,23 @@ final invoiceStreamProvider =
   return repository.getProjectStream(invoiceId);
 });
 
-/// Stream provider for all expenses associated with an invoice.
+/// Provider for all expenses associated with an invoice.
 ///
-/// This provider delivers a real-time stream of all expenses for a specific invoice.
-/// The stream automatically updates when expenses are added, modified, or removed.
+/// This provider delivers data of all expenses for a specific invoice.
+/// The data will be fetched from the PostgreSQL database in future implementation.
 ///
 /// Parameters:
 ///   - params: A map containing 'projectId' and 'invoiceId'
 final expensesStreamProvider = StreamProvider.autoDispose
     .family<List<Expense>, Map<String, String>>((ref, params) {
-  final repository = ref.watch(expenseRepositoryProvider);
+  // TODO: Replace with PostgreSQL implementation
   final logger = ref.watch(loggerProvider);
   final projectId = params['projectId']!;
   final invoiceId = params['invoiceId']!;
   logger.d(
       '[PROVIDER] expensesStreamProvider executing for projectId: $projectId, invoiceId: $invoiceId');
-  return repository.getExpensesStream(projectId, invoiceId);
+  // Return empty list until PostgreSQL expense repository is implemented
+  return Stream.value([]);
 });
 
 /// Provider for tracking the gallery upload state.
@@ -137,17 +138,10 @@ final expensesStreamProvider = StreamProvider.autoDispose
 /// to show appropriate loading indicators.
 final galleryUploadStateProvider = StateProvider<bool>((ref) => false);
 
-final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
-  final firestore = ref.watch(firestoreProvider);
-  final auth = ref.watch(firebaseAuthProvider);
-  final logger = ref.watch(loggerProvider);
-  return ExpenseRepository(firestore: firestore, auth: auth, logger: logger);
-});
-
-/// Stream provider for all images associated with a project (not a specific invoice).
+/// Provider for all images associated with a project (not a specific invoice).
 ///
-/// This provider delivers a real-time stream of all images for a specific project.
-/// The stream automatically updates when images are added, modified, or removed.
+/// This provider delivers data of all images for a specific project.
+/// The data is fetched from the PostgreSQL database via REST API.
 ///
 /// Parameters:
 ///   - projectId: The ID of the project
@@ -166,3 +160,20 @@ final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {
   final logger = ref.watch(loggerProvider);
   return FirebaseAuthRepository(FirebaseAuth.instance, logger);
 });
+
+// Fetches a list of invoice images for a specific project and invoice (now just project)
+// This provider is kept for compatibility but might need to be refactored or removed
+// if the UI no longer thinks in terms of specific "invoiceId" for fetching.
+final specificInvoiceImagesProvider =
+    FutureProvider.autoDispose.family<List<InvoiceImageProcess>, String>(
+  (ref, identifiers) async {
+    final parts = identifiers.split('|');
+    final projectId = parts[0];
+    // final invoiceId = parts[1]; // invoiceId no longer used for fetching
+
+    final repository = ref.watch(invoiceRepositoryProvider);
+    // Use getProjectImagesStream and convert to Future for this provider type
+    return await repository.getProjectImagesStream(projectId).first;
+    // Again, if specific filtering was intended by a now-removed invoiceId, it needs re-evaluation.
+  },
+);

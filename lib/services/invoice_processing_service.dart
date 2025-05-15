@@ -29,8 +29,7 @@ class InvoiceProcessingService {
       final userId = authRepository.currentUser?.uid ?? "unknown-user";
 
       // Fetch the invoice image to get its path
-      final imagesStream =
-          invoiceRepository.getInvoiceImagesStream(projectId, invoiceId);
+      final imagesStream = invoiceRepository.getProjectImagesStream(projectId);
       final images = await imagesStream.first;
 
       // Find the specific image we're processing
@@ -111,8 +110,7 @@ class InvoiceProcessingService {
       // Since we don't have a direct getInvoiceImage method in the repository,
       // we'll have to listen to the stream briefly to get the image
       logger.d('Fetching image data for imageId: $imageId');
-      final imagesStream =
-          invoiceRepository.getInvoiceImagesStream(projectId, invoiceId);
+      final imagesStream = invoiceRepository.getProjectImagesStream(projectId);
       final images = await imagesStream.first;
 
       // Find the specific image we're analyzing

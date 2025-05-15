@@ -1,21 +1,25 @@
 # Use Node.js latest LTS version
-FROM node:20-slim
+FROM node:18-slim
 
 # Create app directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Install app dependencies
+# Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install
+RUN npm ci --only=production
 
-# Bundle app source
+# Copy application code
 COPY . .
 
-# Expose the port your app runs on
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=8080
+
+# Expose the port
 EXPOSE 8080
 
 # Set the Google Cloud Project ID
 ENV GOOGLE_CLOUD_PROJECT=splitbase-7ec0f
 
-# Start the main application
-CMD [ "node", "index.js" ] 
+# Start the server
+CMD ["node", "index.js"] 

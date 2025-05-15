@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
 const { Storage } = require('@google-cloud/storage');
@@ -66,4 +68,5 @@ app.get('/download/:filename(*)', async (req, res) => {
   }
 });
 
-app.listen(8080, () => console.log('Server running on port 8080')); 
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`)); 

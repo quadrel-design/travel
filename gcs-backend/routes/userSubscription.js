@@ -8,8 +8,8 @@
 
 const express = require('express');
 const router = express.Router();
-const admin = require('firebase-admin');
-const subscriptionService = require('../services/userSubscriptionService')();
+const firebaseAdmin = require('firebase-admin');
+const subscriptionService = require('../services/userSubscriptionService');
 
 /**
  * Middleware to verify Firebase ID token from request headers
@@ -20,15 +20,23 @@ const subscriptionService = require('../services/userSubscriptionService')();
  * @returns {void}
  */
 const verifyIdToken = async (req, res, next) => {
+  if (firebaseAdmin.apps.length === 0) {
+    console.error('[Routes/UserSubscription][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
+    return res.status(500).json({ error: 'Authentication service not configured.' });
+  }
   const idToken = req.headers.authorization?.split('Bearer ')[1];
-  if (!idToken) return res.status(401).json({ error: 'No token provided' });
+  if (!idToken) return res.status(401).json({ error: 'Unauthorized: No token provided' });
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
     req.user = decodedToken;
     next();
   } catch (error) {
-    return res.status(401).json({ error: 'Invalid token' });
+    console.error('[Routes/UserSubscription][AuthMiddleware] Error verifying token:', error);
+    if (error.code === 'auth/id-token-expired') {
+      return res.status(401).json({ error: 'Unauthorized: Token expired', code: 'TOKEN_EXPIRED' });
+    }
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };
 
@@ -39,35 +47,46 @@ const verifyIdToken = async (req, res, next) => {
  * custom claims and toggles it between 'pro' and 'free'. The updated status is
  * stored back in the user's custom claims and returned in the response.
  * 
- * @route POST /api/user/toggle-subscription
+ * @route POST /toggle-subscription
  * @authentication Requires Firebase ID token in Authorization header
  * @returns {Object} JSON response containing success status and new subscription value
  */
 router.post('/toggle-subscription', verifyIdToken, async (req, res) => {
   try {
     const uid = req.user.uid;
+    if (!subscriptionService || typeof subscriptionService.toggleUserSubscription !== 'function') {
+      console.error('[Routes/UserSubscription] subscriptionService.toggleUserSubscription is not available!');
+      return res.status(500).json({ error: 'Subscription service not configured correctly.' });
+    }
     const newStatus = await subscriptionService.toggleUserSubscription(uid);
     res.json({ success: true, subscription: newStatus });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[Routes/UserSubscription] Error toggling subscription:', error.message, error.stack);
+    res.status(500).json({ error: error.message || 'Failed to toggle subscription' });
   }
 });
 
 /**
  * Get the current user's subscription status
  * 
- * @route GET /api/user/subscription-status
+ * @route GET /subscription-status
  * @authentication Requires Firebase ID token in Authorization header
  * @returns {Object} JSON response containing the current subscription status
  */
 router.get('/subscription-status', verifyIdToken, async (req, res) => {
   try {
     const uid = req.user.uid;
+    if (!subscriptionService || typeof subscriptionService.getUserSubscription !== 'function') {
+      console.error('[Routes/UserSubscription] subscriptionService.getUserSubscription is not available!');
+      return res.status(500).json({ error: 'Subscription service not configured correctly.' });
+    }
     const status = await subscriptionService.getUserSubscription(uid);
     res.json({ subscription: status });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error('[Routes/UserSubscription] Error getting subscription status:', error.message, error.stack);
+    res.status(500).json({ error: error.message || 'Failed to get subscription status' });
   }
 });
 
+console.log('[Routes/UserSubscription] Routes defined, exporting router.');
 module.exports = router; 

@@ -1,3 +1,22 @@
+const admin = require('firebase-admin');
+
+try {
+  // Check if the app is already initialized to prevent re-initialization errors
+  if (admin.apps.length === 0) {
+    admin.initializeApp({
+      // Using Application Default Credentials.
+      // Ensure your Cloud Run service account has necessary Firebase permissions.
+      // projectId: process.env.GOOGLE_CLOUD_PROJECT, // Usually inferred by ADC
+    });
+    console.log('✅ Firebase Admin SDK initialized successfully.');
+  } else {
+    console.log('✅ Firebase Admin SDK already initialized.');
+  }
+} catch (e) {
+  console.error('❌ CRITICAL ERROR initializing Firebase Admin SDK:', e);
+  // Consider how to handle this error; e.g., prevent app from fully starting
+}
+
 const { Pool } = require('pg'); // Add this for PostgreSQL
 
 // NEW: PostgreSQL Pool Initialization
@@ -63,8 +82,8 @@ console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CR
 
 // Pass the db instances to the routes/services
 // TODO: Refactor routes to accept and use postgresServiceInstance
-const ocrRoutes = require('./routes/ocr')(postgresServiceInstance);
-const analysisRoutes = require('./routes/analysis')(postgresServiceInstance);
+const ocrRoutes = require('./routes/ocr');
+const analysisRoutes = require('./routes/analysis');
 // Assuming gcs routes do not need db, or will be refactored similarly if they do
 console.log('[INDEX.JS] Attempting to load gcsRoutes from ./routes/gcs...');
 const gcsRoutes = require('./routes/gcs'); 
@@ -80,6 +99,9 @@ try {
 
 app.use(ocrRoutes);
 app.use(analysisRoutes);
+
+const projectRoutes = require('./routes/projects');
+app.use('/api/projects', projectRoutes);
 
 /**
  * User Subscription Routes
