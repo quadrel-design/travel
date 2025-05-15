@@ -233,10 +233,10 @@ const projectService = {
   getProjectImages: async (projectId, userId) => {
     if (!pool) { console.error('[ProjectService] DB Pool not available for getProjectImages'); throw new Error('DB Connection Error'); }
     const query = {
-      text: `SELECT i.* 
-             FROM invoice_images i
-             WHERE i.project_id = $1 AND i.user_id = $2
-             ORDER BY i.created_at DESC`,
+      text: `SELECT id, project_id, user_id, gcs_path, status, is_invoice, ocr_text, ocr_confidence, ocr_text_blocks, ocr_processed_at, analysis_processed_at, analyzed_invoice_date, invoice_sum, invoice_currency, invoice_taxes, invoice_location, invoice_category, invoice_taxonomy, gemini_analysis_json, error_message, uploaded_at, created_at, updated_at 
+             FROM invoice_images
+             WHERE project_id = $1 AND user_id = $2
+             ORDER BY created_at DESC`,
       values: [projectId, userId],
     };
     
@@ -248,15 +248,21 @@ const projectService = {
       const transformedImages = res.rows.map(row => ({
         id: row.id,
         projectId: row.project_id,
-        user_id: row.user_id,
+        // user_id: row.user_id, // Usually not needed by client if data is already user-scoped
         status: row.status,
-        imagePath: row.gcs_path,
-        isInvoiceGuess: row.is_invoice,
+        imagePath: row.gcs_path, // Ensure client expects 'imagePath'
+        isInvoiceGuess: row.is_invoice, // Match DB column name
         invoiceAnalysis: row.gemini_analysis_json || {},
-        invoiceDate: row.invoice_date,
+        analyzedInvoiceDate: row.analyzed_invoice_date, // Changed from invoice_date
         uploadedAt: row.uploaded_at,
         createdAt: row.created_at,
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        // Include other fields from the SELECT if the client model needs them
+        ocrText: row.ocr_text,
+        ocrConfidence: row.ocr_confidence,
+        invoiceSum: row.invoice_sum,
+        invoiceCurrency: row.invoice_currency,
+        // etc.
       }));
       
       return transformedImages;
@@ -276,9 +282,9 @@ const projectService = {
   getInvoiceImageById: async (projectId, imageId, userId) => {
     if (!pool) { console.error('[ProjectService] DB Pool not available for getInvoiceImageById'); throw new Error('DB Connection Error'); }
     const query = {
-      text: `SELECT i.* 
-             FROM invoice_images i
-             WHERE i.id = $1 AND i.project_id = $2 AND i.user_id = $3`,
+      text: `SELECT id, project_id, user_id, gcs_path, status, is_invoice, ocr_text, ocr_confidence, ocr_text_blocks, ocr_processed_at, analysis_processed_at, analyzed_invoice_date, invoice_sum, invoice_currency, invoice_taxes, invoice_location, invoice_category, invoice_taxonomy, gemini_analysis_json, error_message, uploaded_at, created_at, updated_at 
+             FROM invoice_images
+             WHERE id = $1 AND project_id = $2 AND user_id = $3`,
       values: [imageId, projectId, userId],
     };
 
@@ -294,15 +300,21 @@ const projectService = {
       return {
         id: row.id,
         projectId: row.project_id,
-        user_id: row.user_id,
+        // user_id: row.user_id,
         status: row.status,
         imagePath: row.gcs_path,
         isInvoiceGuess: row.is_invoice,
         invoiceAnalysis: row.gemini_analysis_json || {},
-        invoiceDate: row.invoice_date,
+        analyzedInvoiceDate: row.analyzed_invoice_date, // Changed from invoice_date
         uploadedAt: row.uploaded_at,
         createdAt: row.created_at,
-        updatedAt: row.updated_at
+        updatedAt: row.updated_at,
+        // Include other fields from the SELECT if the client model needs them
+        ocrText: row.ocr_text,
+        ocrConfidence: row.ocr_confidence,
+        invoiceSum: row.invoice_sum,
+        invoiceCurrency: row.invoice_currency,
+        // etc.
       };
     } catch (err) {
       console.error(`[ProjectService] Error fetching image ${imageId}:`, err.stack);
@@ -323,38 +335,44 @@ const projectService = {
       gcsPath,
       status,
       isInvoice,
-      invoiceDate,
+      analyzed_invoice_date,
       originalFilename,
       size,
       contentType,
-      gemini_analysis_json // Add this field
+      gemini_analysis_json
     } = imageData;
+
+    const id = imageData.id;
+    if (!id) {
+      console.error('[ProjectService] Image ID is missing in imageData for saveImageMetadata');
+      throw new Error('Image ID is required to save image metadata.');
+    }
 
     const query = {
       text: `INSERT INTO invoice_images(
-              id, project_id, user_id, gcs_path, status, is_invoice, invoice_date, original_filename, size, content_type, gemini_analysis_json
-            ) VALUES (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+              id, project_id, user_id, gcs_path, status, is_invoice, analyzed_invoice_date, original_filename, size, content_type, gemini_analysis_json
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             RETURNING *`,
       values: [
+        id,
         projectId,
         userId,
         gcsPath,
         status || 'uploaded',
-        isInvoice || false,
-        invoiceDate, // Can be null
+        isInvoice || null,
+        analyzed_invoice_date || null,
         originalFilename || '',
         size || 0,
         contentType || 'application/octet-stream',
-        gemini_analysis_json || {}
+        gemini_analysis_json || null
       ],
     };
 
     try {
-      console.log(`[ProjectService] Saving image metadata for project ${projectId}, path: ${gcsPath}`);
+      console.log(`[ProjectService] Saving image metadata for id: ${id}, project ${projectId}, path: ${gcsPath}`);
       const res = await pool.query(query);
       const savedImage = res.rows[0];
 
-      // Transform data
       return {
         id: savedImage.id,
         projectId: savedImage.project_id,
@@ -363,10 +381,13 @@ const projectService = {
         imagePath: savedImage.gcs_path,
         isInvoiceGuess: savedImage.is_invoice,
         invoiceAnalysis: savedImage.gemini_analysis_json || {},
-        invoiceDate: savedImage.invoice_date,
+        analyzedInvoiceDate: savedImage.analyzed_invoice_date,
         uploadedAt: savedImage.uploaded_at,
         createdAt: savedImage.created_at,
-        updatedAt: savedImage.updated_at
+        updatedAt: savedImage.updated_at,
+        originalFilename: savedImage.original_filename,
+        contentType: savedImage.content_type,
+        size: savedImage.size
       };
     } catch (err) {
       console.error('[ProjectService] Error saving image metadata:', err.stack);
@@ -386,8 +407,20 @@ const projectService = {
     const {
       status,
       is_invoice,
-      invoice_date,
-      gemini_analysis_json // added this
+      analyzed_invoice_date,
+      gemini_analysis_json,
+      ocr_text,
+      ocr_confidence,
+      ocr_text_blocks,
+      ocr_processed_at,
+      analysis_processed_at,
+      invoice_sum,
+      invoice_currency,
+      invoice_taxes,
+      invoice_location,
+      invoice_category,
+      invoice_taxonomy,
+      error_message
     } = imageData;
 
     const columnsToUpdate = [];
@@ -402,13 +435,61 @@ const projectService = {
       columnsToUpdate.push(`is_invoice = $${placeholderIndex++}`);
       values.push(is_invoice);
     }
-    if (invoice_date !== undefined) {
-      columnsToUpdate.push(`invoice_date = $${placeholderIndex++}`);
-      values.push(invoice_date);
+    if (analyzed_invoice_date !== undefined) {
+      columnsToUpdate.push(`analyzed_invoice_date = $${placeholderIndex++}`);
+      values.push(analyzed_invoice_date);
     }
-    if (gemini_analysis_json !== undefined) { // added this
+    if (gemini_analysis_json !== undefined) {
       columnsToUpdate.push(`gemini_analysis_json = $${placeholderIndex++}`);
       values.push(gemini_analysis_json);
+    }
+    if (ocr_text !== undefined) {
+      columnsToUpdate.push(`ocr_text = $${placeholderIndex++}`);
+      values.push(ocr_text);
+    }
+    if (ocr_confidence !== undefined) {
+      columnsToUpdate.push(`ocr_confidence = $${placeholderIndex++}`);
+      values.push(ocr_confidence);
+    }
+    if (ocr_text_blocks !== undefined) {
+      columnsToUpdate.push(`ocr_text_blocks = $${placeholderIndex++}`);
+      values.push(ocr_text_blocks);
+    }
+    if (ocr_processed_at !== undefined) {
+      columnsToUpdate.push(`ocr_processed_at = $${placeholderIndex++}`);
+      values.push(ocr_processed_at);
+    }
+    if (analysis_processed_at !== undefined) {
+      columnsToUpdate.push(`analysis_processed_at = $${placeholderIndex++}`);
+      values.push(analysis_processed_at);
+    }
+    if (invoice_sum !== undefined) {
+      columnsToUpdate.push(`invoice_sum = $${placeholderIndex++}`);
+      values.push(invoice_sum);
+    }
+    if (invoice_currency !== undefined) {
+      columnsToUpdate.push(`invoice_currency = $${placeholderIndex++}`);
+      values.push(invoice_currency);
+    }
+    if (invoice_taxes !== undefined) {
+      columnsToUpdate.push(`invoice_taxes = $${placeholderIndex++}`);
+      values.push(invoice_taxes);
+    }
+    if (invoice_location !== undefined) {
+      columnsToUpdate.push(`invoice_location = $${placeholderIndex++}`);
+      values.push(invoice_location);
+    }
+    if (invoice_category !== undefined) {
+      columnsToUpdate.push(`invoice_category = $${placeholderIndex++}`);
+      values.push(invoice_category);
+    }
+    if (invoice_taxonomy !== undefined) {
+      columnsToUpdate.push(`invoice_taxonomy = $${placeholderIndex++}`);
+      values.push(invoice_taxonomy);
+    }
+    if (error_message !== undefined) {
+      columnsToUpdate.push(`error_message = $${placeholderIndex++}`);
+      values.push(error_message);
     }
 
     columnsToUpdate.push(`updated_at = NOW()`);
@@ -438,7 +519,7 @@ const projectService = {
         throw new Error(`Image with id ${imageId} not found or not owned by user ${userId}`);
       }
       const updatedImage = res.rows[0];
-      // Transform data
+      // Transform data to match expected client format
       return {
         id: updatedImage.id,
         projectId: updatedImage.project_id,
@@ -447,7 +528,7 @@ const projectService = {
         imagePath: updatedImage.gcs_path,
         isInvoiceGuess: updatedImage.is_invoice,
         invoiceAnalysis: updatedImage.gemini_analysis_json || {},
-        invoiceDate: updatedImage.invoice_date,
+        analyzedInvoiceDate: updatedImage.analyzed_invoice_date,
         uploadedAt: updatedImage.uploaded_at,
         createdAt: updatedImage.created_at,
         updatedAt: updatedImage.updated_at

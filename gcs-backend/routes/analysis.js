@@ -113,7 +113,7 @@ router.post('/analyze-invoice', async (req, res) => {
             const num = parseFloat(String(val).replace(/[^\\d.-]/g, '')); // More robust parsing
             return isNaN(num) ? null : num;
           };
-          analysisDataForPg.invoice_date = ia.date ? new Date(ia.date) : null;
+          analysisDataForPg.analyzed_invoice_date = ia.date ? new Date(ia.date) : null;
           analysisDataForPg.invoice_sum = ensureNumeric(ia.totalAmount);
           analysisDataForPg.invoice_currency = ia.currency || null;
           analysisDataForPg.invoice_taxes = ensureNumeric(ia.taxes); 
