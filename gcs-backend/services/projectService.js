@@ -4,6 +4,39 @@
  */
 const pool = require('../config/db'); // Import the pool
 
+// Helper function to transform database row to the API V1 format for an invoice image
+function _transformDbImageToApiV1Format(dbRow) {
+  if (!dbRow) return null;
+  return {
+    id: dbRow.id,
+    projectId: dbRow.project_id,
+    userId: dbRow.user_id, // Included for completeness, client can ignore if not needed
+    status: dbRow.status,
+    imagePath: dbRow.gcs_path,
+    isInvoiceGuess: dbRow.is_invoice, // Handles null/undefined implicitly
+    ocrText: dbRow.ocr_text,
+    ocrConfidence: dbRow.ocr_confidence,
+    // ocr_text_blocks: dbRow.ocr_text_blocks, // Usually not directly needed by client
+    // ocr_processed_at: dbRow.ocr_processed_at,
+    // analysis_processed_at: dbRow.analysis_processed_at,
+    invoiceAnalysis: dbRow.gemini_analysis_json || {},
+    analyzedInvoiceDate: dbRow.analyzed_invoice_date,
+    invoiceSum: dbRow.invoice_sum,
+    invoiceCurrency: dbRow.invoice_currency,
+    invoiceTaxes: dbRow.invoice_taxes,
+    invoiceLocation: dbRow.invoice_location,
+    invoiceCategory: dbRow.invoice_category,
+    invoiceTaxonomy: dbRow.invoice_taxonomy,
+    errorMessage: dbRow.error_message,
+    uploadedAt: dbRow.uploaded_at,
+    createdAt: dbRow.created_at,
+    updatedAt: dbRow.updated_at,
+    originalFilename: dbRow.original_filename,
+    contentType: dbRow.content_type,
+    size: dbRow.size
+  };
+}
+
 if (!pool) {
   // This check is more for immediate feedback during development.
   // The db.js itself has more robust logging if pool creation fails.
@@ -245,25 +278,7 @@ const projectService = {
       const res = await pool.query(query);
       
       // Transform data to match expected format in Flutter app
-      const transformedImages = res.rows.map(row => ({
-        id: row.id,
-        projectId: row.project_id,
-        // user_id: row.user_id, // Usually not needed by client if data is already user-scoped
-        status: row.status,
-        imagePath: row.gcs_path, // Ensure client expects 'imagePath'
-        isInvoiceGuess: row.is_invoice, // Match DB column name
-        invoiceAnalysis: row.gemini_analysis_json || {},
-        analyzedInvoiceDate: row.analyzed_invoice_date, // Changed from invoice_date
-        uploadedAt: row.uploaded_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        // Include other fields from the SELECT if the client model needs them
-        ocrText: row.ocr_text,
-        ocrConfidence: row.ocr_confidence,
-        invoiceSum: row.invoice_sum,
-        invoiceCurrency: row.invoice_currency,
-        // etc.
-      }));
+      const transformedImages = res.rows.map(row => _transformDbImageToApiV1Format(row));
       
       return transformedImages;
     } catch (err) {
@@ -297,25 +312,7 @@ const projectService = {
       
       // Transform data
       const row = res.rows[0];
-      return {
-        id: row.id,
-        projectId: row.project_id,
-        // user_id: row.user_id,
-        status: row.status,
-        imagePath: row.gcs_path,
-        isInvoiceGuess: row.is_invoice,
-        invoiceAnalysis: row.gemini_analysis_json || {},
-        analyzedInvoiceDate: row.analyzed_invoice_date, // Changed from invoice_date
-        uploadedAt: row.uploaded_at,
-        createdAt: row.created_at,
-        updatedAt: row.updated_at,
-        // Include other fields from the SELECT if the client model needs them
-        ocrText: row.ocr_text,
-        ocrConfidence: row.ocr_confidence,
-        invoiceSum: row.invoice_sum,
-        invoiceCurrency: row.invoice_currency,
-        // etc.
-      };
+      return _transformDbImageToApiV1Format(row);
     } catch (err) {
       console.error(`[ProjectService] Error fetching image ${imageId}:`, err.stack);
       throw err;
@@ -371,24 +368,9 @@ const projectService = {
     try {
       console.log(`[ProjectService] Saving image metadata for id: ${id}, project ${projectId}, path: ${gcsPath}`);
       const res = await pool.query(query);
-      const savedImage = res.rows[0];
+      const savedImageDbRow = res.rows[0];
 
-      return {
-        id: savedImage.id,
-        projectId: savedImage.project_id,
-        user_id: savedImage.user_id,
-        status: savedImage.status,
-        imagePath: savedImage.gcs_path,
-        isInvoiceGuess: savedImage.is_invoice,
-        invoiceAnalysis: savedImage.gemini_analysis_json || {},
-        analyzedInvoiceDate: savedImage.analyzed_invoice_date,
-        uploadedAt: savedImage.uploaded_at,
-        createdAt: savedImage.created_at,
-        updatedAt: savedImage.updated_at,
-        originalFilename: savedImage.original_filename,
-        contentType: savedImage.content_type,
-        size: savedImage.size
-      };
+      return _transformDbImageToApiV1Format(savedImageDbRow);
     } catch (err) {
       console.error('[ProjectService] Error saving image metadata:', err.stack);
       throw err;
@@ -518,21 +500,9 @@ const projectService = {
       if (res.rows.length === 0) {
         throw new Error(`Image with id ${imageId} not found or not owned by user ${userId}`);
       }
-      const updatedImage = res.rows[0];
+      const updatedImageDbRow = res.rows[0];
       // Transform data to match expected client format
-      return {
-        id: updatedImage.id,
-        projectId: updatedImage.project_id,
-        user_id: updatedImage.user_id,
-        status: updatedImage.status,
-        imagePath: updatedImage.gcs_path,
-        isInvoiceGuess: updatedImage.is_invoice,
-        invoiceAnalysis: updatedImage.gemini_analysis_json || {},
-        analyzedInvoiceDate: updatedImage.analyzed_invoice_date,
-        uploadedAt: updatedImage.uploaded_at,
-        createdAt: updatedImage.created_at,
-        updatedAt: updatedImage.updated_at
-      };
+      return _transformDbImageToApiV1Format(updatedImageDbRow);
     } catch (err) {
       console.error(`[ProjectService] Error updating image metadata for ${imageId}:`, err.stack);
       throw err;

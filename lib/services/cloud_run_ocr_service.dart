@@ -163,17 +163,22 @@ class CloudRunOcrService {
         'Authorization': 'Bearer $token',
       };
 
+      final requestBody = {
+        'ocrText': ocrText,
+        'projectId': projectId,
+        'invoiceId': invoiceId,
+        'imageId': imageId,
+        'userId': user.uid,
+      };
+
+      _logger.d(
+          '[CloudRunOcrService] ANALYZE_INVOICE REQUEST BODY: \n${jsonEncode(requestBody)}');
+
       final response = await http
           .post(
         Uri.parse('$_baseUrl/analyze-invoice'),
         headers: authHeaders,
-        body: jsonEncode({
-          'ocrText': ocrText,
-          'projectId': projectId,
-          'invoiceId': invoiceId,
-          'imageId': imageId,
-          'userId': user.uid,
-        }),
+        body: jsonEncode(requestBody),
       )
           .timeout(
         Duration(seconds: timeoutSeconds),
