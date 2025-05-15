@@ -1,30 +1,53 @@
-# Services
+# Backend Service Layer
 
-This directory contains service modules that encapsulate business logic and external API interactions for the Travel application backend.
+This directory contains service modules that encapsulate specific business logic, external API interactions, and complex data manipulations for the Travel App GCS Backend. They are utilized by the route handlers in the `routes/` directory.
 
-## File Overview
+## Service Modules
 
-### `postgresService.js`
-Provides a service layer for interacting with the PostgreSQL database. It includes methods for user management, project operations, invoice handling, and expense tracking. Uses a connection pool for efficient database access and implements parameterized queries for security.
-
-### `gcsService.js`
-Handles interactions with Google Cloud Storage, providing methods for file uploads, downloads, and management. Used primarily for storing and retrieving invoice images and other user documents.
-
-### `visionService.js`
-Interfaces with Google Cloud Vision API to provide OCR (Optical Character Recognition) functionality for extracting text from invoice images. Includes methods for detecting text, analyzing document structure, and processing image content.
+### `projectService.js`
+- **Purpose**: The primary service for managing core application data related to projects and their associated images.
+- **Functionality**: 
+  - CRUD operations for user projects (creating, reading, updating, deleting projects).
+  - CRUD operations for image metadata stored in the `invoice_images` table (saving metadata after GCS upload, retrieving image details, updating OCR/analysis results, deleting metadata).
+  - Data transformation between database row format and API response format.
+- **Dependencies**: PostgreSQL connection pool (`../config/db.js`).
 
 ### `geminiService.js`
-Integrates with Google's Gemini AI model to provide advanced text analysis capabilities. Used for parsing and extracting structured data from OCR results, categorizing expenses, and providing insights from invoice text.
+- **Purpose**: Interacts with Google's Gemini AI for advanced text analysis.
+- **Functionality**: 
+  - Analyzes OCR text (typically from invoices/receipts) to extract structured data like total amount, date, merchant name, currency, taxes, category, etc.
+  - Includes retry logic for API calls and robust JSON parsing.
+- **Dependencies**: `@google/generative-ai`, `GEMINI_API_KEY` environment variable.
+
+### `visionService.js`
+- **Purpose**: Interfaces with Google Cloud Vision API for Optical Character Recognition (OCR).
+- **Functionality**: 
+  - Detects text in images (provided as a URL or buffer).
+  - Extracts full text, individual text blocks, confidence scores, and bounding box information.
+- **Dependencies**: `@google-cloud/vision` (uses Application Default Credentials).
 
 ### `userSubscriptionService.js`
-Manages user subscription state using Firebase Auth custom claims. Provides methods for checking subscription status, toggling between free and pro tiers, and updating user entitlements.
+- **Purpose**: Manages user subscription status (e.g., 'pro' vs 'free').
+- **Functionality**: 
+  - Gets, sets, and toggles user subscription status by manipulating Firebase Authentication custom claims.
+- **Dependencies**: `firebase-admin` (assumes SDK is initialized).
 
-## Usage Pattern
+### `postgresService.js` (Likely Deprecated)
+- **Purpose**: Originally intended for direct PostgreSQL interactions, particularly for updating image records with OCR and analysis data.
+- **Status**: **Likely Deprecated.** Its functionalities appear to be fully covered and superseded by `projectService.js` (specifically `projectService.updateImageOcrResults` and the general `projectService.updateImageMetadata`).
+- **Recommendation**: Use `projectService.js` instead. This service is maintained for historical reference or until a full audit confirms it can be safely removed.
+- **Dependencies**: PostgreSQL connection pool (`../config/db.js`).
 
-These services follow a consistent pattern:
-1. Each service is initialized with necessary dependencies (e.g., database connections, API clients)
-2. Services expose public methods that encapsulate specific business operations
-3. Error handling is standardized, with appropriate logging and status codes
-4. Services maintain separation of concerns, focusing on specific functional areas
+### `gcsService.js` (Likely Deprecated)
+- **Purpose**: Originally intended for direct Google Cloud Storage operations like generating signed URLs and deleting files.
+- **Status**: **Likely Deprecated.** 
+  - Signed URL generation is now handled directly within `routes/gcs.js`.
+  - GCS file deletion is orchestrated by `routes/projects.js` as part of image record deletion.
+- **Recommendation**: Use `routes/gcs.js` for signed URLs and rely on `routes/projects.js` for GCS file management tied to image records. This service is maintained for historical reference or until a full audit confirms it can be safely removed.
+- **Dependencies**: `@google-cloud/storage`, `GCS_BUCKET_NAME` environment variable.
 
-The services are consumed by route handlers, which pass through user requests to the appropriate service methods. 
+## General Usage Pattern
+
+- Services are typically imported by route handlers in the `../routes/` directory.
+- They aim to abstract away direct database queries or complex external API call logic from the route handlers.
+- Error handling within services usually involves logging errors and then re-throwing them to be caught by the route handler, or returning a structured error/success object. 

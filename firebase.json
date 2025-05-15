@@ -1,1 +1,61 @@
-{"firestore":{"rules":"firestore.rules"},"functions":{"source":"functions","predeploy":["cd functions && npm run build"],"runtime":"nodejs18","platform":"gcfv1"},"hosting":{"public":"build/web","ignore":["firebase.json","**/.*","**/node_modules/**"],"headers":[{"source":"**","headers":[{"key":"Access-Control-Allow-Origin","value":"*"},{"key":"Access-Control-Allow-Methods","value":"GET, HEAD, PUT, POST, DELETE, OPTIONS"},{"key":"Access-Control-Allow-Headers","value":"Content-Type, Content-Length, Content-Disposition, Authorization, X-Requested-With, Accept, Origin"},{"key":"Access-Control-Allow-Credentials","value":"true"}]}],"rewrites":[{"source":"**","destination":"/index.html"}]},"storage":{"rules":"storage.rules","cors":[{"origin":["*"],"method":["GET","HEAD","PUT","POST","DELETE","OPTIONS"],"responseHeader":["Content-Type","Content-Length","Content-Disposition","Cache-Control","Authorization","X-Requested-With","Accept","Origin"],"maxAgeSeconds":3600}]},"emulators":{"firestore":{"host":"localhost","port":8080,"rules":"firestore.rules"},"storage":{"host":"localhost","port":9199,"rules":"storage.rules"},"functions":{"host":"127.0.0.1"},"ui":{"enabled":true},"singleProjectMode":true},"flutter":{"platforms":{"android":{"default":{"projectId":"splitbase-7ec0f","appId":"1:213342165039:android:6caaed832566702b458eda","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"splitbase-7ec0f","appId":"1:213342165039:ios:03e18acd08537cda458eda","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"macos":{"default":{"projectId":"splitbase-7ec0f","appId":"1:213342165039:ios:772fdfeed7586f9e458eda","uploadDebugSymbols":false,"fileOutput":"macos/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"splitbase-7ec0f","configurations":{"android":"1:213342165039:android:6caaed832566702b458eda","ios":"1:213342165039:ios:03e18acd08537cda458eda","macos":"1:213342165039:ios:772fdfeed7586f9e458eda","web":"1:213342165039:web:bd145392404471fd458eda","windows":"1:213342165039:web:a938a4e7812aaabb458eda"}}}}}}
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "headers": [
+      {
+        "source": "**",
+        "headers": [
+          { "key": "Access-Control-Allow-Origin", "value": "*" },
+          { "key": "Access-Control-Allow-Methods", "value": "GET, HEAD, PUT, POST, DELETE, OPTIONS" },
+          { "key": "Access-Control-Allow-Headers", "value": "Content-Type, Content-Length, Content-Disposition, Authorization, X-Requested-With, Accept, Origin" },
+          { "key": "Access-Control-Allow-Credentials", "value": "true" }
+        ]
+      }
+    ],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }]
+  },
+  "emulators": {
+    "ui": { "enabled": true },
+    "singleProjectMode": true
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "splitbase-7ec0f",
+          "appId": "1:213342165039:android:6caaed832566702b458eda",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "splitbase-7ec0f",
+          "appId": "1:213342165039:ios:03e18acd08537cda458eda",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "macos": {
+        "default": {
+          "projectId": "splitbase-7ec0f",
+          "appId": "1:213342165039:ios:772fdfeed7586f9e458eda",
+          "uploadDebugSymbols": false,
+          "fileOutput": "macos/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "splitbase-7ec0f",
+          "configurations": {
+            "android": "1:213342165039:android:6caaed832566702b458eda",
+            "ios": "1:213342165039:ios:03e18acd08537cda458eda",
+            "macos": "1:213342165039:ios:772fdfeed7586f9e458eda",
+            "web": "1:213342165039:web:bd145392404471fd458eda",
+            "windows": "1:213342165039:web:a938a4e7812aaabb458eda"
+          }
+        }
+      }
+    }
+  }
+}

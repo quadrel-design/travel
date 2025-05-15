@@ -45,8 +45,20 @@ The Travel App is being migrated from Firestore to PostgreSQL. The backend is a 
 - ✓ Granted appropriate IAM permissions for secret access
 - ✓ Updated mobile app API endpoint configuration from `https://invoice-service-qzlk3xulxq-uc.a.run.app` to `https://travel-api-213342165039.us-central1.run.app`
 - ✓ Fixed connection issues showing in the app logs
+- ✓ Ensured database schema is initialized on application startup.
 
 ## Pending Tasks
+
+### Refactoring & Code Health
+- [ ] Refactor `authenticateUser` middleware: Currently duplicated in multiple route files (`ocr.js`, `analysis.js`, `projects.js`, `gcs.js`, `userSubscription.js`). Centralize into a single middleware in `gcs-backend/middleware/` and import where needed.
+- [ ] Review and potentially remove `gcs-backend/services/postgresService.js`: Appears redundant with `projectService.js`. Confirm no usages and delete if safe.
+- [ ] Review and potentially remove `gcs-backend/services/gcsService.js`: Appears redundant with `routes/gcs.js` and GCS deletion logic in `routes/projects.js`. Confirm no usages and delete if safe.
+- [ ] `routes/gcs.js`: The `/api/gcs/delete` endpoint has a TODO to implement actual GCS file deletion. Address this or remove the endpoint if GCS deletion is handled elsewhere (e.g., via `routes/projects.js`).
+- [ ] `routes/gcs.js`: The `/api/gcs/signed-url` endpoint is marked as redundant with `/api/gcs/generate-download-url`. Decide to merge or remove.
+
+### Documentation
+- [✓] Review and update JSDocs for all files in `gcs-backend/` (routes, services, config, index.js).
+- [✓] Review and update all `README.md` files in `gcs-backend/` (root, routes/, services/).
 
 ### AI/Analysis Functionality
 - [ ] Review and confirm full analyzeText functionality post-OCR.
@@ -55,10 +67,11 @@ The Travel App is being migrated from Firestore to PostgreSQL. The backend is a 
 
 ### Database Improvements
 - [ ] Enable SSL for PostgreSQL connections (more secure for production)
-- [ ] Move database credentials to Secret Manager (more secure than environment variables)
+- [ ] Consider moving PostgreSQL database credentials to Secret Manager for enhanced security (currently uses environment variables via `process.env` in `db.js`).
 - [ ] Implement a proper database migration system for future schema changes
 - [ ] Create database backups and restore process
 - [ ] Fix PostgreSQL `pg_hba.conf` to allow connections for database management tasks
+- [ ] `config/schema.sql`: The `invoice_images` table has columns like `analyzed_total_amount`, `analyzed_currency`, `analyzed_merchant_name`, `analyzed_merchant_location`. These seem to be from an older naming convention or potentially duplicative of fields like `invoice_sum`, `invoice_currency` that are populated from `gemini_analysis_json`. Review and consolidate if necessary for clarity and to avoid confusion.
 
 ### Security Enhancements
 - [ ] Implement rate limiting to prevent API abuse
@@ -105,9 +118,9 @@ The Travel App is being migrated from Firestore to PostgreSQL. The backend is a 
 
 ### Database Structure
 - `projects`: Main table storing travel project data (UUID primary keys)
-- `invoices_metadata`: Invoice metadata linked to projects
-- `invoice_images`: Stores OCR and analysis data for uploaded invoices/receipts (TEXT primary keys)
-- `expenses`: Expense records linked to projects and optionally to invoice images
+- `invoice_images`: Stores GCS path, OCR, and analysis data for uploaded invoices/receipts (primary key `id UUID`)
+- (Deprecated/Removed from docs) `invoices_metadata`: This table was not found in the current `gcs-backend/config/schema.sql` and appears to be from an older design.
+- (To Verify) `expenses`: This table was not found in `gcs-backend/config/schema.sql`. Verify its status; if not part of the current `gcs-backend` PostgreSQL schema, it should be removed from this documentation or its context clarified.
 
 ### Environment Variables
 - `DB_HOST`: PostgreSQL host (37.148.202.133)

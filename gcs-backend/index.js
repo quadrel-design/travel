@@ -1,3 +1,13 @@
+/**
+ * @file Main entry point for the GCS backend Express application.
+ * This file initializes the Firebase Admin SDK, sets up the Express server with
+ * necessary middleware (CORS, JSON parsing), loads environment variables,
+ * mounts all API routes, initializes the PostgreSQL database schema,
+ * and starts the HTTP server.
+ * @author Your Name/Team
+ * @version 1.0.0
+ */
+
 const admin = require('firebase-admin');
 
 try {
@@ -86,7 +96,16 @@ app.get('/', (req, res) => {
 
 const PORT = process.env.PORT || 8080;
 
-// Initialize Database and Start Server
+/**
+ * Initializes the database schema and starts the Express server.
+ * This function first checks if the PostgreSQL connection pool is available.
+ * If so, it attempts to initialize/update the database schema using `initializeDatabase`.
+ * Only if the schema initialization is successful does it start the Express server
+ * to listen on the configured PORT.
+ * If the pool is not available or schema initialization fails, critical errors are logged,
+ * and the server does not start.
+ * @async
+ */
 async function startServer() {
   if (pool) { // Check if pool was created successfully in db.js
     console.log('[INDEX.JS] Database pool available. Initializing schema...');

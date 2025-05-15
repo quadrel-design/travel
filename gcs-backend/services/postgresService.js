@@ -1,6 +1,14 @@
 /**
- * PostgreSQL Service.
- * Provides functions to interact with the PostgreSQL database.
+ * @fileoverview PostgreSQL Service (Likely Deprecated).
+ * This module provides functions to interact with the PostgreSQL database, specifically for updating
+ * image records with OCR and Analysis data. 
+ * 
+ * @deprecated This service module appears to be redundant. Its functionalities are largely covered by 
+ * and superseded by `projectService.js` (`updateImageOcrResults` and the general `updateImageMetadata`).
+ * It is recommended to use `projectService.js` for these operations. This file is kept for historical reference
+ * or until a full audit confirms it can be safely removed.
+ * 
+ * @module services/postgresService
  */
 const pool = require('../config/db'); // Import the shared pool
 
@@ -16,6 +24,8 @@ if (!pool) {
 module.exports = {
     /**
      * Updates an invoice image record with data from OCR processing.
+     * @async
+     * @deprecated Prefer using `projectService.updateImageOcrResults` or the general `projectService.updateImageMetadata`.
      * @param {string} imageId - The ID of the image record to update.
      * @param {object} ocrData
      * @param {string} [ocrData.ocr_text] - Extracted text.
@@ -102,6 +112,8 @@ module.exports = {
 
     /**
      * Updates an invoice image record with data from AI analysis processing.
+     * @async
+     * @deprecated Prefer using the general `projectService.updateImageMetadata`.
      * @param {string} imageId - The ID of the image record to update.
      * @param {object} analysisData
      * @param {string} analysisData.status - New status (e.g., 'analysis_complete', 'analysis_failed').

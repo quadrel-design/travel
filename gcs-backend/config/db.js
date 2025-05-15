@@ -1,3 +1,18 @@
+/**
+ * @file PostgreSQL Database Configuration and Pool Setup
+ * This module configures and initializes a connection pool for the PostgreSQL database.
+ * It reads database connection parameters from environment variables (supports `.env` for local development).
+ * Key responsibilities:
+ *  - Load environment variables.
+ *  - Validate presence of required DB environment variables in production.
+ *  - Construct the `pg.Pool` configuration object, including SSL settings for production.
+ *  - Create and export the PostgreSQL connection pool instance.
+ *  - Set up event listeners for pool events (connect, acquire, error).
+ *  - Perform an initial connection test query.
+ * It handles errors during pool creation by logging them but allows the application to attempt to start
+ * (services relying on the DB will fail if the pool is not available).
+ * @module config/db
+ */
 const { Pool } = require('pg');
 require('dotenv').config(); // For local development, Cloud Run uses its own env var system
 

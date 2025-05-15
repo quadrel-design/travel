@@ -85,32 +85,10 @@ flutter/
 
 # Google Cloud service account keys
 lib/config/*_service_account_key.json
-functions/splitbase-7ec0f-9618a4571647.json
+
 **/splitbase-7ec0f-*.json
 gcs-backend/service-account.json
 service-account.json
-
-#amplify-do-not-edit-begin
-amplify/\#current-cloud-backend
-amplify/.config/local-*
-amplify/logs
-amplify/mock-data
-amplify/mock-api-resources
-amplify/backend/amplify-meta.json
-amplify/backend/.temp
-build/
-dist/
-node_modules/
-aws-exports.js
-awsconfiguration.json
-amplifyconfiguration.json
-amplifyconfiguration.dart
-amplify-build-config.json
-amplify-gradle-config.json
-amplifytools.xcconfig
-.secret-*
-**.sample
-#amplify-do-not-edit-end
 
 # Firebase configuration files
 **/ios/Runner/GoogleService-Info.plist

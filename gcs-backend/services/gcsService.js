@@ -1,6 +1,16 @@
 /**
- * GCS Service.
- * Provides functions to generate signed URLs and delete files in Google Cloud Storage.
+ * @fileoverview Google Cloud Storage (GCS) Service (Likely Deprecated).
+ * This module provides functions to generate signed URLs for uploading/downloading files
+ * and to delete files from Google Cloud Storage.
+ * 
+ * @deprecated This service module appears to be redundant. 
+ * - Signed URL generation is handled directly within `routes/gcs.js`.
+ * - File deletion from GCS is typically orchestrated by `routes/projects.js` when an image record is deleted,
+ *   which may call `projectService.js` or handle GCS interaction directly.
+ * It is recommended to use the functionalities in those respective route files. This file is kept for historical
+ * reference or until a full audit confirms it can be safely removed.
+ * 
+ * @module services/gcsService
  */
 
 const { Storage } = require('@google-cloud/storage');
@@ -22,6 +32,8 @@ console.log('GCS Service: GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_A
 
 /**
  * Generate a signed upload URL for a file.
+ * @async
+ * @deprecated Prefer using the equivalent functionality in `routes/gcs.js` (`POST /api/gcs/generate-upload-url`).
  * @param {string} filename
  * @param {string} contentType
  * @returns {Promise<string>}
@@ -41,6 +53,8 @@ async function generateUploadUrl(filename, contentType) {
 
 /**
  * Generate a signed download URL for a file.
+ * @async
+ * @deprecated Prefer using the equivalent functionality in `routes/gcs.js` (`GET /api/gcs/generate-download-url`).
  * @param {string} filename
  * @returns {Promise<string>}
  */
@@ -58,6 +72,9 @@ async function generateDownloadUrl(filename) {
 
 /**
  * Delete a file from GCS.
+ * @async
+ * @deprecated File deletion from GCS should be handled as part of the image deletion logic in `routes/projects.js`,
+ *             which is responsible for both GCS file removal and database record deletion.
  * @param {string} fileName
  * @returns {Promise<void>}
  */

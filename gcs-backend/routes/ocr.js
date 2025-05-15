@@ -1,6 +1,9 @@
 /**
- * OCR Routes.
- * Handles OCR processing for invoice images.
+ * @fileoverview OCR (Optical Character Recognition) Routes.
+ * Handles API endpoints related to OCR processing of images, typically invoices or receipts.
+ * It uses the Vision API (via `visionService`) for text detection and updates
+ * image metadata in the database (via `projectService`).
+ * @module routes/ocr
  */
 
 const express = require('express');
@@ -10,7 +13,17 @@ const { detectTextInImage } = require('../services/visionService');
 const projectService = require('../services/projectService'); // For DB interactions
 const firebaseAdmin = require('firebase-admin'); // For authentication
 
-// Middleware to check if user is authenticated
+/**
+ * Middleware to authenticate users using Firebase ID tokens.
+ * Verifies the Bearer token from the Authorization header.
+ * Attaches the decoded token (including user UID and email) to `req.user`.
+ * TODO: Refactor this to a shared middleware in the `middleware/` directory.
+ *
+ * @async
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response object.
+ * @param {import('express').NextFunction} next - Express next middleware function.
+ */
 const authenticateUser = async (req, res, next) => {
   if (firebaseAdmin.apps.length === 0) {
     console.error('[Routes/OCR][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
@@ -49,12 +62,40 @@ if (!projectService) {
 
 /**
  * @route POST /ocr-invoice
- * Performs OCR on an image (from URL or direct data), updates database record.
- * @body {string} [imageUrl] - URL of the image to process.
- * @body {string} [imageData] - Base64 encoded image data (not yet fully supported in this version).
- * @body {string} projectId - Project ID for context and DB record.
- * @body {string} imageId - The ID of the image record in 'invoice_images' table.
- * User ID is obtained from authentication token.
+ * @summary Performs OCR on an image specified by a GCS URL.
+ * @description This endpoint initiates OCR processing for an image that presumably resides in Google Cloud Storage (GCS).
+ * It first updates the image's status to `pending_ocr` in the database.
+ * Then, it fetches the image from the provided `imageUrl` (GCS URI), sends it to the Vision API for text detection.
+ * The OCR results (extracted text, confidence) and final status (`ocr_complete`, `ocr_no_text`, or `ocr_failed`)
+ * are then saved to the image's database record.
+ * The `imageData` (direct base64 upload) path is currently not fully supported and will result in an error.
+ * Retries image download and OCR processing on failure with exponential backoff.
+ *
+ * @body {string} imageUrl - The GCS URI of the image to process (e.g., `gs://<bucket-name>/path/to/image.jpg`).
+ * @body {string} projectId - The ID of the project to which the image belongs (for context and DB record consistency).
+ * @body {string} imageId - The ID of the image record in the `invoice_images` table to update.
+ *
+ * @response {200} OK - OCR process completed (successfully or with no text found).
+ *   @example response - 200 - OCR Successful
+ *   {
+ *     "success": true,
+ *     "status": "ocr_complete",
+ *     "message": "OCR successful",
+ *     "ocrText": "Extracted text...",
+ *     "ocrConfidence": 0.92
+ *   }
+ * @response {200} OK - OCR completed, no text found.
+ *   @example response - 200 - No Text Found
+ *   {
+ *     "success": true,
+ *     "status": "ocr_no_text",
+ *     "message": "OCR successful, no text detected",
+ *     "ocrText": "",
+ *     "ocrConfidence": 0
+ *   }
+ * @response {400} Bad Request - Missing required fields (`projectId`, `imageId`, `imageUrl`) or `imageData` provided.
+ * @response {500} Internal Server Error - If the OCR process encounters an unrecoverable error, or if database updates fail.
+ *   The image status in the database is updated to `ocr_failed` with an error message.
  */
   router.post('/ocr-invoice', async (req, res) => {
   // invoiceId from body was present but seems redundant if imageId is the primary key for invoice_images.

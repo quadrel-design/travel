@@ -1,9 +1,11 @@
 /**
- * User Subscription Routes
- * 
- * This module provides endpoints for managing user subscription status in Firebase Auth.
- * It enables toggling between 'pro' and 'free' subscription tiers by updating
- * custom claims in the Firebase Auth user profile.
+ * @fileoverview User Subscription Routes.
+ * Provides API endpoints for managing user subscription status (e.g., 'pro' vs 'free').
+ * These routes interact with Firebase Authentication custom claims via the `userSubscriptionService`
+ * to store and retrieve a user's subscription tier.
+ * All endpoints require Firebase authentication.
+ * @module routes/userSubscription
+ * @basepath /api/user
  */
 
 const express = require('express');
@@ -41,15 +43,21 @@ const verifyIdToken = async (req, res, next) => {
 };
 
 /**
- * Toggle user subscription status between 'pro' and 'free'
+ * @summary Toggle user subscription status between 'pro' and 'free'.
+ * @description Retrieves the current user subscription status from Firebase Auth custom claims,
+ * toggles it (pro -> free, free -> pro), and updates the custom claims.
+ * The new subscription status is returned.
  * 
- * This endpoint retrieves the current user subscription status from Firebase Auth
- * custom claims and toggles it between 'pro' and 'free'. The updated status is
- * stored back in the user's custom claims and returned in the response.
- * 
- * @route POST /toggle-subscription
- * @authentication Requires Firebase ID token in Authorization header
- * @returns {Object} JSON response containing success status and new subscription value
+ * @route POST /api/user/toggle-subscription
+ * @authentication Requires Firebase ID token in Authorization header (`Bearer <token>`)
+ * @returns {object} 200 - JSON response containing success status and the new subscription value.
+ *   @example response - 200 - Success
+ *   {
+ *     "success": true,
+ *     "subscription": "pro"
+ *   }
+ * @returns {Error} 401 - Unauthorized if token is missing, invalid, or expired.
+ * @returns {Error} 500 - Internal server error if subscription service is misconfigured or Firebase interaction fails.
  */
 router.post('/toggle-subscription', verifyIdToken, async (req, res) => {
   try {
@@ -67,11 +75,19 @@ router.post('/toggle-subscription', verifyIdToken, async (req, res) => {
 });
 
 /**
- * Get the current user's subscription status
+ * @summary Get the current user's subscription status.
+ * @description Retrieves the user's current subscription status (e.g., 'free' or 'pro')
+ * from their Firebase Auth custom claims.
  * 
- * @route GET /subscription-status
- * @authentication Requires Firebase ID token in Authorization header
- * @returns {Object} JSON response containing the current subscription status
+ * @route GET /api/user/subscription-status
+ * @authentication Requires Firebase ID token in Authorization header (`Bearer <token>`)
+ * @returns {object} 200 - JSON response containing the current subscription status.
+ *   @example response - 200 - Success
+ *   {
+ *     "subscription": "free"
+ *   }
+ * @returns {Error} 401 - Unauthorized if token is missing, invalid, or expired.
+ * @returns {Error} 500 - Internal server error if subscription service is misconfigured or Firebase interaction fails.
  */
 router.get('/subscription-status', verifyIdToken, async (req, res) => {
   try {

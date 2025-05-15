@@ -1,8 +1,12 @@
 console.log('[ANALYSIS.JS MODULE] File loaded by Node.js');
 
 /**
- * Analysis Routes.
- * Handles invoice text analysis using Gemini AI.
+ * @fileoverview AI Analysis Routes.
+ * Handles API endpoints for analyzing extracted OCR text using Google's Gemini AI.
+ * Its primary purpose is to determine if the text is from an invoice/receipt and
+ * extract structured data (total amount, date, merchant, etc.).
+ * Uses `geminiService` for AI interaction and `projectService` for DB updates.
+ * @module routes/analysis
  */
 
 const express = require('express');
@@ -11,7 +15,17 @@ const geminiService = require('../services/geminiService');
 const projectService = require('../services/projectService'); // Using projectService for PostgreSQL interactions
 const firebaseAdmin = require('firebase-admin'); // For authentication
 
-// Middleware to check if user is authenticated (similar to other route files)
+/**
+ * Middleware to authenticate users using Firebase ID tokens.
+ * Verifies the Bearer token from the Authorization header.
+ * Attaches the decoded token (including user UID and email) to `req.user`.
+ * TODO: Refactor this to a shared middleware in the `middleware/` directory.
+ *
+ * @async
+ * @param {import('express').Request} req - Express request object.
+ * @param {import('express').Response} res - Express response object.
+ * @param {import('express').NextFunction} next - Express next middleware function.
+ */
 const authenticateUser = async (req, res, next) => {
   if (firebaseAdmin.apps.length === 0) {
     console.error('[Routes/Analysis][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
@@ -55,12 +69,46 @@ if (!projectService) {
 }
 
 /**
- * Analyze detected OCR text for invoice data.
  * @route POST /analyze-invoice
- * @body {string} ocrText - Text extracted from OCR
- * @body {string} projectId - Project ID (validation, context)
- * @body {string} imageId - The ID of the image/invoice being analyzed (from invoice_images table)
- * Note: userId is now derived from the authentication token via authenticateUser middleware.
+ * @summary Analyzes OCR text of an image using Gemini AI to extract invoice data.
+ * @description This endpoint takes text previously extracted by OCR, sends it to the Gemini AI service
+ * for analysis, and then stores the structured analysis results (or errors) in the database,
+ * updating the corresponding image record. It first sets the image status to `analysis_running`.
+ * After Gemini processing, it updates the status to `analysis_complete`, `analysis_not_invoice`,
+ * or `analysis_failed`, and populates fields like `is_invoice`, `gemini_analysis_json`,
+ * `analyzed_invoice_date`, `invoice_sum`, etc., in the `invoice_images` table.
+ * It includes a robust `ensureNumeric` helper to parse monetary values from Gemini's output.
+ *
+ * @body {string} ocrText - The full text extracted from an image by an OCR process.
+ * @body {string} projectId - The ID of the project to which the image belongs (for context).
+ * @body {string} imageId - The ID of the image record in the `invoice_images` table that is being analyzed.
+ *
+ * @response {200} OK - Analysis process completed. The `isInvoice` field in the response indicates if Gemini classified it as an invoice.
+ *   @example response - 200 - Analysis Successful (Invoice)
+ *   {
+ *     "success": true,
+ *     "message": "Analysis successful",
+ *     "isInvoice": true,
+ *     "data": {
+ *       "totalAmount": 123.45,
+ *       "currency": "USD",
+ *       "date": "2024-07-15",
+ *       "merchantName": "Example Store",
+ *       "isInvoice": true
+ *     },
+ *     "status": "analysis_complete"
+ *   }
+ *   @example response - 200 - Analysis Successful (Not an Invoice)
+ *   {
+ *     "success": true,
+ *     "message": "Analyzed, not an invoice",
+ *     "isInvoice": false,
+ *     "data": { ... },
+ *     "status": "analysis_not_invoice"
+ *   }
+ * @response {400} Bad Request - Missing required fields (`ocrText`, `projectId`, `imageId`).
+ * @response {500} Internal Server Error - If the AI analysis encounters an unrecoverable error, or if database updates fail.
+ *   The image status in the database is updated to `analysis_failed` with an error message.
  */
 router.post('/analyze-invoice', async (req, res) => {
   console.log('[Routes/Analysis] /analyze-invoice hit');
@@ -114,6 +162,12 @@ router.post('/analyze-invoice', async (req, res) => {
         // If analysis was successful and provided invoice details, map them
         if (analysisResult.success && analysisResult.invoiceAnalysis) {
           const ia = analysisResult.invoiceAnalysis;
+          /**
+           * Helper function to parse and clean a string value representing a number.
+           * It handles currency symbols, and different decimal/thousand separators (European vs. US).
+           * @param {string|number|null|undefined} val - The value to convert to a numeric type.
+           * @returns {number|null} The parsed number, or null if parsing is not possible.
+           */
           const ensureNumeric = (val) => {
             if (val === null || val === undefined) return null;
 

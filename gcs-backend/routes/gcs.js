@@ -1,6 +1,12 @@
 /**
- * GCS Routes
- * Handles signed URL generation, file upload, download, and deletion.
+ * @fileoverview Google Cloud Storage (GCS) Operation Routes.
+ * Provides API endpoints for interacting with Google Cloud Storage, primarily for generating
+ * signed URLs that allow clients to directly upload or download files.
+ * This facilitates secure client-side interaction with GCS buckets without exposing service account keys.
+ * All routes require Firebase authentication.
+ * The GCS bucket name is configured via the `GCS_BUCKET_NAME` environment variable.
+ * @module routes/gcs
+ * @basepath /api/gcs
  */
 
 const express = require('express');
@@ -68,10 +74,23 @@ const authenticateUser = async (req, res, next) => {
 router.use(authenticateUser);
 
 /**
- * Generate a signed upload URL for a file.
- * @route POST /generate-upload-url
- * @body {string} filename The desired path/name for the file in GCS.
- * @body {string} contentType The content type of the file to be uploaded.
+ * @route POST /api/gcs/generate-upload-url
+ * @summary Generate a v4 signed URL for client-side file upload to GCS.
+ * @description Creates a short-lived (15 minutes) signed URL that grants write access to a specific GCS object path.
+ * The client can use this URL with an HTTP PUT request to upload the file directly to GCS.
+ * This is the preferred method for uploading files from the client.
+ *
+ * @body {string} filename - The desired GCS object path, including the filename (e.g., `users/firebase-uid/projects/project-id/images/image-id/original_file.jpg`).
+ *                           It is crucial that this path is unique and correctly structured as per application requirements.
+ * @body {string} contentType - The MIME type of the file to be uploaded (e.g., `image/jpeg`, `application/pdf`).
+ *
+ * @returns {object} 200 - JSON object containing the signed URL.
+ *   @example response - 200 - Success
+ *   {
+ *     "url": "https://storage.googleapis.com/your-bucket-name/your-filename.jpg?X-Goog-Algorithm=..."
+ *   }
+ * @returns {Error} 400 - If `filename` or `contentType` is missing in the request body.
+ * @returns {Error} 500 - If the GCS bucket is not initialized or if there's an error generating the signed URL.
  */
 router.post('/generate-upload-url', async (req, res) => {
   console.log('[Routes/GCS] /generate-upload-url POST hit. Request body:', req.body);
@@ -106,9 +125,21 @@ router.post('/generate-upload-url', async (req, res) => {
 });
 
 /**
- * Generate a signed download URL for a file.
- * @route GET /generate-download-url
- * @query {string} filename The GCS path/name of the file.
+ * @route GET /api/gcs/generate-download-url
+ * @summary Generate a v4 signed URL for client-side file download from GCS.
+ * @description Creates a short-lived (15 minutes) signed URL that grants read access to a specific GCS object.
+ * The client can use this URL with an HTTP GET request to download the file directly from GCS.
+ *
+ * @query {string} filename - The GCS object path of the file to download (e.g., `users/firebase-uid/projects/project-id/images/image-id/original_file.jpg`).
+ *
+ * @returns {object} 200 - JSON object containing the signed URL for download.
+ *   @example response - 200 - Success
+ *   {
+ *     "url": "https://storage.googleapis.com/your-bucket-name/your-filename.jpg?X-Goog-Algorithm=..."
+ *   }
+ * @returns {Error} 400 - If the `filename` query parameter is missing.
+ * @returns {Error} 404 - If the specified file (filename) does not exist in the GCS bucket.
+ * @returns {Error} 500 - If the GCS bucket is not initialized or if there's an error generating the signed URL.
  */
 router.get('/generate-download-url', async (req, res) => {
   console.log('[Routes/GCS] /generate-download-url GET hit. Query params:', req.query);
@@ -145,9 +176,17 @@ router.get('/generate-download-url', async (req, res) => {
 });
 
 /**
- * Delete file from GCS. (Still Minimal - actual deletion logic needed)
- * @route POST /delete
- * @body {string} filename The GCS path/name of the file to delete.
+ * @route POST /api/gcs/delete
+ * @summary Delete a file from GCS. (MINIMAL IMPLEMENTATION - GCS Deletion Inactive)
+ * @description Intended to delete a file from Google Cloud Storage. Currently, this endpoint logs the request
+ * but **does not actually perform the GCS file deletion**. It returns a success-like message indicating this.
+ * TODO: Implement actual GCS file deletion logic (e.g., `await bucket.file(filename).delete();`).
+ *
+ * @body {string} filename - The GCS object path of the file to be deleted.
+ *
+ * @returns {object} 200 - A message indicating the minimal operation was called.
+ * @returns {Error} 400 - If `filename` is missing in the request body.
+ * @returns {Error} 500 - If the GCS bucket is not initialized.
  */
 router.post('/delete', async (req, res) => {
   console.log('[Routes/GCS] /delete POST hit. Body:', req.body);
@@ -177,9 +216,17 @@ router.post('/delete', async (req, res) => {
 });
 
 /**
- * Generate a signed URL for accessing a GCS object. (Redundant with /generate-download-url, consider merging or removing one)
- * @route GET /signed-url
- * @query {string} path - The path to the object in the GCS bucket
+ * @route GET /api/gcs/signed-url
+ * @summary Generate a v4 signed URL for GCS object access (Read-only).
+ * @deprecated This route is redundant with `/api/gcs/generate-download-url`. Consider using that instead or removing this one.
+ * @description Creates a short-lived (15 minutes) signed URL that grants read access to a specific GCS object.
+ *
+ * @query {string} path - The GCS object path of the file (equivalent to `filename` in the other route).
+ *
+ * @returns {object} 200 - JSON object containing the signed URL for download.
+ * @returns {Error} 400 - If the `path` query parameter is missing.
+ * @returns {Error} 404 - If the specified file does not exist in GCS.
+ * @returns {Error} 500 - If the GCS bucket is not initialized or if there's an error generating the URL.
  */
 router.get('/signed-url', async (req, res) => {
   console.log('[Routes/GCS] /signed-url GET hit. Query params:', req.query);
