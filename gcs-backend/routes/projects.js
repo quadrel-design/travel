@@ -434,12 +434,29 @@ router.patch('/:projectId/images/:imageId/analysis', async (req, res) => {
     const projectId = req.params.projectId;
     const imageId = req.params.imageId;
     
-    const analysisData = req.body;
+    const receivedAnalysisData = req.body; // Data from Flutter app
+
+    // Prepare the data for projectService.updateImageMetadata
+    const dataForDbUpdate = {
+      projectId: projectId, // For internal checks within updateImageMetadata if needed
+      gemini_analysis_json: receivedAnalysisData.invoiceAnalysis,
+      is_invoice: receivedAnalysisData.isInvoiceGuess,
+      analysis_processed_at: receivedAnalysisData.lastProcessedAt, // Ensure Flutter sends this key
+      status: receivedAnalysisData.status,
+      // analyzed_invoice_date is expected by updateImageMetadata if present
+      // Flutter sends 'invoiceDate', map it.
+      analyzed_invoice_date: receivedAnalysisData.invoiceDate 
+    };
+
+    // Remove undefined keys to prevent them from being set as null in the DB
+    // unless specifically intended. The updateImageMetadata service handles this.
+    // For example, if invoiceDate wasn't sent, analyzed_invoice_date will be undefined here.
+
+    console.log(`[Routes/Projects] Updating analysis for image ${imageId}. Data for DB:`, JSON.stringify(dataForDbUpdate, null, 2));
     
-    const image = await projectService.updateImageAnalysisDetails(
-      projectId, 
+    const image = await projectService.updateImageMetadata( // Corrected service call
       imageId, 
-      analysisData, 
+      dataForDbUpdate, 
       userId
     );
     

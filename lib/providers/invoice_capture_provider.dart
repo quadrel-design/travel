@@ -208,6 +208,23 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
     }
   }
 
+  /// Updates the ocrText for a specific image.
+  void updateOcrTextForImage(String imageId, String ocrText) {
+    _logger.d('Updating ocrText for image ID: $imageId');
+    final imageIndex = state.images.indexWhere((img) => img.id == imageId);
+    if (imageIndex != -1) {
+      final oldImageInfo = state.images[imageIndex];
+      final newImageInfo = oldImageInfo.copyWith(
+          ocrText: ocrText, lastProcessedAt: DateTime.now());
+      final updatedImages = List<InvoiceImageProcess>.from(state.images);
+      updatedImages[imageIndex] = newImageInfo;
+      state = state.copyWith(images: updatedImages);
+      _logger.d('Successfully updated ocrText in state for image ID: $imageId');
+    } else {
+      _logger.w('Could not find image with ID: $imageId to update ocrText.');
+    }
+  }
+
   @override
   void dispose() {
     _logger.d(

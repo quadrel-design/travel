@@ -65,17 +65,71 @@ class InvoiceCaptureController {
       }
       logger.d("Image downloaded successfully for scan (ID: $imageId)");
       logger.i('Calling Cloud Run OCR for scanning image ID: $imageId');
-      await InvoiceScanUtil.scanImage(
+
+      // Get the current image object before scan
+      final currentImageInfo = images[currentIndex];
+
+      final Map<String, dynamic>? ocrResult = await InvoiceScanUtil.scanImage(
         context,
         ref,
         projectId,
         invoiceId,
-        images[currentIndex],
+        currentImageInfo, // Pass the specific image info
       );
-      timeoutTimer.cancel();
-      logger.i('Scan completed for $imageId');
+      timeoutTimer
+          .cancel(); // Cancel timeout if scanImage completes (success or error)
+
+      if (ocrResult != null) {
+        String? extractedTextValue;
+        // Prioritize 'ocrText', then 'text', then 'fullText' as potential keys
+        if (ocrResult['extractedText'] is String &&
+            (ocrResult['extractedText'] as String).isNotEmpty) {
+          extractedTextValue = ocrResult['extractedText'] as String;
+        } else if (ocrResult['ocrText'] is String &&
+            (ocrResult['ocrText'] as String).isNotEmpty) {
+          extractedTextValue = ocrResult['ocrText'] as String;
+        } else if (ocrResult['text'] is String &&
+            (ocrResult['text'] as String).isNotEmpty) {
+          extractedTextValue = ocrResult['text'] as String;
+        } else if (ocrResult['fullText'] is String &&
+            (ocrResult['fullText'] as String).isNotEmpty) {
+          extractedTextValue = ocrResult['fullText'] as String;
+        }
+        // Add other potential keys like 'detectedText' if necessary based on actual OCR service response
+
+        if (extractedTextValue != null) {
+          logger.i(
+              'OCR scan successful for $imageId. Extracted text. Updating state.');
+          final notifier = ref.read(invoiceCaptureProvider(
+              (projectId: projectId, invoiceId: invoiceId)).notifier);
+          notifier.updateOcrTextForImage(imageId, extractedTextValue);
+          // InvoiceScanUtil handles success snackbar
+        } else {
+          // Text is null or empty, or not found under expected keys.
+          String errorMessage = "OCR returned no usable text.";
+          if (ocrResult.containsKey('error') && ocrResult['error'] != null) {
+            errorMessage = "OCR Error: ${ocrResult['error']}";
+            logger.e(
+                'OCR service returned an error for $imageId: ${ocrResult['error']}');
+          } else {
+            logger.w(
+                'OCR scan for $imageId did not find text under expected keys or text was empty. Result: $ocrResult');
+          }
+          ref.read(provider.notifier).setScanError(imageId, errorMessage);
+          // InvoiceScanUtil might show a snackbar; if not, or if more specific error needed, consider adding one here or relying on state change.
+        }
+      } else {
+        // ocrResult is null.
+        // This typically means InvoiceScanUtil.scanImage returned null, likely due to an exception
+        // during its HTTP call or within its own try-catch block.
+        // The catch block in this handleScan method or in InvoiceScanUtil should have already logged
+        // the error and called setScanError.
+        logger.w(
+            'OCR scan for $imageId returned null result. Error should have been handled by InvoiceScanUtil or the calling catch block.');
+      }
     } catch (e, stackTrace) {
-      timeoutTimer.cancel();
+      // Catch errors from scanImage or pre-scan steps
+      timeoutTimer?.cancel(); // Ensure timer is cancelled on any error too
       logger.e('[INVOICE_CAPTURE] Error during scan process:',
           error: e, stackTrace: stackTrace);
       ref.read(provider.notifier).setScanError(imageId, e.toString());

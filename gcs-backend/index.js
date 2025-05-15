@@ -17,47 +17,7 @@ try {
   // Consider how to handle this error; e.g., prevent app from fully starting
 }
 
-const { Pool } = require('pg'); // Add this for PostgreSQL
-
-// NEW: PostgreSQL Pool Initialization
-let pgPool = null;
-try {
-  pgPool = new Pool({
-    user: process.env.DB_USER,
-    host: process.env.DB_HOST,
-    database: process.env.DB_NAME,
-    password: process.env.DB_PASSWORD,
-    port: process.env.DB_PORT || 5432, // Default PostgreSQL port
-    // Optional: connection timeout, max connections in pool, etc.
-    // max: 20,
-    // idleTimeoutMillis: 30000,
-    // connectionTimeoutMillis: 2000,
-  });
-
-  // Test the PostgreSQL connection (optional, but recommended)
-  pgPool.query('SELECT NOW()', (err, res) => {
-    if (err) {
-      console.error('❌ PostgreSQL Pool: Error connecting to database:', err);
-    } else {
-      console.log('✅ PostgreSQL Pool: Successfully connected. Current time from DB:', res.rows[0].now);
-    }
-  });
-  console.log('✅ PostgreSQL Pool initialized.');
-
-} catch (e) {
-  console.error('❌ CRITICAL ERROR initializing PostgreSQL Pool:', e);
-  // If pgPool is critical, consider throwing e to halt startup
-}
-
-// Initialize services (PostgreSQL)
-const postgresServiceFile = require('./services/postgresService');
-let postgresServiceInstance = null;
-if (pgPool) { // Only initialize if the pool was created successfully
-  postgresServiceInstance = postgresServiceFile(pgPool);
-  console.log('✅ PostgreSQL Service initialized.');
-} else {
-  console.error('❌ PostgreSQL Service NOT initialized because pgPool is null.');
-}
+// PostgreSQL Pool is initialized in config/db.js and imported by services as needed.
 
 // For debugging, let's ensure these are still logged to see what Cloud Run provides:
 console.log('[ENV CHECK] GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);

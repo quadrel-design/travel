@@ -58,6 +58,7 @@ The Travel App is being migrated from Firestore to PostgreSQL. The backend is a 
 - [ ] Move database credentials to Secret Manager (more secure than environment variables)
 - [ ] Implement a proper database migration system for future schema changes
 - [ ] Create database backups and restore process
+- [ ] Fix PostgreSQL `pg_hba.conf` to allow connections for database management tasks
 
 ### Security Enhancements
 - [ ] Implement rate limiting to prevent API abuse

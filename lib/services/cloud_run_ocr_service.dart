@@ -56,7 +56,7 @@ class CloudRunOcrService {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) {
         _logger.e('[OCR] User not authenticated for OCR request.');
-        throw FunctionCallException('User not authenticated',
+        throw FunctionCallException('User not authenticated for OCR request',
             functionName: 'ocr-invoice');
       }
       final token = await user.getIdToken();
@@ -150,16 +150,29 @@ class CloudRunOcrService {
       _logger.d(
           '[ANALYSIS] Preparing to analyze text for project: $projectId, invoice: $invoiceId, image: $imageId');
 
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _logger.e('[ANALYSIS] User not authenticated for Analysis request.');
+        throw FunctionCallException(
+            'User not authenticated for Analysis request',
+            functionName: 'analyze-invoice');
+      }
+      final token = await user.getIdToken();
+      final authHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
       final response = await http
           .post(
         Uri.parse('$_baseUrl/analyze-invoice'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: jsonEncode({
           'ocrText': ocrText,
           'projectId': projectId,
           'invoiceId': invoiceId,
           'imageId': imageId,
-          'userId': FirebaseAuth.instance.currentUser?.uid,
+          'userId': user.uid,
         }),
       )
           .timeout(

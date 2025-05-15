@@ -64,13 +64,15 @@ if (!projectService) {
  */
 router.post('/analyze-invoice', async (req, res) => {
   console.log('[Routes/Analysis] /analyze-invoice hit');
-  // userId is now on req.user.id from authenticateUser middleware
   const { projectId, imageId, ocrText } = req.body; 
-  const userId = req.user.id; // Get userId from authenticated user
+  const userId = req.user ? req.user.id : null; // Get userId from authenticated user, handle if req.user is undefined
 
-  // invoiceId from body seems redundant if imageId is the primary key for invoice_images
-  // Assuming imageId refers to the id in invoice_images table.
+  // Log received values for debugging
+  console.log(`[Routes/Analysis] Received for /analyze-invoice - projectId: ${projectId}, imageId: ${imageId}, ocrText present: ${!!ocrText}, userId (from token): ${userId}`);
+  console.log('[Routes/Analysis] Full req.body:', JSON.stringify(req.body));
+
   if (!projectId || !imageId || !ocrText || !userId) {
+    console.error(`[Routes/Analysis] Validation failed: projectId=${projectId}, imageId=${imageId}, ocrText=${ocrText ? 'present' : 'absent'}, userId=${userId}`);
     return res.status(400).json({ error: 'projectId, imageId, ocrText, and authenticated userId are required' });
   }
   console.log(`[Routes/Analysis] Received /analyze-invoice for imageId: ${imageId}, userId: ${userId}, projectId: ${projectId}`);

@@ -8,8 +8,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 
 /// Utility class for invoice OCR scanning that can be shared across screens
 class InvoiceScanUtil {
-  static Future<void> scanImage(BuildContext context, WidgetRef ref,
-      String projectId, String invoiceId, InvoiceImageProcess imageInfo) async {
+  static Future<Map<String, dynamic>?> scanImage(
+      BuildContext context,
+      WidgetRef ref,
+      String projectId,
+      String invoiceId,
+      InvoiceImageProcess imageInfo) async {
     final logger = ref.read(loggerProvider);
     try {
       logger.d("🔍 Starting OCR scan for image ${imageInfo.id}...");
@@ -112,6 +116,7 @@ class InvoiceScanUtil {
           SnackBar(content: Text(message)),
         );
       }
+      return result;
     } catch (e) {
       logger.e("🔍 Error during OCR scan: $e");
       if (context.mounted) {
@@ -119,6 +124,7 @@ class InvoiceScanUtil {
           SnackBar(content: Text('Error scanning image: $e')),
         );
       }
+      return null;
     }
   }
 }
