@@ -29,6 +29,11 @@ The Travel App is being migrated from Firestore to PostgreSQL. The backend is a 
 - ✓ Fixed budget handling for null/undefined values to prevent server errors when fetching projects
 - ✓ Fixed project creation - Fixed 500 Internal Server Error when creating new projects
 - ✓ Fixed database authentication issue - Corrected the PostgreSQL password in Secret Manager by removing URL-encoded character
+- ✓ Resolved backend startup crashes due to SyntaxErrors and incorrect Express route handling.
+- ✓ Fixed TypeError related to Express middleware by correcting route imports.
+- ✓ Aligned image upload flow: Backend now accepts JSON metadata for GCS pre-uploaded files.
+- ✓ Ensured Flutter client sends all required metadata (originalFilename, contentType, size) for image record creation.
+- ✓ Resolved database schema mismatches for image metadata (analyzed_invoice_date, original_filename, size, content_type).
 
 ### Deployment and Configuration
 - ✓ Created Dockerfile for containerizing the application
@@ -44,10 +49,9 @@ The Travel App is being migrated from Firestore to PostgreSQL. The backend is a 
 ## Pending Tasks
 
 ### AI/Analysis Functionality
-- [ ] Fix analyzeText functionality that's not working correctly
-- [ ] Troubleshoot integration between OCR and Gemini API for invoice analysis
-- [ ] Improve error handling in analysis pipeline
-- [ ] Add better logging for AI analysis steps to diagnose issues
+- [ ] Review and confirm full analyzeText functionality post-OCR.
+- [ ] Further troubleshoot integration between OCR and Gemini API for invoice analysis if needed.
+- [ ] Improve error handling in analysis pipeline.
 
 ### Database Improvements
 - [ ] Enable SSL for PostgreSQL connections (more secure for production)

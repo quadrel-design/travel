@@ -42,6 +42,8 @@ class CloudRunOcrService {
   Future<Map<String, dynamic>> scanImage(
       String imagePath, String projectId, String invoiceId, String imageId,
       {int timeoutSeconds = _defaultTimeoutSeconds}) async {
+    _logger.d(
+        '[OCR] Service scanImage called for imageId: $imageId, invoiceId: $invoiceId');
     try {
       // Always fetch a fresh signed URL for OCR
       final gcsFileService = GcsFileService(backendBaseUrl: _baseUrl);
@@ -51,16 +53,28 @@ class CloudRunOcrService {
       _logger.d(
           '[OCR] Project ID: $projectId, Invoice ID: $invoiceId, Image ID: $imageId');
 
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        _logger.e('[OCR] User not authenticated for OCR request.');
+        throw FunctionCallException('User not authenticated',
+            functionName: 'ocr-invoice');
+      }
+      final token = await user.getIdToken();
+      final authHeaders = {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      };
+
       final response = await http
           .post(
         Uri.parse('$_baseUrl/ocr-invoice'),
-        headers: {'Content-Type': 'application/json'},
+        headers: authHeaders,
         body: jsonEncode({
           'imageUrl': imageUrl,
           'projectId': projectId,
           'invoiceId': invoiceId,
           'imageId': imageId,
-          'userId': FirebaseAuth.instance.currentUser?.uid,
+          'userId': user.uid,
         }),
       )
           .timeout(
