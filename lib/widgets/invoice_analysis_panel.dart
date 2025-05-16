@@ -324,114 +324,94 @@ class InvoiceAnalysisPanel extends ConsumerWidget {
 
   Future<void> _runOCR(WidgetRef ref) async {
     logger.i('OCR requested for image: ${imageInfo.id}');
-
-    // Set processing state
     ref.read(invoiceProcessingProvider(imageInfo.id).notifier).state = true;
 
     try {
       final service = ref.read(invoiceProcessingServiceProvider);
 
-      // Extract project and invoice IDs from the image path
-      // Format: users/{userId}/projects/{projectId}/invoices/{invoiceId}/invoice_images/{filename}
-      final pathComponents = imageInfo.imagePath.split('/') ?? [];
-      String? projectId, invoiceId;
+      // Extract projectId from the image path
+      // Format: users/{userId}/projects/{projectId}/invoice_images/{filename}
+      final pathComponents = imageInfo.imagePath.split('/');
+      String? projectId;
 
-      if (pathComponents.length >= 6) {
-        // Find the index of "projects" and "invoices"
-        final projectsIndex = pathComponents.indexOf('projects');
-        final invoicesIndex = pathComponents.indexOf('invoices');
-
-        if (projectsIndex >= 0 && projectsIndex + 1 < pathComponents.length) {
-          projectId = pathComponents[projectsIndex + 1];
-          logger.d('Extracted projectId: $projectId');
-        }
-
-        if (invoicesIndex >= 0 && invoicesIndex + 1 < pathComponents.length) {
-          invoiceId = pathComponents[invoicesIndex + 1];
-          logger.d('Extracted invoiceId: $invoiceId');
-        }
+      final projectsIndex = pathComponents.indexOf('projects');
+      if (projectsIndex != -1 && projectsIndex + 1 < pathComponents.length) {
+        projectId = pathComponents[projectsIndex + 1];
+        logger.d('Extracted projectId: $projectId');
       }
 
-      if (projectId == null || invoiceId == null) {
+      // The invoiceId for the backend call is the image's own ID
+      final String invoiceIdForBackend = imageInfo.id;
+      logger.d(
+          'Using imageInfo.id as invoiceId for backend OCR call: $invoiceIdForBackend');
+
+      if (projectId == null) {
         logger.e(
-            'Failed to extract project or invoice ID from path: ${imageInfo.imagePath}');
-        throw Exception('Invalid image path format');
+            'Failed to extract project ID from path: ${imageInfo.imagePath}');
+        throw Exception('Invalid image path format for project ID extraction');
       }
 
       final result = await service.runOCR(
         projectId,
-        invoiceId,
-        imageInfo.id,
+        invoiceIdForBackend, // Use imageInfo.id as the invoiceId for the service
+        imageInfo.id, // This is the imageId (image's own unique ID)
       );
 
       if (result) {
-        // Show success message
         logger.i('OCR request sent successfully');
       } else {
-        // Show error message
         logger.e('OCR request failed');
       }
     } catch (e) {
       logger.e('Error processing OCR request', error: e);
     } finally {
-      // Reset processing state
       ref.read(invoiceProcessingProvider(imageInfo.id).notifier).state = false;
     }
   }
 
   Future<void> _runAnalysis(WidgetRef ref) async {
     logger.i('Analysis requested for image: ${imageInfo.id}');
-
-    // Set processing state
     ref.read(invoiceProcessingProvider(imageInfo.id).notifier).state = true;
 
     try {
       final service = ref.read(invoiceProcessingServiceProvider);
 
-      // Extract project and invoice IDs from the image path
-      // Format: users/{userId}/projects/{projectId}/invoices/{invoiceId}/invoice_images/{filename}
-      final pathComponents = imageInfo.imagePath.split('/') ?? [];
-      String? projectId, invoiceId;
+      // Extract projectId from the image path
+      // Format: users/{userId}/projects/{projectId}/invoice_images/{filename}
+      final pathComponents = imageInfo.imagePath.split('/');
+      String? projectId;
 
-      if (pathComponents.length >= 6) {
-        // Find the index of "projects" and "invoices"
-        final projectsIndex = pathComponents.indexOf('projects');
-        final invoicesIndex = pathComponents.indexOf('invoices');
-
-        if (projectsIndex >= 0 && projectsIndex + 1 < pathComponents.length) {
-          projectId = pathComponents[projectsIndex + 1];
-          logger.d('Extracted projectId: $projectId');
-        }
-
-        if (invoicesIndex >= 0 && invoicesIndex + 1 < pathComponents.length) {
-          invoiceId = pathComponents[invoicesIndex + 1];
-          logger.d('Extracted invoiceId: $invoiceId');
-        }
+      final projectsIndex = pathComponents.indexOf('projects');
+      if (projectsIndex != -1 && projectsIndex + 1 < pathComponents.length) {
+        projectId = pathComponents[projectsIndex + 1];
+        logger.d('Extracted projectId: $projectId');
       }
 
-      if (projectId == null || invoiceId == null) {
+      // The invoiceId for the backend call is the image's own ID
+      final String invoiceIdForBackend = imageInfo.id;
+      logger.d(
+          'Using imageInfo.id as invoiceId for backend analysis call: $invoiceIdForBackend');
+
+      if (projectId == null) {
         logger.e(
-            'Failed to extract project or invoice ID from path: ${imageInfo.imagePath}');
-        throw Exception('Invalid image path format');
+            'Failed to extract project ID from path: ${imageInfo.imagePath}');
+        throw Exception('Invalid image path format for project ID extraction');
       }
 
       final result = await service.runAnalysis(
         projectId,
-        invoiceId,
-        imageInfo.id,
+        invoiceIdForBackend, // Use imageInfo.id as the invoiceId for the service
+        imageInfo.id, // This is the imageId (image's own unique ID)
       );
 
       if (result) {
-        // Show success message
         logger.i('Analysis request sent successfully');
       } else {
-        // Show error message
         logger.e('Analysis request failed');
       }
     } catch (e) {
       logger.e('Error processing analysis request', error: e);
     } finally {
-      // Reset processing state
       ref.read(invoiceProcessingProvider(imageInfo.id).notifier).state = false;
     }
   }

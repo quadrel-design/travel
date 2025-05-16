@@ -73,14 +73,12 @@ class _InvoiceCaptureDetailViewState
     final state = ref.watch(provider);
     final images = state.images;
 
-    // Debug logging: print all images received
     _logger.d('[INVOICE_CAPTURE] UI received ${images.length} images:');
     for (final img in images) {
       _logger.d(
           '[INVOICE_CAPTURE] Image: id=${img.id}, url=${img.url}, imagePath=${img.imagePath}');
     }
 
-    // Handle case when images are removed
     if (images.isNotEmpty && currentIndex >= images.length) {
       currentIndex = images.length - 1;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -92,7 +90,8 @@ class _InvoiceCaptureDetailViewState
 
     _logger.d('[INVOICE_CAPTURE] Building with ${images.length} images');
     if (images.isNotEmpty) {
-      _logger.d('[INVOICE_CAPTURE] First image URL: ${images[0].url}');
+      _logger.d(
+          '[INVOICE_CAPTURE] First image path (URL fetched on demand by display widget): ${images[0].imagePath}, initial URL field: "${images[0].url}"');
     }
 
     return Scaffold(

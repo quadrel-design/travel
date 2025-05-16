@@ -112,12 +112,12 @@ if (!projectService) {
  */
 router.post('/analyze-invoice', async (req, res) => {
   console.log('[Routes/Analysis] /analyze-invoice hit');
-  const { projectId, imageId, ocrText } = req.body; 
+  const { projectId, imageId, ocrText } = req.body; // invoiceId is received but no longer explicitly used here
   const userId = req.user ? req.user.id : null; // Get userId from authenticated user, handle if req.user is undefined
 
   // Log received values for debugging
   console.log(`[Routes/Analysis] Received for /analyze-invoice - projectId: ${projectId}, imageId: ${imageId}, ocrText present: ${!!ocrText}, userId (from token): ${userId}`);
-  console.log('[Routes/Analysis] Full req.body:', JSON.stringify(req.body));
+  // console.log('[Routes/Analysis] Full req.body:', JSON.stringify(req.body)); // req.body.invoiceId might still appear here if sent by client
 
   if (!projectId || !imageId || !ocrText || !userId) {
     console.error(`[Routes/Analysis] Validation failed: projectId=${projectId}, imageId=${imageId}, ocrText=${ocrText ? 'present' : 'absent'}, userId=${userId}`);
@@ -155,8 +155,8 @@ router.post('/analyze-invoice', async (req, res) => {
         const analysisDataForPg = {
           status: finalStatus,
           is_invoice: analysisResult.isInvoice, // from Gemini result
-          analysis_processed_at: analysisTimestamp, // Corrected field name if needed
-          gemini_analysis_json: analysisResult.invoiceAnalysis || {} // Store the full JSON from Gemini
+          analysis_processed_at: analysisTimestamp, 
+          gemini_analysis_json: analysisResult.invoiceAnalysis || {} 
         };
 
         // If analysis was successful and provided invoice details, map them

@@ -297,16 +297,16 @@ class PostgresInvoiceImageRepository implements InvoiceImagesRepository {
   @override
   Future<InvoiceImageProcess> uploadInvoiceImage(
       String projectId, Uint8List fileBytes, String fileName) async {
-    final userId = _getCurrentUserId();
     final logger = _logger;
+    final userId = _getCurrentUserId();
 
-    final imageId =
+    final imageFileId =
         '${DateTime.now().millisecondsSinceEpoch}_${p.basename(fileName)}';
     logger.d(
-        '[PostgresInvoiceRepo] Uploading image $imageId for project $projectId');
+        '[PostgresInvoiceRepo] Uploading image $imageFileId for project $projectId');
 
     final gcsPath =
-        'users/$userId/projects/$projectId/invoice_images/$imageId${p.extension(fileName)}';
+        'users/$userId/projects/$projectId/invoice_images/$imageFileId${p.extension(fileName)}';
 
     try {
       logger.d(
@@ -325,8 +325,7 @@ class PostgresInvoiceImageRepository implements InvoiceImagesRepository {
       final int fileSize = fileBytes.length;
 
       final Map<String, dynamic> requestBody = {
-        'id': imageId,
-        'project_id': projectId,
+        'id': imageFileId,
         'imagePath': gcsPath,
         'uploaded_at': DateTime.now().toIso8601String(),
         'originalFilename': fileName,
@@ -340,7 +339,7 @@ class PostgresInvoiceImageRepository implements InvoiceImagesRepository {
       final headers = await _getAuthHeaders();
       final response = await http.post(
         Uri.parse('$_baseUrl/api/projects/$projectId/images'),
-        headers: headers,
+        headers: {...headers, 'Content-Type': 'application/json'},
         body: json.encode(requestBody),
       );
 
@@ -350,7 +349,7 @@ class PostgresInvoiceImageRepository implements InvoiceImagesRepository {
       if (response.statusCode == 201) {
         final Map<String, dynamic> data = json.decode(response.body);
         logger.i(
-            '[PostgresInvoiceRepo] Successfully uploaded and created record for image $imageId');
+            '[PostgresInvoiceRepo] Successfully uploaded and created record for image $imageFileId');
         return InvoiceImageProcess.fromJson({
           ...data,
           'projectId': projectId,
@@ -374,9 +373,13 @@ class PostgresInvoiceImageRepository implements InvoiceImagesRepository {
         );
       }
     } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error uploading image $fileName',
-          error: e, stackTrace: stackTrace);
-      if (e is ImageUploadException || e is DatabaseOperationException) {
+      logger.e(
+          '[PostgresInvoiceRepo] Error uploading image $fileName for project $projectId',
+          error: e,
+          stackTrace: stackTrace);
+      if (e is ImageUploadException ||
+          e is DatabaseOperationException ||
+          e is ArgumentError) {
         rethrow;
       }
       throw RepositoryException(

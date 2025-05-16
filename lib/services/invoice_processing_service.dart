@@ -1,7 +1,4 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/invoice_image_process.dart';
-import '../providers/service_providers.dart' as services;
 import '../providers/logging_provider.dart';
 import '../providers/repository_providers.dart';
 import '../config/service_config.dart';
@@ -42,7 +39,7 @@ class InvoiceProcessingService {
       final imageInfo = matchingImages.first;
       final imagePath = imageInfo.imagePath;
 
-      if (imagePath == null || imagePath.isEmpty) {
+      if (imagePath.isEmpty) {
         logger.e('No image path found for image $imageId');
         return false;
       }
@@ -167,8 +164,18 @@ class InvoiceProcessingService {
         if (response.statusCode == 200 || response.statusCode == 202) {
           logger.i('Analysis request sent successfully for image $imageId');
 
-          // If the backend sent an ApiError status but returned a 200 status code,
-          // we still consider it a successful request (just not a successful analysis)
+          // The backend /analyze-invoice route has already updated the necessary data in Postgres.
+          // The getProjectImagesStream will pick up these changes on its next poll.
+          // We just need to confirm the call was successful.
+
+          // Optionally, log extracted fields for quick verification if needed locally
+          // final String? returnedInvoiceId = responseMap['invoiceId'] as String?;
+          final Map<String, dynamic>? geminiData =
+              responseMap['data'] as Map<String, dynamic>?;
+          logger.d(
+              // '[InvoiceProcessingService] Analysis response parsed: invoiceId=$returnedInvoiceId, hasGeminiData=${geminiData != null}');
+              '[InvoiceProcessingService] Analysis response parsed: hasGeminiData=${geminiData != null}');
+
           return true;
         }
       } catch (e) {

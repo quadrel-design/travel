@@ -17,6 +17,7 @@ import 'package:travel/providers/logging_provider.dart'; // Import logger provid
 // Import routes
 // Import Firebase Auth (needed for error types maybe)
 import 'package:firebase_auth/firebase_auth.dart'; // Needed for FirebaseAuthException
+import 'package:travel/widgets/text_field.dart'; // Import the new AppTextField
 
 // Change to ConsumerStatefulWidget
 /// The main screen widget for handling user authentication.
@@ -361,6 +362,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   /// Builds the UI for the Login form.
   Widget _buildAuthForm(BuildContext context, WidgetRef ref, bool isLogin,
       bool isLoading, String? errorMessage) {
+    // Access theme for consistent styling
+    final theme = Theme.of(context);
+    final errorColor = Colors.red.shade700; // Or Colors.pink;
+
     return Form(
       key: _formKey,
       child: Column(
@@ -379,18 +384,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             ),
 
           // --- Email Field ---
-          TextFormField(
+          AppTextField(
             controller: _emailController,
-            decoration: const InputDecoration(
-              // labelText: l10n.emailLabel,
-              labelText: 'Email', // Placeholder
-              // hintText: l10n.emailHint,
-              hintText: 'Enter your email', // Placeholder
-              prefixIcon: Icon(Icons.email),
-            ),
+            labelText:
+                'Email', // Placeholder, replace with l10n.emailLabel if available
+            hintText:
+                'Enter your email', // Placeholder, replace with l10n.emailHint if available
+            prefixIconData: Icons.email_outlined,
             keyboardType: TextInputType.emailAddress,
-            autocorrect: false,
-            textCapitalization: TextCapitalization.none,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (value) {
               if (value == null ||
                   value.trim().isEmpty ||
@@ -400,30 +402,22 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               }
               return null;
             },
-            onSaved: (value) {
-              // No need to save to separate variable if using controller directly
-            },
+            // onSaved is handled by FormField within AppTextField if passed, or by _formKey.currentState!.save()
           ),
           const SizedBox(height: 16),
 
           // --- Password Field ---
-          TextFormField(
+          AppTextField(
             controller: _passwordController,
-            decoration: InputDecoration(
-              // labelText: l10n.passwordLabel,
-              labelText: 'Password', // Placeholder
-              // hintText: l10n.passwordHint,
-              hintText: 'Enter your password', // Placeholder
-              prefixIcon: const Icon(Icons.lock),
-              suffixIcon: IconButton(
-                // Added suffix icon
-                icon: Icon(
-                  _obscurePassword ? Icons.visibility_off : Icons.visibility,
-                ),
-                onPressed: _togglePasswordVisibility,
-              ),
-            ),
-            obscureText: _obscurePassword, // Use local state
+            labelText:
+                'Password', // Placeholder, replace with l10n.passwordLabel if available
+            hintText:
+                'Enter your password', // Placeholder, replace with l10n.passwordHint if available
+            prefixIconData: Icons.lock_outline,
+            isPassword: true,
+            obscureText: _obscurePassword,
+            onToggleObscureText: _togglePasswordVisibility,
+            autovalidateMode: AutovalidateMode.onUserInteraction,
             validator: (value) {
               if (value == null || value.trim().length < 6) {
                 // return l10n.passwordValidationError;
@@ -431,9 +425,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
               }
               return null;
             },
-            onSaved: (value) {
-              // No need to save to separate variable if using controller directly
-            },
+            // onSaved is handled by FormField within AppTextField if passed, or by _formKey.currentState!.save()
           ),
           const SizedBox(height: 24),
 

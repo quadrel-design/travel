@@ -45,28 +45,35 @@ CREATE TABLE IF NOT EXISTS projects (
 -- Invoice Images Table
 CREATE TABLE IF NOT EXISTS invoice_images (
     id TEXT PRIMARY KEY,
-    project_id UUID NOT NULL,
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL,
-    gcs_path TEXT NOT NULL,
-    status TEXT NOT NULL,
-    is_invoice BOOLEAN,
+    gcs_path TEXT NOT NULL UNIQUE,
+    status TEXT DEFAULT 'uploaded',
+    original_filename TEXT,
+    content_type TEXT,
+    size BIGINT,
+    uploaded_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    
+    -- OCR Fields
     ocr_text TEXT,
-    ocr_confidence DECIMAL(5, 2),
+    ocr_confidence FLOAT,
     ocr_text_blocks JSONB,
-    ocr_processed_at TIMESTAMP WITH TIME ZONE,
-    analysis_processed_at TIMESTAMP WITH TIME ZONE,
-    analyzed_invoice_date TIMESTAMP WITH TIME ZONE,
-    invoice_sum DECIMAL(10, 2),
+    ocr_processed_at TIMESTAMPTZ,
+
+    -- Analysis Fields (populated by Gemini or other analysis tools)
+    gemini_analysis_json JSONB,
+    is_invoice BOOLEAN,
+    analyzed_invoice_date DATE,
+    invoice_sum NUMERIC,
     invoice_currency TEXT,
-    invoice_taxes DECIMAL(10, 2),
+    invoice_taxes NUMERIC,
     invoice_location TEXT,
     invoice_category TEXT,
-    invoice_taxonomy TEXT,
-    gemini_analysis_json JSONB,
-    error_message TEXT,
-    uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    invoice_taxonomy JSONB,
+    analysis_processed_at TIMESTAMPTZ,
+    error_message TEXT
 );
 
 -- Add foreign keys for invoice_images

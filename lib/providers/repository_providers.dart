@@ -25,6 +25,7 @@ import 'package:travel/repositories/firebase_auth_repository.dart';
 import 'package:travel/models/project.dart';
 import 'package:travel/models/expense.dart';
 import 'package:travel/models/invoice_image_process.dart';
+import 'package:flutter/foundation.dart'; // ADDED for listEquals
 
 /// Provider for accessing the Firebase Authentication instance.
 ///
@@ -146,14 +147,30 @@ final galleryUploadStateProvider = StateProvider<bool>((ref) => false);
 /// Parameters:
 ///   - projectId: The ID of the project
 final projectImagesStreamProvider = StreamProvider.autoDispose
-    .family<List<InvoiceImageProcess>, String>((ref, projectIdWithKey) {
-  final parts = projectIdWithKey.split('|');
+    .family<List<InvoiceImageProcess>, String>((ref, identifiers) {
+  final parts = identifiers.split('|');
   final projectId = parts[0];
   final repository = ref.watch(invoiceRepositoryProvider);
   final logger = ref.watch(loggerProvider);
-  logger.d(
-      '[PROVIDER] projectImagesStreamProvider executing for projectId: $projectId');
-  return repository.getProjectImagesStream(projectId);
+  final rawStream = repository.getProjectImagesStream(projectId);
+
+  List<InvoiceImageProcess>? previousList;
+
+  logger
+      .d('[PROVIDER] projectImagesStreamProvider for $projectId initialized.');
+
+  return rawStream.where((newList) {
+    final isDifferent = !listEquals(previousList, newList);
+    if (isDifferent) {
+      logger.d(
+          '[PROVIDER] projectImagesStreamProvider for $projectId: List changed, emitting.');
+      previousList = newList;
+    } else {
+      logger.d(
+          '[PROVIDER] projectImagesStreamProvider for $projectId: List is the same, filtering out.');
+    }
+    return isDifferent;
+  });
 });
 
 final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {
@@ -177,3 +194,14 @@ final specificInvoiceImagesProvider =
     // Again, if specific filtering was intended by a now-removed invoiceId, it needs re-evaluation.
   },
 );
+
+/// Provider for all projects of the current user.
+///
+/// This provider delivers data of all projects for the current user.
+/// The data will be fetched from the PostgreSQL database via REST API.
+/// Data is refreshed when reloadKey changes or when the provider is invalidated.
+final userProjectsStreamProvider =
+    StreamProvider.family<List<Project>, int>((ref, reloadKey) {
+  final repository = ref.watch(invoiceRepositoryProvider);
+  return repository.fetchUserProjects();
+});

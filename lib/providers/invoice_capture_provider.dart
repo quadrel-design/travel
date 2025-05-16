@@ -17,6 +17,7 @@ import 'package:logger/logger.dart';
 import 'package:travel/models/invoice_image_process.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:travel/providers/repository_providers.dart';
+import 'package:flutter/foundation.dart';
 
 /// State class for the invoice capture feature.
 ///
@@ -102,14 +103,16 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
       final repository = _ref.read(invoiceRepositoryProvider);
       _imageStreamSubscription =
           repository.getProjectImagesStream(_projectId).listen(
-        (images) {
-          _logger
-              .d('[INVOICE_CAPTURE] Stream received ${images.length} images');
-          for (final img in images) {
+        (newImages) {
+          _logger.d(
+              '[INVOICE_CAPTURE] Stream received ${newImages.length} images');
+          if (!listEquals(state.images, newImages)) {
+            _logger.d('[INVOICE_CAPTURE] Image list changed, updating state.');
+            state = state.copyWith(images: newImages);
+          } else {
             _logger.d(
-                '[INVOICE_CAPTURE] Image: id=${img.id}, url=${img.url}, invoiceId=${img.invoiceId}');
+                '[INVOICE_CAPTURE] Image list is the same, not updating state.');
           }
-          state = state.copyWith(images: images);
         },
         onError: (error, stackTrace) {
           _logger.e('[INVOICE_CAPTURE] Error in image stream:',

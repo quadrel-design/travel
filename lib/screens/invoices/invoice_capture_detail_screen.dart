@@ -23,10 +23,8 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final projectImagesAsyncValue = ref.watch(invoiceImagesStreamProvider({
-      'projectId': projectId,
-      'invoiceId': invoiceId,
-    }));
+    final projectImagesAsyncValue =
+        ref.watch(invoiceImagesStreamProvider(projectId));
 
     final projectAsyncValue = ref.watch(invoiceStreamProvider(projectId));
 
@@ -100,10 +98,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 4),
                   ElevatedButton(
                     onPressed: () =>
-                        ref.invalidate(invoiceImagesStreamProvider({
-                      'projectId': projectId,
-                      'invoiceId': invoiceId,
-                    })),
+                        ref.invalidate(invoiceImagesStreamProvider(projectId)),
                     child: const Text('Retry', style: TextStyle(fontSize: 10)),
                   ),
                 ],
@@ -215,7 +210,6 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
       ref.read(loggerProvider).d("🗑️ Starting invoice deletion...");
       await repo.deleteInvoiceImage(
         projectId,
-        invoiceId,
         imageInfo.id,
       );
       ref.read(loggerProvider).i("🗑️ Invoice deleted successfully");
@@ -244,8 +238,8 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
           .d("📸 File: $fileName, size: ${fileBytes.length} bytes");
 
       ref.read(loggerProvider).d("📸 Starting repository upload...");
-      final uploadResult = await repo.uploadInvoiceImage(
-          projectId, invoiceId, fileBytes, fileName);
+      final uploadResult =
+          await repo.uploadInvoiceImage(projectId, fileBytes, fileName);
 
       ref.read(loggerProvider).i("📸 Repository upload completed successfully");
       ref.read(loggerProvider).d('📸 Upload result: ${uploadResult.id}');

@@ -6,16 +6,17 @@
  * such as text, invoice data, and processing status.
  */
 
-import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart'; // Removed this import
 // Remove provider imports if they were added here
 // import 'package:flutter_riverpod/flutter_riverpod.dart';
 // import 'package:travel/providers/logging_provider.dart';
+import 'package:equatable/equatable.dart';
 
 /// Represents an image associated with a project and its metadata.
 ///
 /// This model stores information about images including their storage path,
 /// extracted data from OCR processing, and status information.
-class InvoiceImageProcess {
+class InvoiceImageProcess extends Equatable {
   /// Unique identifier for the image
   final String id;
 
@@ -60,6 +61,20 @@ class InvoiceImageProcess {
     this.uploadedAt,
   });
 
+  @override
+  List<Object?> get props => [
+        id,
+        url,
+        imagePath,
+        invoiceId,
+        ocrText,
+        invoiceAnalysis,
+        lastProcessedAt,
+        location,
+        isInvoiceGuess,
+        uploadedAt,
+      ];
+
   /// Creates a InvoiceCaptureProcess instance from a JSON map.
   ///
   /// This method handles Firestore Timestamp objects and safely parses numeric values.
@@ -69,7 +84,6 @@ class InvoiceImageProcess {
     DateTime? parseDate(dynamic value) {
       if (value == null) return null;
       if (value is DateTime) return value;
-      if (value is Timestamp) return value.toDate();
       if (value is String) return DateTime.tryParse(value);
       return null;
     }
@@ -79,7 +93,7 @@ class InvoiceImageProcess {
         id: json['id'] ?? '',
         url: json['url'] ?? '',
         imagePath: json['imagePath'] ?? json['image_path'] ?? '',
-        invoiceId: json['invoiceId'] ?? '',
+        invoiceId: json['id'] ?? '',
         ocrText: json['ocrText'],
         invoiceAnalysis: json['invoiceAnalysis'],
         lastProcessedAt: parseDate(json['lastProcessedAt']),

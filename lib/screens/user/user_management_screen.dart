@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 // import 'package:provider/provider.dart'; // Remove unused import
 import '../../models/user.dart' as app_user;
 // Import Firestore
-import 'package:cloud_firestore/cloud_firestore.dart';
+// import 'package:cloud_firestore/cloud_firestore.dart'; // Remove this import
+import 'package:firebase_core/firebase_core.dart'; // Keep for FirebaseException if used generally
 
 class UserManagementScreen extends StatefulWidget {
   const UserManagementScreen({super.key});
@@ -29,27 +30,33 @@ class UserManagementScreenState extends State<UserManagementScreen> {
     });
     try {
       // Use Firestore
-      final firestore = FirebaseFirestore.instance;
-      final querySnapshot = await firestore.collection('users').get();
+      // final firestore = FirebaseFirestore.instance; // Comment out
+      // final querySnapshot = await firestore.collection('users').get(); // Comment out
 
       // Map Firestore documents, including the ID
-      final List<app_user.User> loadedUsers = querySnapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id; // Add Firestore document ID
-        return app_user.User.fromJson(data);
-      }).toList();
+      // final List<app_user.User> loadedUsers = querySnapshot.docs.map((doc) { // Comment out
+      //   final data = doc.data(); // Comment out
+      //   data['id'] = doc.id; // Add Firestore document ID // Comment out
+      //   return app_user.User.fromJson(data); // Comment out
+      // }).toList(); // Comment out
+      final List<app_user.User> loadedUsers = []; // Placeholder
 
       if (mounted) {
         setState(() {
           _users = loadedUsers;
           _isLoading = false;
+          if (loadedUsers.isEmpty) {
+            _error =
+                'User fetching logic needs to be updated to use PostgreSQL.'; // Placeholder message
+          }
         });
       }
       // Catch FirebaseException
     } on FirebaseException catch (e) {
+      // This might catch general Firebase errors, fine to keep
       if (mounted) {
         setState(() {
-          _error = 'Failed to load users: ${e.message}';
+          _error = 'Failed to load users: ${e.message} (Firebase Core Error)';
           _isLoading = false;
         });
       }
@@ -89,17 +96,23 @@ class UserManagementScreenState extends State<UserManagementScreen> {
       });
       try {
         // Use Firestore
-        final firestore = FirebaseFirestore.instance;
-        await firestore.collection('users').doc(userId).delete();
+        // final firestore = FirebaseFirestore.instance; // Comment out
+        // await firestore.collection('users').doc(userId).delete(); // Comment out
+
+        _error =
+            'User deletion logic needs to be updated to use PostgreSQL for user ID: $userId.'; // Placeholder
 
         // Refetch users after delete
-        await _fetchUsers();
+        await _fetchUsers(); // This will show the placeholder error now
 
         // Catch FirebaseException
       } on FirebaseException catch (e) {
+        // This might catch general Firebase errors
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete user: ${e.message}')),
+            SnackBar(
+                content: Text(
+                    'Failed to delete user: ${e.message} (Firebase Core Error)')),
           );
           setState(() {
             _isLoading = false;

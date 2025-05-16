@@ -9,13 +9,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:logger/logger.dart';
-import 'package:travel/providers/logging_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
-import 'dart:typed_data';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import 'package:uuid/uuid.dart';
 
 class InvoiceCaptureOverviewScreen extends ConsumerStatefulWidget {
@@ -33,7 +29,7 @@ class _InvoiceCaptureOverviewScreenState
   int _reloadKey = 0;
   XFile? _imageFile; // Store the picked image file
   bool _isUploading = false;
-  bool _isProcessing = false; // For OCR/Analysis
+  final bool _isProcessing = false; // For OCR/Analysis
   String? _uploadError;
   InvoiceImageProcess? _uploadedImageInfo; // Store info of last uploaded image
 
@@ -346,7 +342,7 @@ class _InvoiceCaptureOverviewScreenState
       _logger
           .d("📸 Starting repository upload to project: ${widget.project.id}");
 
-      // Call uploadInvoiceImage without invoiceId
+      // Call uploadInvoiceImage with projectId, fileBytes, and fileName only
       final uploadResult =
           await repo.uploadInvoiceImage(widget.project.id, fileBytes, fileName);
 

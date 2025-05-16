@@ -25,6 +25,7 @@ const firebaseAdmin = require('firebase-admin'); // For authentication
  * @param {import('express').NextFunction} next - Express next middleware function.
  */
 const authenticateUser = async (req, res, next) => {
+  console.log('[Routes/OCR][AuthMiddleware] Received headers:', JSON.stringify(req.headers)); // Log all headers
   if (firebaseAdmin.apps.length === 0) {
     console.error('[Routes/OCR][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
     return res.status(500).json({ error: 'Authentication service not configured.' });

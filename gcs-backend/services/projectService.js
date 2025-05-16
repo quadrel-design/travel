@@ -46,7 +46,7 @@ function _transformDbImageToApiV1Format(dbRow) {
   return {
     id: dbRow.id,
     projectId: dbRow.project_id,
-    userId: dbRow.user_id, // Included for completeness, client can ignore if not needed
+    userId: dbRow.user_id,
     status: dbRow.status,
     imagePath: dbRow.gcs_path,
     isInvoiceGuess: dbRow.is_invoice, // Handles null/undefined implicitly
@@ -636,7 +636,21 @@ const projectService = {
   updateImageMetadata: async (imageId, imageData, userId) => {
     if (!pool) { console.error('[ProjectService] DB Pool not available for updateImageMetadata'); throw new Error('DB Connection Error'); }
 
-    const { projectId, ...fieldsToUpdate } = imageData; // Separate projectId if present
+    const { projectId, ...fieldsToUpdate } = imageData;
+
+    // Remove invoice_id or invoiceId if it accidentally exists in fieldsToUpdate, as the column is gone
+    if ('invoice_id' in fieldsToUpdate) {
+      delete fieldsToUpdate.invoice_id;
+    }
+    if ('invoiceId' in fieldsToUpdate) {
+      delete fieldsToUpdate.invoiceId;
+    }
+
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      console.log(`[ProjectService] No fields to update for image ${imageId}. Returning current data.`);
+      const currentImage = await projectService.getInvoiceImageById(projectId, imageId, userId); // projectId might be undefined if not in imageData
+      return currentImage; 
+    }
 
     const columnsToUpdate = [];
     const values = [];
