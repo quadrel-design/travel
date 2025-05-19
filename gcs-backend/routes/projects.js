@@ -18,6 +18,8 @@ const firebaseAdmin = require('firebase-admin');
 const path = require('path');
 
 const projectService = require('../services/projectService');
+const { addSseClient } = require('../services/sseService');
+const logger = require('../config/logger');
 
 // Initialize in-memory storage for multer
 const storage = multer.memoryStorage();
@@ -654,6 +656,61 @@ router.patch('/:projectId/images/:imageId/analysis', async (req, res) => {
     }
     
     res.status(500).json({ error: 'Failed to update analysis details' });
+  }
+});
+
+// SSE Endpoint for Project Image Updates
+router.get('/:projectId/image-stream', async (req, res) => {
+  const projectId = req.params.projectId;
+  const userId = req.user.id; // Ensure project belongs to user
+
+  logger.info(`[SSE] Connection attempt for project ${projectId} by user ${userId}`);
+
+  // 1. Set SSE Headers
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Useful for Nginx
+
+  // Optional: Send a connection confirmation message (client might not use this, but good for debugging)
+  res.write('event: connection_established\\ndata: {"message": "SSE connection established for project ' + projectId + '"}\\n\\n');
+  
+  try {
+    // 2. Verify project ownership (optional but good practice)
+    const project = await projectService.getProjectById(projectId, userId);
+    if (!project) {
+      logger.warn(`[SSE] User ${userId} attempted to connect to non-existent or unauthorized project ${projectId}.`);
+      // Don't keep the connection open if project is invalid or not owned.
+      // Send an error event and close.
+      res.write(`event: error\\ndata: {"error": "Project not found or not authorized"}\\n\\n`);
+      return res.status(404).end(); // End the response
+    }
+
+    // 3. Register client with sseService
+    addSseClient(projectId, res);
+    logger.info(`[SSE] Client registered for project ${projectId}. Sending initial image list.`);
+
+    // 4. Fetch and send initial image list
+    const images = await projectService.getProjectImages(projectId, userId);
+    logger.info(`[SSE] Fetched images for project ${projectId}: ${JSON.stringify(images, null, 2)}`);
+    res.write(`event: imagesUpdated\\ndata: ${JSON.stringify(images)}\\n\\n`);
+
+    // Keep connection alive. sseService will handle 'close' event for cleanup.
+
+  } catch (error) {
+    logger.error(`[SSE] Error during connection setup for project ${projectId}:`, error);
+    // Send an error event to the client before closing
+    try {
+        res.write(`event: error\\ndata: ${JSON.stringify({ error: 'Internal server error during SSE setup' })}\\n\\n`);
+    } catch (writeError) {
+        logger.error('[SSE] Failed to send error event to client:', writeError);
+    }
+    // Don't call addSseClient if there was an error before that point.
+    // If res.on('close') was already set up by addSseClient, it will handle cleanup.
+    // Otherwise, explicitly end.
+    if (!res.writableEnded) {
+        res.status(500).end();
+    }
   }
 });
 

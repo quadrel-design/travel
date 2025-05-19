@@ -7,12 +7,11 @@ import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:travel/providers/service_providers.dart' as service_providers;
-
 import '../../models/project.dart';
 import '../../models/invoice_image_process.dart';
+import '../../providers/auth_providers.dart';
 
 class ProjectDetailScreen extends ConsumerWidget {
   final Project project;
@@ -31,13 +30,21 @@ class ProjectDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
+    final logger = ref.watch(loggerProvider);
 
     // Watch the project stream for real-time updates
     final projectStream = ref.watch(invoiceStreamProvider(project.id));
 
+    // The 'invoiceId' parameter passed to ProjectDetailScreen is used here.
+    // However, the invoiceImagesStreamProvider now only takes projectId.
+    // This discrepancy needs to be resolved. For now, using project.id.
+    final String streamIdToUse = project.id;
+    logger.d(
+        '[ProjectDetailScreen] Using project ID for imagesStream: $streamIdToUse (original invoiceId was: $invoiceId)');
+
     final imagesStream = ref.watch(
-      invoiceImagesStreamProvider(
-          {'projectId': project.id, 'invoiceId': invoiceId}),
+      projectImagesStreamProvider(
+          streamIdToUse), // Changed to projectImagesStreamProvider and using project.id
     );
 
     return Scaffold(
@@ -206,7 +213,9 @@ class ProjectDetailScreen extends ConsumerWidget {
                                                       context,
                                                       ref,
                                                       image,
-                                                      invoiceId),
+                                                      project
+                                                          .id // Pass project.id as it's the relevant identifier now
+                                                      ),
                                                   tooltip: 'Scan Invoice',
                                                 ),
                                               ),
@@ -258,102 +267,118 @@ class ProjectDetailScreen extends ConsumerWidget {
   }
 
   Future<void> _scanImage(BuildContext context, WidgetRef ref,
-      InvoiceImageProcess image, String invoiceId) async {
+      InvoiceImageProcess image, String currentProjectId) async {
+    final logger = ref.read(loggerProvider);
+    logger.i('Scanning image ${image.id} for project $currentProjectId');
+    // final scaffoldMessenger = ScaffoldMessenger.of(context);
+    // final l10n = AppLocalizations.of(context)!;
+
     try {
-      final logger = ref.read(loggerProvider);
-      logger.d(
-          "🔍 Starting OCR scan for image ${image.id} using Cloud Run service...");
+      // final gcsService = ref.read(service_providers.gcsFileServiceProvider);
+      // final imageUrl = await gcsService.getPublicUrl(image.imagePath);
+      // if (imageUrl == null) {
+      //   throw Exception('Could not get image public URL.');
+      // }
 
-      // First update status to ocr_running
-      try {
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(FirebaseAuth.instance.currentUser!.uid)
-            .collection('projects')
-            .doc(project.id)
-            .collection('budgets')
-            .doc(budgetId)
-            .collection('invoices')
-            .doc(invoiceId)
-            .collection('invoice_images')
-            .doc(image.id);
+      // Placeholder for actual scanning logic that would interact with a backend service
+      // This service would take the image details (e.g., its GCS path or ID)
+      // and trigger the OCR/analysis process.
 
-        await docRef.update({
-          'status': 'ocr_running',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      // Example: calling a repository method that hits your backend /analyze-invoice endpoint
+      // final invoiceRepo = ref.read(invoiceRepositoryProvider);
+      // await invoiceRepo.analyzeInvoiceImage(currentProjectId, image.id);
 
-        logger.d("🔍 Status updated to ocr_running");
-      } catch (updateError) {
-        logger.e("🔍 Error updating status to ocr_running", error: updateError);
-        // Continue even if this fails
+      logger.i(
+          '_scanImage: Placeholder for backend analysis call for image ${image.id} in project $currentProjectId');
+      // scaffoldMessenger.showSnackBar(
+      //   SnackBar(content: Text(l10n.imageScanInitiated(image.originalFilename ?? l10n.thisImage))),
+      // );
+
+      // Commenting out direct Firestore updates as they are no longer valid
+      /*
+      final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+      if (userId == null) {
+        throw Exception(l10n.userNotAuthenticated);
       }
 
-      // Call the OCR service via CloudRunOcrService
-      final ocrService = ref.read(service_providers.cloudRunOcrServiceProvider);
+      // Assuming 'projects' is the correct top-level collection for projects if using Firestore elsewhere
+      // This logic is Firestore-specific and should be replaced by backend calls.
+      await FirebaseFirestore.instance
+          .collection('users') // Or your top-level user collection
+          .doc(userId)
+          .collection('projects')
+          .doc(currentProjectId) // Use currentProjectId which is project.id
+          .collection('images') // Assuming a subcollection for images
+          .doc(image.id)
+          .update({
+        'status': 'analysis_pending',
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
 
-      // Ensure all required parameters are available and correct
-      // CloudRunOcrService.scanImage expects:
-      // String imagePath, String projectId, String invoiceId, String imageId
-
-      logger.d(
-          "🔍 Calling Cloud Run OCR endpoint with imagePath: ${image.imagePath}, projectId: ${project.id}, invoiceId: $invoiceId, imageId: ${image.id}");
-
-      final result = await ocrService.scanImage(
-        image.imagePath, // imagePath from InvoiceImageProcess
-        project.id, // projectId from the current project
-        invoiceId, // invoiceId passed to _scanImage
-        image.id, // imageId from InvoiceImageProcess
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text(l10n.imageSubmittedForAnalysis(image.originalFilename ?? l10n.thisImage))),
       );
-
-      // Process the result if needed, e.g., update UI based on result.success
-      logger.i("🔍 OCR processing via Cloud Run completed. Result: $result");
-
-      if (context.mounted) {
-        // Example: Show a message based on the 'status' or 'success' field in the result
-        String message = "OCR processing completed.";
-        if (result.containsKey('success') && result['success'] == true) {
-          message =
-              result['message'] as String? ?? "OCR successful via Cloud Run.";
-          // Potentially, update local state or re-fetch data if OCR modifies data significantly
-        } else {
-          message = result['error'] as String? ?? "OCR failed via Cloud Run.";
-        }
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message)),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        final logger = ref.read(loggerProvider);
-        logger.e("🔍 Error during Cloud Run OCR process", error: e);
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error during OCR: ${e.toString()}')),
-        );
-      }
-
-      // Try to reset status on error
-      try {
-        final docRef = FirebaseFirestore.instance
-            .collection('users')
-            .doc(FirebaseAuth.instance.currentUser!.uid)
-            .collection('projects')
-            .doc(project.id)
-            .collection('budgets')
-            .doc(budgetId)
-            .collection('invoices')
-            .doc(invoiceId)
-            .collection('invoice_images')
-            .doc(image.id);
-
-        await docRef.update({
-          'status': 'ready',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      } catch (_) {
-        // Ignore errors when resetting status
-      }
+      */
+    } catch (e, stackTrace) {
+      logger.e('Error scanning image ${image.id}:',
+          error: e, stackTrace: stackTrace);
+      // scaffoldMessenger.showSnackBar(
+      //   SnackBar(content: Text(l10n.errorScanningImage(e.toString()))),
+      // );
     }
   }
+
+  // Commenting out Firestore-specific delete method
+  /*
+  Future<void> _deleteProjectImage(BuildContext context, WidgetRef ref, InvoiceImageProcess image) async {
+    final logger = ref.read(loggerProvider);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final l10n = AppLocalizations.of(context)!;
+
+    try {
+      final userId = ref.read(firebaseAuthProvider).currentUser?.uid;
+      if (userId == null) {
+        throw Exception(l10n.userNotAuthenticated);
+      }
+      // final gcsService = ref.read(service_providers.gcsFileServiceProvider);
+      // await gcsService.deleteFile(fileName: image.imagePath);
+      
+      // This is Firestore-specific logic for deleting the metadata
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .collection('projects')
+          .doc(project.id) // project.id is the projectId
+          .collection('images')
+          .doc(image.id)
+          .delete();
+
+      // Also delete any related expenses or other sub-collections if necessary (Firestore specific)
+      // Example: Delete expenses subcollection (if it exists for this image)
+      // final expensesCollection = FirebaseFirestore.instance
+      //     .collection('users') 
+      //     .doc(userId)
+      //     .collection('projects')
+      //     .doc(project.id)
+      //     .collection('images')
+      //     .doc(image.id)
+      //     .collection('expenses');
+      // final expensesSnapshot = await expensesCollection.get();
+      // for (var doc in expensesSnapshot.docs) {
+      //   await expensesCollection.doc(doc.id).delete();
+      // }
+
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text(l10n.imageDeletedSuccessfully(image.originalFilename ?? l10n.thisImage))),
+      );
+      logger.i('Image ${image.id} and its GCS file ${image.imagePath} deleted successfully.');
+
+    } catch (e, stackTrace) {
+      logger.e('Error deleting image ${image.id}:', error: e, stackTrace: stackTrace);
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text(l10n.errorDeletingImage(e.toString()))),
+      );
+    }
+  }
+  */
 }

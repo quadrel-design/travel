@@ -40,6 +40,7 @@ dependencies:
   freezed_annotation: ^3.0.0
   form_builder_validators: ^11.1.2
   flutter_form_builder: ^10.0.1
+  eventflux: ^2.2.1
 
 dev_dependencies:
   flutter_test:

@@ -9,6 +9,8 @@
  * @module services/projectService
  */
 const pool = require('../config/db'); // Import the pool
+const { sendSseUpdateToProject } = require('./sseService'); // Added for SSE
+const logger = require('../config/logger'); // Added for logging
 
 /**
  * @private
@@ -86,7 +88,8 @@ if (!pool) {
   console.warn('projectService: Service will be non-functional as the DB pool is unavailable.');
 }
 
-console.log('projectService: DB pool imported. Service getting initialized.');
+// console.log('projectService: DB pool imported. Service getting initialized.'); // Redundant with logger
+logger.info('projectService: DB pool imported. Service getting initialized.');
 
 const projectService = {
   /**
@@ -434,53 +437,65 @@ const projectService = {
    * @throws {Error} If the DB pool is not available, required fields are missing, or the query fails (e.g., duplicate ID).
    */
   saveImageMetadata: async (imageData, userId) => {
-    if (!pool) { console.error('[ProjectService] DB Pool not available for saveImageMetadata'); throw new Error('DB Connection Error'); }
+    if (!pool) { 
+      logger.error('[ProjectService] DB Pool not available for saveImageMetadata'); 
+      throw new Error('DB Connection Error'); 
+    }
     const {
+      id, // client-generated imageId
       projectId,
       gcsPath,
       status,
-      isInvoice,
-      analyzed_invoice_date,
       originalFilename,
       size,
       contentType,
-      gemini_analysis_json
+      uploaded_at
     } = imageData;
 
-    const id = imageData.id;
-    if (!id) {
-      console.error('[ProjectService] Image ID is missing in imageData for saveImageMetadata');
-      throw new Error('Image ID is required to save image metadata.');
-    }
-
+    // Ensure user_id from the authenticated user is used, not from imageData if present
     const query = {
       text: `INSERT INTO invoice_images(
-              id, project_id, user_id, gcs_path, status, is_invoice, analyzed_invoice_date, original_filename, size, content_type, gemini_analysis_json
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+              id, project_id, user_id, gcs_path, status, 
+              original_filename, size, content_type, uploaded_at
+            ) VALUES($1, $2, $3, $4, $5, $6, $7, $8, $9) 
             RETURNING *`,
       values: [
-        id,
+        id, 
         projectId,
-        userId,
+        userId, // Authenticated user ID
         gcsPath,
         status || 'uploaded',
-        isInvoice || null,
-        analyzed_invoice_date || null,
-        originalFilename || '',
-        size || 0,
-        contentType || 'application/octet-stream',
-        gemini_analysis_json || null
+        originalFilename, 
+        size, 
+        contentType, 
+        uploaded_at || new Date()
       ],
     };
 
     try {
-      console.log(`[ProjectService] Saving image metadata for id: ${id}, project ${projectId}, path: ${gcsPath}`);
+      logger.info(`[ProjectService] Saving image metadata for image ${id} in project ${projectId} by user ${userId}`);
       const res = await pool.query(query);
-      const savedImageDbRow = res.rows[0];
+      const savedImage = _transformDbImageToApiV1Format(res.rows[0]);
 
-      return _transformDbImageToApiV1Format(savedImageDbRow);
+      // SSE Update
+      if (savedImage) {
+        try {
+          const updatedImages = await projectService.getProjectImages(projectId, userId);
+          sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+        } catch (sseError) {
+          logger.error(`[ProjectService] SSE Update failed after saving image ${id} for project ${projectId}:`, sseError);
+          // Non-critical, main operation succeeded.
+        }
+      }
+      return savedImage;
     } catch (err) {
-      console.error('[ProjectService] Error saving image metadata:', err.stack);
+      logger.error(`[ProjectService] Error saving image metadata for project ${projectId}:`, err);
+      if (err.code === '23503') { // Foreign key violation (e.g. project_id doesn't exist)
+        throw new Error(`Project with ID ${projectId} not found.`);
+      }
+      if (err.code === '23505') { // Unique key violation (e.g. image ID already exists for project)
+        throw new Error(`Image with ID ${id} might already exist for this project.`);
+      }
       throw err;
     }
   },
@@ -500,25 +515,36 @@ const projectService = {
    * @throws {Error} If the DB pool is not available or the query fails.
    */
   deleteImageMetadata: async (imageId, projectId, userId) => {
-    if (!pool) { console.error('[ProjectService] DB Pool not available for deleteImageMetadata'); throw new Error('DB Connection Error'); }
+    if (!pool) { 
+      logger.error('[ProjectService] DB Pool not available for deleteImageMetadata'); 
+      throw new Error('DB Connection Error'); 
+    }
     const query = {
       text: 'DELETE FROM invoice_images WHERE id = $1 AND project_id = $2 AND user_id = $3 RETURNING id',
       values: [imageId, projectId, userId],
     };
-    
+
     try {
-      console.log(`[ProjectService] Deleting image metadata for image ${imageId}`);
+      logger.info(`[ProjectService] Deleting image metadata for image ${imageId} in project ${projectId} by user ${userId}`);
       const res = await pool.query(query);
-      if (res.rows.length === 0) {
-        // To provide a boolean return that indicates if deletion occurred, 
-        // we check if any rows were returned by RETURNING id.
-        // If 0 rows, it means no record matched, so deletion didn't happen.
-        console.warn(`[ProjectService] Image with id ${imageId} (project: ${projectId}) not found or not owned by user ${userId} for deletion.`);
-        return false; 
+      
+      if (res.rowCount === 0) {
+        throw new Error('Image not found or not owned by user, cannot delete.');
       }
-      return true; // Deletion was successful
+      
+      // SSE Update
+      try {
+        logger.info(`[ProjectService] Image ${imageId} deleted for project ${projectId}. Triggering SSE update.`);
+        const updatedImages = await projectService.getProjectImages(projectId, userId);
+        sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+      } catch (sseError) {
+        logger.error(`[ProjectService] SSE Update failed after deleting image ${imageId} for project ${projectId}:`, sseError);
+        // Non-critical, main operation succeeded.
+      }
+      
+      return { id: imageId, deleted: true }; // Confirm deletion
     } catch (err) {
-      console.error(`[ProjectService] Error deleting image metadata ${imageId}:`, err.stack);
+      logger.error(`[ProjectService] Error deleting image metadata ${imageId} for project ${projectId}:`, err);
       throw err;
     }
   },
@@ -544,7 +570,10 @@ const projectService = {
    * @throws {Error} If the DB pool is not available or the query fails.
    */
   updateImageOcrResults: async (projectId, imageId, ocrData, userId) => {
-    if (!pool) { console.error('[ProjectService] DB Pool not available for updateImageOcrResults'); throw new Error('DB Connection Error'); }
+    if (!pool) { 
+      logger.error('[ProjectService] DB Pool not available for updateImageOcrResults'); 
+      throw new Error('DB Connection Error'); 
+    }
     const {
       status,
       ocr_text,
@@ -600,15 +629,27 @@ const projectService = {
     };
 
     try {
-      console.log(`[ProjectService] Updating image OCR results for image ${imageId}`);
+      logger.info(`[ProjectService] Updating image OCR results for image ${imageId} in project ${projectId}`);
       const res = await pool.query(query);
       if (res.rows.length === 0) {
-        console.warn(`[ProjectService] Image with id ${imageId} (project: ${projectId}) not found or not owned by user ${userId} for OCR update.`);
+        logger.warn(`[ProjectService] Image with id ${imageId} (project: ${projectId}) not found or not owned by user ${userId} for OCR update.`);
         return null;
       }
-      return _transformDbImageToApiV1Format(res.rows[0]);
+      const updatedImage = _transformDbImageToApiV1Format(res.rows[0]);
+
+      // SSE Update
+      if (updatedImage) {
+        try {
+          const updatedImages = await projectService.getProjectImages(projectId, userId);
+          sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+        } catch (sseError) {
+          logger.error(`[ProjectService] SSE Update failed after updating OCR for image ${imageId} project ${projectId}:`, sseError);
+          // Non-critical, main operation succeeded.
+        }
+      }
+      return updatedImage;
     } catch (err) {
-      console.error(`[ProjectService] Error updating OCR results for image ${imageId}:`, err.stack);
+      logger.error(`[ProjectService] Error updating OCR results for image ${imageId}:`, err);
       throw err;
     }
   },
@@ -634,79 +675,79 @@ const projectService = {
    * @throws {Error} If no updatable fields are provided (beyond `projectId`), if the DB pool is unavailable, or if the query fails.
    */
   updateImageMetadata: async (imageId, imageData, userId) => {
-    if (!pool) { console.error('[ProjectService] DB Pool not available for updateImageMetadata'); throw new Error('DB Connection Error'); }
-
-    const { projectId, ...fieldsToUpdate } = imageData;
-
-    // Remove invoice_id or invoiceId if it accidentally exists in fieldsToUpdate, as the column is gone
-    if ('invoice_id' in fieldsToUpdate) {
-      delete fieldsToUpdate.invoice_id;
-    }
-    if ('invoiceId' in fieldsToUpdate) {
-      delete fieldsToUpdate.invoiceId;
+    if (!pool) { 
+      logger.error('[ProjectService] DB Pool not available for updateImageMetadata'); 
+      throw new Error('DB Connection Error'); 
     }
 
-    if (Object.keys(fieldsToUpdate).length === 0) {
-      console.log(`[ProjectService] No fields to update for image ${imageId}. Returning current data.`);
-      const currentImage = await projectService.getInvoiceImageById(projectId, imageId, userId); // projectId might be undefined if not in imageData
-      return currentImage; 
+    const { projectId, ...fieldsToUpdate } = imageData; // Extract projectId, rest are fields
+
+    if (!projectId) {
+        logger.error('[ProjectService] projectId is required in imageData to update image metadata.');
+        throw new Error('Project ID is required to update image metadata.');
     }
 
-    const columnsToUpdate = [];
+    const setClauses = [];
     const values = [];
     let placeholderIndex = 1;
 
     // Dynamically build the SET part of the query
     for (const key in fieldsToUpdate) {
-      if (Object.prototype.hasOwnProperty.call(fieldsToUpdate, key) && fieldsToUpdate[key] !== undefined) {
-        // Ensure key is a valid column name (basic protection, ideally use a whitelist)
-        // For now, we assume keys match DB columns like: status, is_invoice, gemini_analysis_json, etc.
-        columnsToUpdate.push(`${key} = $${placeholderIndex++}`);
+      if (Object.prototype.hasOwnProperty.call(fieldsToUpdate, key)) {
+        // Convert camelCase from API to snake_case for DB
+        const dbKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+        setClauses.push(`${dbKey} = $${placeholderIndex++}`);
         values.push(fieldsToUpdate[key]);
       }
     }
 
-    if (columnsToUpdate.length === 0) {
-      console.warn(`[ProjectService] No fields provided to update for image ${imageId}.`);
-      // Fetch and return current image data if no change, or could throw error.
-      // For consistency with PATCH, if no actual data fields to change, we might just return current state.
-      // However, the calling route usually ensures there is something to update.
-      // For now, let's throw, as this shouldn't typically be called with no fields.
-      throw new Error('No updatable fields provided for image metadata.');
+    if (setClauses.length === 0) {
+      logger.warn('[ProjectService] No fields provided to update for image', imageId);
+      // Optionally, fetch and return current image data or throw error
+      // For now, let's return the current data as if no update occurred.
+      const currentImage = await projectService.getInvoiceImageById(projectId, imageId, userId);
+      if (!currentImage) throw new Error('Image not found after attempting an empty update.')
+      return currentImage; 
     }
 
-    columnsToUpdate.push(`updated_at = NOW()`);
+    // Add updated_at timestamp
+    setClauses.push(`updated_at = CURRENT_TIMESTAMP`);
 
-    // Base WHERE clause for user and image ID
-    let whereClause = `id = $${placeholderIndex++} AND user_id = $${placeholderIndex++}`;
     values.push(imageId);
+    values.push(projectId);
     values.push(userId);
 
-    // Add projectId to WHERE clause if it was provided in imageData
-    if (projectId) {
-      whereClause += ` AND project_id = $${placeholderIndex++}`;
-      values.push(projectId);
-    }
-
+    const queryText = `UPDATE invoice_images SET ${setClauses.join(', ')} \
+                       WHERE id = $${placeholderIndex++} AND project_id = $${placeholderIndex++} AND user_id = $${placeholderIndex++} \
+                       RETURNING *`;
+    
     const query = {
-      text: `UPDATE invoice_images SET ${columnsToUpdate.join(', ')} 
-             WHERE ${whereClause}
-             RETURNING *`,
+      text: queryText,
       values: values,
     };
-
+    
     try {
-      console.log(`[ProjectService] Updating image metadata for image ${imageId} (user: ${userId}) with data:`, fieldsToUpdate);
+      logger.info(`[ProjectService] Updating image metadata for image ${imageId} in project ${projectId} by user ${userId}. Fields: ${Object.keys(fieldsToUpdate).join(', ')}`);
       const res = await pool.query(query);
+
       if (res.rows.length === 0) {
-        let notFoundMessage = `Image with id ${imageId} not found or not owned by user ${userId}`;
-        if(projectId) notFoundMessage += ` (for project ${projectId})`;
-        console.warn(`[ProjectService] ${notFoundMessage} during metadata update.`);
-        return null; // Or throw an error: new Error(notFoundMessage);
+        throw new Error('Image not found, not owned by user, or update failed.');
       }
-      return _transformDbImageToApiV1Format(res.rows[0]);
+      const updatedImage = _transformDbImageToApiV1Format(res.rows[0]);
+
+      // SSE Update
+      if (updatedImage) {
+        try {
+          const updatedImages = await projectService.getProjectImages(projectId, userId);
+          sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+        } catch (sseError) {
+          logger.error(`[ProjectService] SSE Update failed after updating image ${imageId} for project ${projectId}:`, sseError);
+          // Non-critical, main operation succeeded.
+        }
+      }
+      return updatedImage;
     } catch (err) {
-      console.error(`[ProjectService] Error updating image metadata for ${imageId}:`, err.stack);
+      logger.error(`[ProjectService] Error updating image metadata ${imageId} for project ${projectId}:`, err);
       throw err;
     }
   }
