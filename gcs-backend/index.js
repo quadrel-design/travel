@@ -9,6 +9,7 @@
  */
 
 const admin = require('firebase-admin');
+const logger = require('./config/logger'); // Added logger import
 
 try {
   // Check if the app is already initialized to prevent re-initialization errors
@@ -18,12 +19,12 @@ try {
       // Ensure your Cloud Run service account has necessary Firebase permissions.
       // projectId: process.env.GOOGLE_CLOUD_PROJECT, // Usually inferred by ADC
     });
-    console.log('✅ Firebase Admin SDK initialized successfully.');
+    logger.info('✅ Firebase Admin SDK initialized successfully.'); // Replaced console.log
   } else {
-    console.log('✅ Firebase Admin SDK already initialized.');
+    logger.info('✅ Firebase Admin SDK already initialized.'); // Replaced console.log
   }
 } catch (e) {
-  console.error('❌ CRITICAL ERROR initializing Firebase Admin SDK:', e);
+  logger.error('❌ CRITICAL ERROR initializing Firebase Admin SDK:', e); // Replaced console.error
   // Consider how to handle this error; e.g., prevent app from fully starting
 }
 
@@ -32,8 +33,8 @@ const pool = require('./config/db'); // Import the pool to pass to init or check
 const initializeDatabase = require('./config/db-init');
 
 // For debugging, let's ensure these are still logged to see what Cloud Run provides:
-console.log('[ENV CHECK] GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
-console.log('[ENV CHECK] GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS); // Should ideally be unset if relying on ADC
+logger.debug('[ENV CHECK] GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT); // Replaced console.log, changed to debug
+logger.debug('[ENV CHECK] GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS); // Replaced console.log, changed to debug
 
 /**
  * Main entry point for the GCS backend API.
@@ -49,24 +50,24 @@ app.use(cors());
 app.use(express.json());
 
 // Debug log to check environment variables
-console.log('GOOGLE_CLOUD_PROJECT (in index.js route setup):', process.env.GOOGLE_CLOUD_PROJECT);
-console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+logger.debug('GOOGLE_CLOUD_PROJECT (in index.js route setup):', process.env.GOOGLE_CLOUD_PROJECT); // Replaced console.log, changed to debug
+logger.debug('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS); // Replaced console.log, changed to debug
 
 // Pass the db instances to the routes/services
 // TODO: Refactor routes to accept and use postgresServiceInstance
 const ocrRoutes = require('./routes/ocr');
 const analysisRoutes = require('./routes/analysis');
 // Assuming gcs routes do not need db, or will be refactored similarly if they do
-console.log('[INDEX.JS] Attempting to load gcsRoutes from ./routes/gcs...');
+logger.debug('[INDEX.JS] Attempting to load gcsRoutes from ./routes/gcs...'); // Replaced console.log, changed to debug
 const gcsRoutes = require('./routes/gcs'); 
-console.log('[DEBUG] typeof gcsRoutes:', typeof gcsRoutes);
-console.log('[DEBUG] gcsRoutes object:', gcsRoutes); // Express routers are functions with properties
+logger.debug('[DEBUG] typeof gcsRoutes:', typeof gcsRoutes); // Replaced console.log
+logger.debug('[DEBUG] gcsRoutes object:', gcsRoutes); // Replaced console.log, Express routers are functions with properties
 
 try {
   app.use('/api/gcs', gcsRoutes);
-  console.log('[INDEX.JS] gcsRoutes loaded and mounted at /api/gcs.');
+  logger.info('[INDEX.JS] gcsRoutes loaded and mounted at /api/gcs.'); // Replaced console.log
 } catch (e) {
-  console.error('[DEBUG] CRITICAL ERROR mounting /api/gcs routes:', e);
+  logger.error('[DEBUG] CRITICAL ERROR mounting /api/gcs routes:', e); // Replaced console.error
 }
 
 app.use(ocrRoutes);
@@ -108,17 +109,17 @@ const PORT = process.env.PORT || 8080;
  */
 async function startServer() {
   if (pool) { // Check if pool was created successfully in db.js
-    console.log('[INDEX.JS] Database pool available. Initializing schema...');
+    logger.info('[INDEX.JS] Database pool available. Initializing schema...'); // Replaced console.log
     const dbInitialized = await initializeDatabase(pool);
     if (dbInitialized) {
-      console.log('[INDEX.JS] Database schema initialization successful or already up-to-date.');
-      app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+      logger.info('[INDEX.JS] Database schema initialization successful or already up-to-date.'); // Replaced console.log
+      app.listen(PORT, () => logger.info(`Server running on port ${PORT}`)); // Replaced console.log
     } else {
-      console.error('[INDEX.JS] CRITICAL: Database schema initialization failed. Server will not start.');
+      logger.error('[INDEX.JS] CRITICAL: Database schema initialization failed. Server will not start.'); // Replaced console.error
       // process.exit(1); // Or handle more gracefully, e.g. keep trying or enter maintenance mode
     }
   } else {
-    console.error('[INDEX.JS] CRITICAL: Database pool not available. Server will not start.');
+    logger.error('[INDEX.JS] CRITICAL: Database pool not available. Server will not start.'); // Replaced console.error
     // process.exit(1);
   }
 }

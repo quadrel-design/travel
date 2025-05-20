@@ -390,9 +390,6 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
     // Helper function to process image data
     List<InvoiceImageProcess>? _processImageDataEventHelper(String jsonData,
         List<InvoiceImageProcess>? currentLastEmittedImagesList) {
-      _logger.wtf(
-          "[[[[[ PROCESS IMAGE DATA EVENT HELPER ENTERED ]]]]] for $projectId. Data: $jsonData"); // VERY PROMINENT LOG
-
       final trimmedJsonData = jsonData.trim(); // TRIM WHITESPACE
       logger.d(
           "[PostgresInvoiceRepo][_processImageDataEventHelper] Processing data for $projectId: $trimmedJsonData");
@@ -464,13 +461,6 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         // Let's ensure it happens correctly if a new list was emitted.
         // The calling code in the stream listener will now assign the result of this function to _lastEmittedImagesList
         // if newEmittedList is not null.
-        if (newEmittedList != null) {
-          _logger.wtf(
-              "[[[[[ RETURNING NEWLY PROCESSED LIST from _processImageDataEventHelper for $projectId ]]]]]");
-        } else {
-          _logger.wtf(
-              "[[[[[ RETURNING NULL (no new list processed/emitted) from _processImageDataEventHelper for $projectId ]]]]]");
-        }
         return newEmittedList; // Return the list that was added, or null if no new list was added
       } catch (e, stackTrace) {
         logger.e(

@@ -10,55 +10,23 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const { detectTextInImage } = require('../services/visionService');
-const projectService = require('../services/projectService'); // For DB interactions
-const firebaseAdmin = require('firebase-admin'); // For authentication
+// const projectService = require('../services/projectService'); // Removed as it's not directly used
+const invoiceService = require('../services/invoiceService'); // Changed from imageService, For Image DB interactions
+const firebaseAdmin = require('firebase-admin'); // For authentication. Keep this for other potential Firebase uses, even if auth is middleware.
+const logger = require('../config/logger'); // Import logger
+const authenticateUser = require('../middleware/authenticateUser'); // Import shared middleware
 
-/**
- * Middleware to authenticate users using Firebase ID tokens.
- * Verifies the Bearer token from the Authorization header.
- * Attaches the decoded token (including user UID and email) to `req.user`.
- * TODO: Refactor this to a shared middleware in the `middleware/` directory.
- *
- * @async
- * @param {import('express').Request} req - Express request object.
- * @param {import('express').Response} res - Express response object.
- * @param {import('express').NextFunction} next - Express next middleware function.
- */
-const authenticateUser = async (req, res, next) => {
-  console.log('[Routes/OCR][AuthMiddleware] Received headers:', JSON.stringify(req.headers)); // Log all headers
-  if (firebaseAdmin.apps.length === 0) {
-    console.error('[Routes/OCR][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
-    return res.status(500).json({ error: 'Authentication service not configured.' });
-  }
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: No token provided' });
-    }
-    const token = authHeader.split(' ')[1];
-    const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
-    req.user = { // Attach user to request object with a consistent structure
-      id: decodedToken.uid, 
-      email: decodedToken.email
-    }; 
-    next();
-  } catch (error) {
-    console.error('[Routes/OCR][AuthMiddleware] Error authenticating user:', error);
-    if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'Unauthorized: Token expired', code: 'TOKEN_EXPIRED' });
-    }
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-};
-
-// Apply authentication middleware to all routes in this router
+// Apply shared authentication middleware to all routes in this router
 router.use(authenticateUser);
 
-// Check if projectService is available
-if (!projectService) {
-  const errorMessage = '[Routes/OCR] CRITICAL ERROR - projectService was not imported or is unavailable. OCR routes cannot function with DB.';
-    console.error(errorMessage);
-    throw new Error(errorMessage);
+// Check if projectService is available - REMOVED check as service is not used
+// if (!projectService) { ... }
+
+// Check if invoiceService is available
+if (!invoiceService) {
+  const errorMessage = '[Routes/OCR] CRITICAL ERROR - invoiceService was not imported or is unavailable. OCR routes cannot function with DB.';
+    logger.error(errorMessage);
+    // throw new Error(errorMessage); // Replaced with logger.error to prevent immediate crash
   }
 
 /**
@@ -105,59 +73,65 @@ if (!projectService) {
   const userId = req.user.id; // Get from authenticated user
 
   if (!projectId || !imageId) {
+    logger.warn('[Routes/OCR] Missing projectId or imageId in /ocr-invoice request', { body: req.body });
     return res.status(400).json({ error: 'projectId and imageId are required.' });
     }
     if (!imageUrl && !imageData) {
+    logger.warn('[Routes/OCR] Missing imageUrl and imageData in /ocr-invoice request', { body: req.body });
     return res.status(400).json({ error: 'Must provide either imageUrl or imageData.' });
     }
-  console.log(`[Routes/OCR] /ocr-invoice POST for imageId: ${imageId}, userId: ${userId}, projectId: ${projectId}`);
+  logger.info(`[Routes/OCR] /ocr-invoice POST for imageId: ${imageId}, userId: ${userId}, projectId: ${projectId}`);
 
     try {
     // Update DB: Set status to pending_ocr for the imageId
     try {
-      if (typeof projectService.updateImageMetadata !== 'function') {
-        console.warn('[Routes/OCR] projectService.updateImageMetadata not available. OCR cannot proceed.');
-        throw new Error('projectService.updateImageMetadata is not a function, OCR aborted.');
+      if (typeof invoiceService.updateImageMetadata !== 'function') {
+        logger.error('[Routes/OCR] invoiceService.updateImageMetadata not available. OCR cannot proceed.');
+        throw new Error('invoiceService.updateImageMetadata is not a function, OCR aborted.');
       } else {
-        await projectService.updateImageMetadata(imageId, { status: 'pending_ocr', ocr_processed_at: new Date() }, userId);
-        console.log(`[Routes/OCR] Status set to 'pending_ocr' in DB for imageId: ${imageId}`);
+        await invoiceService.updateImageMetadata(projectId, imageId, { status: 'pending_ocr', ocr_processed_at: new Date() }, userId);
+        logger.info(`[Routes/OCR] Status set to 'pending_ocr' in DB for imageId: ${imageId}`);
       }
     } catch (dbError) {
-      console.error(`[Routes/OCR] CRITICAL: Failed to set status to 'pending_ocr' for imageId: ${imageId}. Aborting OCR.`, dbError);
-      throw dbError; // Re-throw to be caught by the main catch block
+      logger.error(`[Routes/OCR] Failed to set status to 'pending_ocr' for imageId: ${imageId}. Aborting OCR.`, { error: dbError.message, statusCode: dbError.statusCode, stack: dbError.stack });
+      if (dbError.statusCode === 404 || dbError.statusCode === 403) {
+        return res.status(dbError.statusCode).json({ success: false, error: dbError.message });
+      }
+      // For other errors during this critical initial update, treat as 500 for now or re-evaluate
+      return res.status(500).json({ success: false, error: `Failed to initialize OCR process for image: ${dbError.message}` });
     }
       
       let detectResult = null;
       if (imageData) {
       // imageData (direct upload) is complex with Cloud Run scaling & GCS. For now, focusing on imageUrl from GCS.
-      console.warn('[Routes/OCR] imageData (direct base64 upload) processing is not fully supported in this version. Please use imageUrl.');
+      logger.warn('[Routes/OCR] imageData (direct base64 upload) processing is not fully supported in this version. Please use imageUrl.');
       return res.status(400).json({ error: 'imageData processing not yet fully supported. Please use imageUrl from GCS.' });
     } else { // Process imageUrl
         let retryCount = 0;
         const maxRetries = 2;
         let lastError = null;
-      console.log(`[Routes/OCR] Attempting to download image from URL: ${imageUrl} for imageId: ${imageId}`);
+      logger.info(`[Routes/OCR] Attempting to download image from URL: ${imageUrl} for imageId: ${imageId}`);
         while (retryCount <= maxRetries) {
           try {
           const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 20000 }); // Increased timeout
             const imageBuffer = Buffer.isBuffer(response.data) ? response.data : Buffer.from(response.data);
-          console.log(`[Routes/OCR] Image downloaded successfully for imageId: ${imageId}. Buffer length: ${imageBuffer.length}. Initiating text detection.`);
+          logger.info(`[Routes/OCR] Image downloaded successfully for imageId: ${imageId}. Buffer length: ${imageBuffer.length}. Initiating text detection.`);
           detectResult = await detectTextInImage(imageUrl, imageBuffer); // detectTextInImage expects buffer or imageUrl
-          console.log(`[Routes/OCR] Text detection complete for imageId: ${imageId}. Success: ${detectResult.success}`);
+          logger.info(`[Routes/OCR] Text detection complete for imageId: ${imageId}. Success: ${detectResult.success}`);
           break; // Success, exit retry loop
           } catch (err) {
           lastError = err;
-          console.error(`[Routes/OCR] Error during image download or OCR (Attempt ${retryCount + 1}/${maxRetries + 1}) for imageId: ${imageId}:`, err.message);
+          logger.error(`[Routes/OCR] Error during image download or OCR (Attempt ${retryCount + 1}/${maxRetries + 1}) for imageId: ${imageId}:`, { errorMessage: err.message });
             if (err.response) {
-            console.error('[Routes/OCR] Axios error response status:', err.response.status);
+            logger.error('[Routes/OCR] Axios error response status:', { status: err.response.status });
           }
           if (retryCount === maxRetries) {
-            console.error('[Routes/OCR] Max retries reached for imageId: ${imageId}. OCR failed.');
+            logger.error(`[Routes/OCR] Max retries reached for imageId: ${imageId}. OCR failed.`);
             break; // Max retries reached, exit loop
           }
           await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1500)); // Exponential backoff
             retryCount++;
-          console.log(`[Routes/OCR] Retrying OCR for imageId: ${imageId} (Attempt ${retryCount + 1})`);
+          logger.info(`[Routes/OCR] Retrying OCR for imageId: ${imageId} (Attempt ${retryCount + 1})`);
           }
         }
       if (!detectResult && lastError) throw lastError; // If all retries failed, throw the last error
@@ -176,9 +150,9 @@ if (!projectService) {
         // textBlocks are often too large for a simple DB field, consider if needed or how to store.
         // ocr_text_blocks: detectResult.textBlocks || [], 
         ocr_processed_at: ocrTimestamp,
-        error_message: detectResult.error || null // Should be null if success is true
+        error_message: null // Clear previous errors if successful
       };
-      console.log(`[Routes/OCR] OCR successful for imageId: ${imageId}. Status: ${newStatus}`);
+      logger.info(`[Routes/OCR] OCR successful for imageId: ${imageId}. Status: ${newStatus}`);
       } else {
       dbUpdatePayload = {
         status: 'ocr_failed',
@@ -186,21 +160,25 @@ if (!projectService) {
         ocr_processed_at: ocrTimestamp,
               error_message: detectResult.error || 'OCR process failed or no text found'
             };
-      console.warn(`[Routes/OCR] OCR failed for imageId: ${imageId}. Error: ${dbUpdatePayload.error_message}`);
+      logger.warn(`[Routes/OCR] OCR failed for imageId: ${imageId}. Error: ${dbUpdatePayload.error_message}`);
     }
 
     // Update DB with OCR results
     try {
-      if (typeof projectService.updateImageMetadata !== 'function') {
-        console.warn('[Routes/OCR] projectService.updateImageMetadata not available. Cannot save OCR results to DB.');
-        throw new Error('projectService.updateImageMetadata is not a function, cannot save OCR results.');
+      if (typeof invoiceService.updateImageMetadata !== 'function') {
+        logger.error('[Routes/OCR] invoiceService.updateImageMetadata not available. Cannot save OCR results to DB.');
+        throw new Error('invoiceService.updateImageMetadata is not a function, cannot save OCR results.');
       } else {
-        await projectService.updateImageMetadata(imageId, dbUpdatePayload, userId);
-        console.log(`[Routes/OCR] OCR data updated in DB for imageId: ${imageId}`);
+        await invoiceService.updateImageMetadata(projectId, imageId, dbUpdatePayload, userId);
+        logger.info(`[Routes/OCR] OCR data updated in DB for imageId: ${imageId}`);
       }
     } catch (dbUpdateError) {
-      console.error(`[Routes/OCR] CRITICAL: Error updating DB with OCR data for imageId: ${imageId}.`, dbUpdateError);
-      throw dbUpdateError; // Re-throw to be caught by the main catch block
+      // If this update fails (e.g. image deleted between pending_ocr and now), it's an issue.
+      // The OCR itself might have finished, but we can't save. Log critically.
+      logger.error(`[Routes/OCR] CRITICAL: Error updating DB with OCR data for imageId: ${imageId}. OCR result might be lost.`, { error: dbUpdateError.message, statusCode: dbUpdateError.statusCode, stack: dbUpdateError.stack });
+      // Don't return a specific 404/403 here as the main operation (OCR) might have completed.
+      // Let the overall catch block handle this as a general failure to complete the request flow.
+      throw dbUpdateError; 
     }
 
     // Construct a standardized response
@@ -215,26 +193,33 @@ if (!projectService) {
     res.json(responsePayload);
 
   } catch (error) {
-    console.error(`[Routes/OCR] Overall CATCH BLOCK for imageId: ${imageId}. Error: ${error.message}`, error.stack);
+    logger.error(`[Routes/OCR] Overall CATCH BLOCK for imageId: ${imageId}. Error: ${error.message}`, { stack: error.stack });
       const errorTimestamp = new Date();
       try {
-      if (typeof projectService.updateImageMetadata === 'function') {
+      if (typeof invoiceService.updateImageMetadata === 'function') {
         const errorDbPayload = {
           status: 'ocr_failed',
               ocr_processed_at: errorTimestamp,
           error_message: String(error.message || 'OCR process failed in main catch').substring(0, 500)
             };
-        await projectService.updateImageMetadata(imageId, errorDbPayload, userId);
-        console.log(`[Routes/OCR] OCR error state (overall catch) updated in DB for imageId: ${imageId}`);
+        await invoiceService.updateImageMetadata(projectId, imageId, errorDbPayload, userId);
+        logger.info(`[Routes/OCR] OCR error state (overall catch) updated in DB for imageId: ${imageId}`);
       } else {
-        console.warn('[Routes/OCR] projectService.updateImageMetadata not available in CATCH block. Cannot log OCR error to DB.');
+        logger.warn('[Routes/OCR] invoiceService.updateImageMetadata not available in CATCH block. Cannot log OCR error to DB.');
         }
-      } catch (serviceError) {
-      console.error(`[Routes/OCR] DB update FAILED in overall catch block for imageId ${imageId}:`, serviceError.message);
+      } catch (serviceErrorInCatch) {
+      // If updating DB in catch block fails, especially with 404/403, the image might be gone.
+      logger.error(`[Routes/OCR] DB update FAILED in overall catch block for imageId ${imageId}:`, { error: serviceErrorInCatch.message, statusCode: serviceErrorInCatch.statusCode, stack: serviceErrorInCatch.stack });
+      }
+      // The original error that led to this catch block determines the response
+      // If it was a NotFoundError or NotAuthorizedError from the initial pending_ocr update, it would have returned already.
+      // Otherwise, it's likely a 500 from OCR process or subsequent DB update failure.
+      if (error.statusCode === 404 || error.statusCode === 403) {
+           return res.status(error.statusCode).json({ success: false, error: error.message });
       }
       res.status(500).json({ success: false, error: error.message || 'OCR process failed overall' });
     }
   });
 
-console.log('[Routes/OCR] Routes defined, exporting router.');
+logger.info('[Routes/OCR] Routes defined, exporting router.');
 module.exports = router;

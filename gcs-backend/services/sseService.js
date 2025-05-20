@@ -4,7 +4,8 @@
  */
 
 const logger = require('../config/logger');
-const projectService = require('./projectService'); // Import projectService
+// const projectService = require('../services/projectService'); // No longer used
+const invoiceService = require('../services/invoiceService'); // Changed from imageService
 
 const activeSseConnections = {}; // In-memory store: { projectId: [{res, userId}, {res, userId}, ...] }
 const lastSentProjectImages = {}; // NEW: { projectId: JSON_stringified_image_list }
@@ -27,7 +28,7 @@ async function addSseClient(projectId, userId, res) { // Added userId and made a
 
   // Send initial images to this new client
   try {
-    const images = await projectService.getProjectImages(projectId, userId);
+    const images = await invoiceService.getProjectImages(projectId, userId);
     // In the backend, the event is 'imagesUpdated' for both initial and subsequent.
     // The client was already adapted to handle 'initialImages' or 'imagesUpdated' with the same payload structure.
     // We will send { "images": [...] } as the payload for the data field.
@@ -117,7 +118,7 @@ function sendSseUpdateToProject(projectId, eventName, data) {
     try {
       clientEntry.res.write(sseMessage);
     } catch (error) {
-      logger.error(`[SSE] Error writing to client for project ${projectId}:`, error);
+      logger.error(`[SSE] Error writing to client for project ${projectId}, user ${clientEntry.userId}:`, { message: error.message, stack: error.stack });
       // Optionally remove client if write fails, though 'close' event should handle most cases
     }
   });

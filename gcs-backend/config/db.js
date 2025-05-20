@@ -14,19 +14,20 @@
  * @module config/db
  */
 const { Pool } = require('pg');
+const logger = require('./logger'); // Import logger
 require('dotenv').config(); // For local development, Cloud Run uses its own env var system
 
 if (process.env.NODE_ENV !== 'production') {
-  console.log('[DB Config] Loading .env variables for non-production environment.');
+  logger.info('[DB Config] Loading .env variables for non-production environment.');
   // In development, ensure local .env file has these if you're not using Cloud SQL Proxy
   // For Cloud Run, these are set in the service configuration.
 }
 
-console.log(`[DB Config] DB_HOST: ${process.env.DB_HOST}`);
-console.log(`[DB Config] DB_USER: ${process.env.DB_USER}`);
-console.log(`[DB Config] DB_NAME: ${process.env.DB_NAME}`);
-console.log(`[DB Config] DB_PORT: ${process.env.DB_PORT || 5432}`);
-console.log(`[DB Config] NODE_ENV: ${process.env.NODE_ENV}`);
+logger.info(`[DB Config] DB_HOST: ${process.env.DB_HOST}`);
+logger.info(`[DB Config] DB_USER: ${process.env.DB_USER}`);
+logger.info(`[DB Config] DB_NAME: ${process.env.DB_NAME}`);
+logger.info(`[DB Config] DB_PORT: ${process.env.DB_PORT || 5432}`);
+logger.info(`[DB Config] NODE_ENV: ${process.env.NODE_ENV}`);
 
 const requiredEnvVars = ['DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME'];
 const missingEnvVars = requiredEnvVars.filter(v => !process.env[v]);
@@ -34,62 +35,103 @@ const missingEnvVars = requiredEnvVars.filter(v => !process.env[v]);
 if (missingEnvVars.length > 0 && process.env.NODE_ENV === 'production') {
   // Only throw error in production if critical DB vars are missing.
   // For local dev, user might be using a different setup or expecting services to fail gracefully if DB is not up.
-  console.error(`[DB Config] CRITICAL ERROR: Missing required database environment variables: ${missingEnvVars.join(', ')}`);
+  logger.error(`[DB Config] CRITICAL ERROR: Missing required database environment variables: ${missingEnvVars.join(', ')}`);
   // In a real production scenario, you might want to prevent the app from starting or throw a more specific error.
   // For Cloud Run, this would ideally cause the revision to fail deployment if essential vars aren't set.
 }
 
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Base configuration
 const dbConfig = {
-  host: process.env.DB_HOST,
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
-  port: parseInt(process.env.DB_PORT || '5432', 10),
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false, // Basic SSL for production, adjust as needed
-  max: 20, // Max number of clients in the pool
-  idleTimeoutMillis: 30000, // How long a client is allowed to remain idle before being closed
-  connectionTimeoutMillis: 5000, // How long to wait for a connection from the pool
+  host: process.env.DB_HOST, // Usually set for cloud or specific non-local setups
+  port: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 5432,
+  ssl: isProduction ? { rejectUnauthorized: false } : false, // Use SSL in production
+  // statement_timeout: 5000, // milliseconds, terminate any statement that takes >5s
+  // query_timeout: 5000,    // milliseconds, terminate any query that takes >5s
+  // idle_in_transaction_session_timeout: 10000, // milliseconds, terminate any session with an open transaction that has been idle for >10s
+  // connectionTimeoutMillis: isProduction ? 2000 : 5000, // Time to wait for connection: 2s prod, 5s dev
+  // idleTimeoutMillis: isProduction ? 10000 : 30000, // Close idle clients after 10s (prod) / 30s (dev)
+  // max: 20, // Max number of clients in the pool
 };
 
-console.log('[DB Config] Attempting to create PostgreSQL Pool...');
-let pool;
-try {
-  pool = new Pool(dbConfig);
-  console.log('[DB Config] PostgreSQL Pool created successfully.');
-
-  pool.on('connect', client => {
-    console.log('[DB Pool] Client connected to database.');
-    // You can set session parameters here if needed, e.g.:
-    // client.query('SET DATESTYLE = iso, mdy;');
-  });
-
-  pool.on('acquire', client => {
-    console.log('[DB Pool] Client acquired from pool.');
-  });
-
-  pool.on('error', (err, client) => {
-    console.error('[DB Pool] Unexpected error on idle client', err);
-    // process.exit(-1); // Consider if critical enough to exit
-  });
-
-  // Test the connection (optional, but good for startup diagnostics)
-  pool.query('SELECT NOW()', (err, res) => {
-    if (err) {
-      console.error('[DB Pool] Initial connection test query failed:', err.stack);
-      // This might indicate a problem with DB connectivity or credentials
-      // Depending on policy, you might want to throw an error here to stop app startup if DB is essential
-    } else {
-      console.log('[DB Pool] Initial connection test query successful:', res.rows[0]);
-    }
-  });
-
-} catch (error) {
-  console.error('[DB Config] CRITICAL ERROR creating PostgreSQL Pool:', error);
-  // If the pool cannot be created, the application likely cannot function.
-  // Consider throwing this error to halt startup, especially in production.
-  // throw error; 
-  // For now, we log and allow the app to continue starting, but services will fail.
-  console.warn('[DB Config] Application will continue to start, but database services will likely fail.');
+// Cloud SQL specific configuration (for production)
+if (isProduction && process.env.DB_SOCKET_PATH) {
+  dbConfig.host = process.env.DB_SOCKET_PATH;
+  // logger.info('[DB Config] Using Cloud SQL Socket Path:', dbConfig.host); // Replaced console.log
 }
 
-module.exports = pool; 
+// Log the configuration being used (excluding password for security)
+const loggableConfig = { ...dbConfig };
+delete loggableConfig.password;
+// console.log('[DB Config] Database configuration:', loggableConfig); // Replaced console.log
+logger.info('[DB Config] Database configuration:', loggableConfig);
+
+const pool = new Pool(dbConfig);
+
+pool.on('connect', (client) => {
+  // console.log('[DB Pool] Client connected to the database.'); // Replaced console.log
+  logger.info('[DB Pool] Client connected to the database.');
+  // You can set session parameters here if needed, e.g.:
+  // client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE;');
+});
+
+pool.on('acquire', (client) => {
+  // console.log('[DB Pool] Client acquired from pool.'); // Replaced console.log
+  logger.debug('[DB Pool] Client acquired from pool.'); // Changed to debug for less noise
+});
+
+pool.on('remove', (client) => {
+  // console.log('[DB Pool] Client removed from pool (released).'); // Replaced console.log
+  logger.debug('[DB Pool] Client removed from pool (released).'); // Changed to debug for less noise
+});
+
+pool.on('error', (err, client) => {
+  // console.error('[DB Pool] Unexpected error on idle client', err); // Replaced console.error
+  logger.error('[DB Pool] Unexpected error on idle client', { error: err, clientInfo: client ? client.processID : 'N/A' });
+  // Recommended to exit the process if a serious error occurs with the pool
+  // process.exit(-1);
+});
+
+// Test the connection (optional, but good for startup diagnostics)
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    logger.error('[DB Pool] Initial connection test query failed:', err.stack);
+    // This might indicate a problem with DB connectivity or credentials
+    // Depending on policy, you might want to throw an error here to stop app startup if DB is essential
+  } else {
+    logger.info('[DB Pool] Initial connection test query successful:', res.rows[0]);
+  }
+});
+
+module.exports = {
+  query: (text, params) => pool.query(text, params),
+  getClient: async () => {
+    const client = await pool.connect();
+    // console.log('[DB Pool] Manual client checkout.'); // Replaced console.log
+    logger.debug('[DB Pool] Manual client checkout.');
+    const query = client.query;
+    const release = client.release;
+    // monkey patch the query method to keep track of when the client is busy
+    client.query = (...args) => {
+      // client.lastQuery = new Date(); // Example: track last query time
+      return query.apply(client, args);
+    };
+    // set a timeout one second before the idle_in_transaction_session_timeout fires
+    // client.release = () => {
+    //   // clear the timeout
+    //   // clearTimeout(timeout)
+    //   // set the client back to its old self
+    //   client.query = query;
+    //   client.release = release;
+    //   // console.log('[DB Pool] Manual client release.'); // Replaced console.log
+    //   logger.debug('[DB Pool] Manual client release.');
+    //   return release.apply(client);
+    // };
+    return client;
+  },
+  pool, // Export the pool itself if direct access is needed for specific pg features
+}; 

@@ -13,6 +13,8 @@ const express = require('express');
 const router = express.Router();
 const { Storage } = require('@google-cloud/storage');
 const firebaseAdmin = require('firebase-admin');
+const logger = require('../config/logger');
+const authenticateUser = require('../middleware/authenticateUser');
 
 // Initialize GCS Storage client
 let storage;
@@ -35,40 +37,10 @@ if (!bucketName) {
   }
 }
 
-console.log(`[Routes/GCS] Module loaded. Bucket name configured: ${bucketName ? bucketName : 'NOT SET - OPERATIONS WILL FAIL'}`);
+logger.info(`[Routes/GCS] Module loaded. Bucket name configured: ${bucketName ? bucketName : 'NOT SET - OPERATIONS WILL FAIL'}`);
 
 // Middleware to check if user is authenticated
-const authenticateUser = async (req, res, next) => {
-  if (firebaseAdmin.apps.length === 0) {
-    console.error('[Routes/GCS][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
-    return res.status(500).json({ error: 'Authentication service not configured.' });
-  }
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: No token provided' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
-    
-    req.user = {
-      id: decodedToken.uid,
-      email: decodedToken.email
-    };
-    
-    next();
-  } catch (error) {
-    console.error('[Routes/GCS] Error authenticating user:', error);
-    if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'Unauthorized: Token expired', code: 'TOKEN_EXPIRED' });
-    }
-    if (error.code === 'auth/argument-error') {
-      console.error('[Routes/GCS][AuthMiddleware] Firebase ID token verification failed.');
-    }
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-};
+// const authenticateUser = async (req, res, next) => { ... }; // REMOVED
 
 // Apply authentication middleware to all routes
 router.use(authenticateUser);

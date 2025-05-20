@@ -12,35 +12,8 @@ const express = require('express');
 const router = express.Router();
 const firebaseAdmin = require('firebase-admin');
 const subscriptionService = require('../services/userSubscriptionService');
-
-/**
- * Middleware to verify Firebase ID token from request headers
- * 
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next middleware function
- * @returns {void}
- */
-const verifyIdToken = async (req, res, next) => {
-  if (firebaseAdmin.apps.length === 0) {
-    console.error('[Routes/UserSubscription][AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
-    return res.status(500).json({ error: 'Authentication service not configured.' });
-  }
-  const idToken = req.headers.authorization?.split('Bearer ')[1];
-  if (!idToken) return res.status(401).json({ error: 'Unauthorized: No token provided' });
-
-  try {
-    const decodedToken = await firebaseAdmin.auth().verifyIdToken(idToken);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    console.error('[Routes/UserSubscription][AuthMiddleware] Error verifying token:', error);
-    if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'Unauthorized: Token expired', code: 'TOKEN_EXPIRED' });
-    }
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-};
+const logger = require('../config/logger');
+const authenticateUser = require('../middleware/authenticateUser');
 
 /**
  * @summary Toggle user subscription status between 'pro' and 'free'.
@@ -59,17 +32,17 @@ const verifyIdToken = async (req, res, next) => {
  * @returns {Error} 401 - Unauthorized if token is missing, invalid, or expired.
  * @returns {Error} 500 - Internal server error if subscription service is misconfigured or Firebase interaction fails.
  */
-router.post('/toggle-subscription', verifyIdToken, async (req, res) => {
+router.post('/toggle-subscription', authenticateUser, async (req, res) => {
   try {
-    const uid = req.user.uid;
+    const uid = req.user.id;
     if (!subscriptionService || typeof subscriptionService.toggleUserSubscription !== 'function') {
-      console.error('[Routes/UserSubscription] subscriptionService.toggleUserSubscription is not available!');
+      logger.error('[Routes/UserSubscription] subscriptionService.toggleUserSubscription is not available!');
       return res.status(500).json({ error: 'Subscription service not configured correctly.' });
     }
     const newStatus = await subscriptionService.toggleUserSubscription(uid);
     res.json({ success: true, subscription: newStatus });
   } catch (error) {
-    console.error('[Routes/UserSubscription] Error toggling subscription:', error.message, error.stack);
+    logger.error('[Routes/UserSubscription] Error toggling subscription:', { message: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to toggle subscription' });
   }
 });
@@ -89,20 +62,20 @@ router.post('/toggle-subscription', verifyIdToken, async (req, res) => {
  * @returns {Error} 401 - Unauthorized if token is missing, invalid, or expired.
  * @returns {Error} 500 - Internal server error if subscription service is misconfigured or Firebase interaction fails.
  */
-router.get('/subscription-status', verifyIdToken, async (req, res) => {
+router.get('/subscription-status', authenticateUser, async (req, res) => {
   try {
-    const uid = req.user.uid;
+    const uid = req.user.id;
     if (!subscriptionService || typeof subscriptionService.getUserSubscription !== 'function') {
-      console.error('[Routes/UserSubscription] subscriptionService.getUserSubscription is not available!');
+      logger.error('[Routes/UserSubscription] subscriptionService.getUserSubscription is not available!');
       return res.status(500).json({ error: 'Subscription service not configured correctly.' });
     }
     const status = await subscriptionService.getUserSubscription(uid);
     res.json({ subscription: status });
   } catch (error) {
-    console.error('[Routes/UserSubscription] Error getting subscription status:', error.message, error.stack);
+    logger.error('[Routes/UserSubscription] Error getting subscription status:', { message: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to get subscription status' });
   }
 });
 
-console.log('[Routes/UserSubscription] Routes defined, exporting router.');
+logger.info('[Routes/UserSubscription] Routes defined, exporting router.');
 module.exports = router; 

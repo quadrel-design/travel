@@ -12,82 +12,26 @@
  */
 const express = require('express');
 const router = express.Router();
-const multer = require('multer');
-const { Storage } = require('@google-cloud/storage');
 const firebaseAdmin = require('firebase-admin');
-const path = require('path');
 
 const projectService = require('../services/projectService');
+const invoiceService = require('../services/invoiceService');
+const projectImagesRouter = require('./projectImages');
 const { addSseClient } = require('../services/sseService');
 const logger = require('../config/logger');
-
-// Initialize in-memory storage for multer
-const storage = multer.memoryStorage();
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max file size
-});
-
-// Google Cloud Storage client
-const storageBucketName = process.env.GCS_BUCKET_NAME || 'travel-app-invoices';
-let storageClient;
-let bucket;
-try {
-  storageClient = new Storage();
-  bucket = storageClient.bucket(storageBucketName);
-  console.log(`[Routes/Projects] Successfully connected to GCS bucket: ${storageBucketName}`);
-} catch (error) {
-  console.error(`[Routes/Projects] CRITICAL ERROR: Failed to initialize Google Cloud Storage client or bucket '${storageBucketName}':`, error);
-  console.warn('[Routes/Projects] GCS operations will fail.');
-}
+const authenticateUser = require('../middleware/authenticateUser');
 
 // Firebase Admin SDK initialization check
 if (firebaseAdmin.apps.length === 0) {
   console.warn('[Routes/Projects] Firebase Admin SDK has not been initialized. Authentication will fail.');
 }
 
-/**
- * Middleware to authenticate users using Firebase ID tokens.
- * Verifies the Bearer token from the Authorization header.
- * Attaches the decoded token (including user UID and email) to `req.user`.
- * TODO: Refactor this to a shared middleware in the `middleware/` directory.
- *
- * @async
- * @param {import('express').Request} req - Express request object.
- * @param {import('express').Response} res - Express response object.
- * @param {import('express').NextFunction} next - Express next middleware function.
- */
-const authenticateUser = async (req, res, next) => {
-  if (firebaseAdmin.apps.length === 0) {
-    console.error('[AuthMiddleware] Firebase Admin SDK not initialized. Cannot authenticate.');
-    return res.status(500).json({ error: 'Authentication service not configured.' });
-  }
-  try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return res.status(401).json({ error: 'Unauthorized: No token provided' });
-    }
-
-    const token = authHeader.split(' ')[1];
-    const decodedToken = await firebaseAdmin.auth().verifyIdToken(token);
-    
-    req.user = {
-      id: decodedToken.uid,
-      email: decodedToken.email
-    };
-    
-    next();
-  } catch (error) {
-    console.error('Error authenticating user:', error);
-    if (error.code === 'auth/id-token-expired') {
-      return res.status(401).json({ error: 'Unauthorized: Token expired', code: 'TOKEN_EXPIRED' });
-    }
-    if (error.code === 'auth/argument-error') {
-      console.error('[AuthMiddleware] Firebase ID token verification failed. This might be due to an emulator issue or misconfiguration if not in production.');
-    }
-    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
-  }
-};
+// Check if invoiceService is available
+if (!invoiceService) {
+  logger.error('[Routes/Projects] CRITICAL ERROR - invoiceService was not imported or is unavailable (needed for SSE).');
+  // Depending on startup strategy, might throw an error to prevent app start
+  // throw new Error('[Routes/Projects] invoiceService is critical and not available.');
+}
 
 // Apply authentication middleware to all routes in this router
 router.use(authenticateUser);
@@ -119,9 +63,9 @@ router.use(authenticateUser);
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(`[Routes/Projects] GET / - Attempting to fetch projects for user: ${userId}`);
+    logger.info(`[Routes/Projects] GET / - Attempting to fetch projects for user: ${userId}`);
     if (!projectService || typeof projectService.getUserProjects !== 'function') {
-      console.error('[Routes/Projects] projectService.getUserProjects is not available!');
+      logger.error('[Routes/Projects] projectService.getUserProjects is not available!');
       return res.status(500).json({ error: 'Project service not configured correctly.' });
     }
     const projects = await projectService.getUserProjects(userId);
@@ -133,8 +77,8 @@ router.get('/', async (req, res) => {
     
     res.status(200).json(projectsWithParsedBudget);
   } catch (error) {
-    console.error('[Routes/Projects] GET / - ERROR CAUGHT:', error);
-    console.error('[Routes/Projects] Error stack:', error.stack);
+    logger.error('[Routes/Projects] GET / - ERROR CAUGHT:', error);
+    logger.error('[Routes/Projects] Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to fetch projects' });
   }
 });
@@ -158,21 +102,24 @@ router.get('/:projectId', async (req, res) => {
   try {
     const userId = req.user.id;
     const projectId = req.params.projectId;
-    console.log(`[Routes/Projects] GET /${projectId} - Attempting to fetch project for user: ${userId}`);
+    logger.info(`[Routes/Projects] GET /${projectId} - Attempting to fetch project for user: ${userId}`);
     if (!projectService || typeof projectService.getProjectById !== 'function') {
-      console.error('[Routes/Projects] projectService.getProjectById is not available!');
+      logger.error('[Routes/Projects] projectService.getProjectById is not available!');
       return res.status(500).json({ error: 'Project service not configured correctly.' });
     }
     const project = await projectService.getProjectById(projectId, userId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found' });
-    }
     
     project.budget = project.budget !== null && project.budget !== undefined ? parseFloat(project.budget) : null;
     
     res.status(200).json(project);
   } catch (error) {
-    console.error(`[Routes/Projects] Error fetching project ${req.params.projectId}:`, error);
+    logger.error(`[Routes/Projects] Error fetching project ${req.params.projectId}:`, error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to fetch project' });
   }
 });
@@ -210,9 +157,9 @@ router.get('/:projectId', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const userId = req.user.id;
-    console.log(`[Routes/Projects] POST / - Attempting to create project for user: ${userId}`);
+    logger.info(`[Routes/Projects] POST / - Attempting to create project for user: ${userId}`);
     if (!projectService || typeof projectService.createProject !== 'function') {
-      console.error('[Routes/Projects] projectService.createProject is not available!');
+      logger.error('[Routes/Projects] projectService.createProject is not available!');
       return res.status(500).json({ error: 'Project service not configured correctly.' });
     }
     const projectData = {
@@ -236,7 +183,13 @@ router.post('/', async (req, res) => {
     
     res.status(201).json(project);
   } catch (error) {
-    console.error('[Routes/Projects] Error creating project:', error);
+    logger.error('[Routes/Projects] Error creating project:', error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: error.message });
+    }
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to create project' });
   }
 });
@@ -248,9 +201,6 @@ router.post('/', async (req, res) => {
  * The budget field is parsed to a float if provided.
  * @param {string} req.params.projectId - The UUID of the project to update.
  * @body {object} projectData - An object containing the project fields to update.
- * @body {string} [projectData.title] - New title.
- * @body {string} [projectData.description] - New description.
- * @body {number} [projectData.budget] - New budget.
  * @returns {object} 200 - The updated project object.
  * @returns {Error} 404 - If the project is not found or not owned by the user.
  * @returns {Error} 500 - If there's an error updating the project or the project service is not configured.
@@ -259,9 +209,9 @@ router.patch('/:projectId', async (req, res) => {
   try {
     const userId = req.user.id;
     const projectId = req.params.projectId;
-    console.log(`[Routes/Projects] PATCH /${projectId} - Attempting to update project for user: ${userId}`);
+    logger.info(`[Routes/Projects] PATCH /${projectId} - Attempting to update project for user: ${userId}`);
     if (!projectService || typeof projectService.updateProject !== 'function') {
-      console.error('[Routes/Projects] projectService.updateProject is not available!');
+      logger.error('[Routes/Projects] projectService.updateProject is not available!');
       return res.status(500).json({ error: 'Project service not configured correctly.' });
     }
     const projectData = req.body;
@@ -269,25 +219,28 @@ router.patch('/:projectId', async (req, res) => {
     if (projectData.budget !== null && projectData.budget !== undefined) {
       projectData.budget = parseFloat(projectData.budget);
       if (isNaN(projectData.budget)) {
-        projectData.budget = 0;
+        // Decide on behavior: error, or set to null/0? Current service sets to 0 if undefined.
+        // For now, let service handle default if not a valid number, or frontend should ensure valid numbers.
+        // Consider adding validation here if strictness is required.
       }
     }
     
-    const project = await projectService.updateProject(projectId, projectData, userId);
+    const updatedProject = await projectService.updateProject(projectId, projectData, userId);
     
-    project.budget = project.budget !== null && project.budget !== undefined ? parseFloat(project.budget) : null;
-    if (isNaN(project.budget)) {
-      project.budget = null;
+    updatedProject.budget = updatedProject.budget !== null && updatedProject.budget !== undefined ? parseFloat(updatedProject.budget) : null;
+    if (isNaN(updatedProject.budget)) {
+      updatedProject.budget = null; // Ensure consistent null for bad float parse outcome
     }
     
-    res.status(200).json(project);
+    res.status(200).json(updatedProject);
   } catch (error) {
-    console.error(`[Routes/Projects] Error updating project ${req.params.projectId}:`, error);
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ error: 'Project not found' });
+    logger.error(`[Routes/Projects] Error updating project ${req.params.projectId}:`, error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: error.message });
     }
-    
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update project' });
   }
 });
@@ -305,364 +258,39 @@ router.delete('/:projectId', async (req, res) => {
   try {
     const userId = req.user.id;
     const projectId = req.params.projectId;
-    console.log(`[Routes/Projects] DELETE /${projectId} - Attempting to delete project for user: ${userId}`);
+    logger.info(`[Routes/Projects] DELETE /${projectId} - Attempting to delete project for user: ${userId}`);
     if (!projectService || typeof projectService.deleteProject !== 'function') {
-      console.error('[Routes/Projects] projectService.deleteProject is not available!');
+      logger.error('[Routes/Projects] projectService.deleteProject is not available!');
       return res.status(500).json({ error: 'Project service not configured correctly.' });
     }
-    await projectService.deleteProject(projectId, userId);
-    res.status(204).send();
+    const result = await projectService.deleteProject(projectId, userId);
+    res.status(200).json({ message: 'Project deleted successfully', id: result.id });
   } catch (error) {
-    console.error(`[Routes/Projects] Error deleting project ${req.params.projectId}:`, error);
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ error: 'Project not found' });
+    logger.error(`[Routes/Projects] Error deleting project ${req.params.projectId}:`, error);
+    if (error.statusCode === 404) {
+      return res.status(404).json({ error: error.message });
     }
-    
+    if (error.statusCode === 403) {
+      return res.status(403).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to delete project' });
   }
 });
 
+// --- Mount Image Sub-Router --- 
+router.use('/:projectId/images', projectImagesRouter);
+
 /**
- * @route GET /api/projects/:projectId/images
- * @summary Get all images for a project.
- * @description Retrieves metadata for all images associated with a specific project for the authenticated user.
+ * @route GET /api/projects/:projectId/image-stream
+ * @summary Establishes an SSE connection for real-time image updates for a project.
+ * @description This endpoint establishes a Server-Sent Events (SSE) connection for real-time image updates for a specific project.
  * @param {string} req.params.projectId - The UUID of the project.
- * @returns {object[]} 200 - An array of image metadata objects.
- * @returns {Error} 500 - If there's an error fetching images or the project service is not configured.
- * @example response - 200 - Success
- * [
- *   {
- *     "id": "client-gen-img-uuid",
- *     "projectId": "project-uuid",
- *     "userId": "firebase-user-uid",
- *     "status": "analysis_complete",
- *     "imagePath": "users/uid/projects/pid/images/imgid/receipt.jpg",
- *     "isInvoiceGuess": true,
- *     "ocrText": "...",
- *     "invoiceAnalysis": { "totalAmount": 50.25, ... },
- *     // ... other image fields from _transformDbImageToApiV1Format
- *   }
- * ]
+ * @returns {EventSource} 200 - SSE connection for real-time image updates.
+ * @returns {Error} 500 - If there's an error establishing the SSE connection or the project service is not configured.
  */
-router.get('/:projectId/images', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    console.log(`[Routes/Projects] GET /${projectId}/images - Attempting to fetch images for user: ${userId}`);
-    if (!projectService || typeof projectService.getProjectImages !== 'function') {
-      console.error('[Routes/Projects] projectService.getProjectImages is not available!');
-      return res.status(500).json({ error: 'Project service not configured correctly.' });
-    }
-    const images = await projectService.getProjectImages(projectId, userId);
-    res.status(200).json(images);
-  } catch (error) {
-    console.error(`[Routes/Projects] Error fetching images for project ${req.params.projectId}:`, error);
-    res.status(500).json({ error: 'Failed to fetch project images' });
-  }
-});
-
-/**
- * @route GET /api/projects/:projectId/images/:imageId
- * @summary Get metadata for a specific image.
- * @description Retrieves metadata for a single image within a project, ensuring it belongs to the authenticated user.
- * @param {string} req.params.projectId - The UUID of the project.
- * @param {string} req.params.imageId - The client-generated ID of the image.
- * @returns {object} 200 - The image metadata object.
- * @returns {Error} 404 - If the project or image is not found or not owned by the user.
- * @returns {Error} 500 - If there's an error fetching the image or the project service is not configured.
- */
-router.get('/:projectId/images/:imageId', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    const imageId = req.params.imageId;
-    console.log(`[Routes/Projects] GET /${projectId}/images/${imageId} - Attempting to fetch image for user: ${userId}`);
-    if (!projectService || typeof projectService.getInvoiceImageById !== 'function') {
-      console.error('[Routes/Projects] projectService.getInvoiceImageById is not available!');
-      return res.status(500).json({ error: 'Project service not configured correctly.' });
-    }
-    const image = await projectService.getInvoiceImageById(projectId, imageId, userId);
-    if (!image) {
-      return res.status(404).json({ error: 'Image not found' });
-    }
-    
-    res.status(200).json(image);
-  } catch (error) {
-    console.error(`[Routes/Projects] Error fetching image ${req.params.imageId}:`, error);
-    res.status(500).json({ error: 'Failed to fetch image' });
-  }
-});
-
-/**
- * @route POST /api/projects/:projectId/images
- * @summary Create image metadata record after GCS upload.
- * @description This endpoint is called by the client *after* it has successfully uploaded an image file to Google Cloud Storage (GCS)
- * using a signed URL (obtained from `/api/gcs/generate-upload-url`). This route then creates a corresponding metadata
- * record for the image in the PostgreSQL database.
- *
- * @param {string} req.params.projectId - The UUID of the project to associate the image with.
- * @body {object} imageMetadata - Metadata of the uploaded image.
- * @body {string} imageMetadata.id - REQUIRED: The client-generated UUID for this image.
- * @body {string} imageMetadata.imagePath - REQUIRED: The full GCS object path where the image was uploaded (e.g., `users/uid/projects/pid/images/imgid/filename.jpg`).
- * @body {string} imageMetadata.originalFilename - REQUIRED: The original name of the uploaded file.
- * @body {string} [imageMetadata.uploaded_at] - Optional: Client-provided ISO 8601 timestamp of when the upload occurred. Defaults to server time if not provided.
- * @body {string} [imageMetadata.contentType] - Optional but recommended: The MIME type of the uploaded file (e.g., `image/jpeg`).
- * @body {number} [imageMetadata.size] - Optional: The size of the uploaded file in bytes.
- *
- * @returns {object} 201 - The newly created image metadata object, including its initial `uploaded` status.
- * @returns {Error} 400 - If required fields (`id`, `imagePath`, `originalFilename`) are missing in the request body.
- * @returns {Error} 404 - If the specified `projectId` does not exist or does not belong to the user.
- * @returns {Error} 409 - If an image with the provided `id` already exists for this project (duplicate ID).
- * @returns {Error} 500 - If there's a server-side error during database operation or if the project service is not configured.
- * @example request body
- * {
- *   "id": "ce7a2e56-9b90-45c1-8b09-90124e5221c3",
- *   "imagePath": "users/someUserId/projects/projectUuid/images/ce7a2e56.../my_receipt.jpg",
- *   "originalFilename": "my_receipt.jpg",
- *   "contentType": "image/jpeg",
- *   "size": 120450
- * }
- */
-router.post('/:projectId/images', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    
-    // Extract metadata sent by the Flutter app
-    const { 
-      id: imageIdFromClient, // This is the imageId generated by Flutter client
-      imagePath,             // This is the GCS object path (e.g., users/uid/projects/pid/...)
-      originalFilename,      // Original name of the file
-      uploaded_at,           // Timestamp from client
-      contentType,           // MIME type of the file
-      size                   // Size of the file in bytes
-    } = req.body;
-
-    console.log(`[Routes/Projects] POST /${projectId}/images - DB record creation for GCS path: ${imagePath}`);
-
-    if (!imagePath || !projectId || !imageIdFromClient || !originalFilename) {
-      return res.status(400).json({ error: 'Missing required image metadata (imageIdFromClient, projectId, imagePath, originalFilename).' });
-    }
-
-    // Verify project ownership (optional, but good)
-    if (!projectService || typeof projectService.getProjectById !== 'function') {
-        console.error('[Routes/Projects] projectService.getProjectById is not available!');
-        return res.status(500).json({ error: 'Project service not configured correctly.' });
-    }
-    const project = await projectService.getProjectById(projectId, userId);
-    if (!project) {
-      return res.status(404).json({ error: 'Project not found or not owned by user, cannot create image record.' });
-    }
-
-    const imageData = {
-      id: imageIdFromClient, 
-      projectId: projectId,
-      gcsPath: imagePath, 
-      status: 'uploaded', 
-      originalFilename: originalFilename,
-      size: size, // Make sure Flutter sends this if you need it
-      contentType: contentType, // Make sure Flutter sends this if you need it
-      uploaded_at: uploaded_at ? new Date(uploaded_at) : new Date(),
-    };
-    
-    if (!projectService || typeof projectService.saveImageMetadata !== 'function') {
-      console.error('[Routes/Projects] projectService.saveImageMetadata is not available!');
-      return res.status(500).json({ error: 'Project service not configured correctly to save image metadata.' });
-    }
-    
-    const savedImage = await projectService.saveImageMetadata(imageData, userId);
-    
-    console.log(`[Routes/Projects] Successfully created DB record for imageId: ${savedImage.id}`);
-    res.status(201).json(savedImage);
-
-  } catch (error) {
-    console.error(`[Routes/Projects] Error creating image DB record for project ${req.params.projectId}:`, error);
-    if (error.code === '23505') { // Example for unique constraint violation in PostgreSQL
-        return res.status(409).json({ error: 'Conflict: Image record might already exist or ID is duplicated.', details: error.detail });
-    }
-    res.status(500).json({ error: 'Failed to create image record in database' });
-  }
-});
-
-/**
- * @route DELETE /api/projects/:projectId/images/:imageId
- * @summary Delete an image from GCS and its metadata from the database.
- * @description Deletes both the image file from Google Cloud Storage and its corresponding metadata record from the database.
- * @param {string} req.params.projectId - The UUID of the project.
- * @param {string} req.params.imageId - The client-generated ID of the image to delete.
- * @returns {} 204 - No content, indicating successful deletion from both GCS and DB.
- * @returns {Error} 404 - If the project or image metadata is not found or not owned by the user.
- * @returns {Error} 500 - If there's an error during GCS deletion or database operation.
- *                       Note: If GCS deletion fails, an error is logged, but the service attempts to continue with DB deletion.
- */
-router.delete('/:projectId/images/:imageId', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    const imageId = req.params.imageId;
-    console.log(`[Routes/Projects] DELETE /${projectId}/images/${imageId} - Attempting to delete image for user: ${userId}`);
-
-    // 1. Get image metadata to find GCS path
-    if (!projectService || typeof projectService.getInvoiceImageById !== 'function' || typeof projectService.deleteImageMetadata !== 'function') {
-      console.error('[Routes/Projects] Project service methods for image deletion are not available!');
-      return res.status(500).json({ error: 'Project service not configured correctly.' });
-    }
-    const image = await projectService.getInvoiceImageById(projectId, imageId, userId);
-    if (!image) {
-      return res.status(404).json({ error: 'Image not found or not owned by user.' });
-    }
-
-    // 2. Delete from GCS if bucket and path are valid
-    if (bucket && image.imagePath && image.imagePath.startsWith(`gs://${storageBucketName}/`)) {
-      const gcsFilename = image.imagePath.substring(`gs://${storageBucketName}/`.length);
-      try {
-        console.log(`[Routes/Projects] Deleting image from GCS: ${gcsFilename}`);
-        await bucket.file(gcsFilename).delete();
-        console.log(`[Routes/Projects] Successfully deleted ${gcsFilename} from GCS.`);
-      } catch (gcsError) {
-        console.error(`[Routes/Projects] Error deleting ${gcsFilename} from GCS:`, gcsError);
-        // Decide if this is a critical failure. 
-        // The DB entry will still be deleted. Client might see a broken image if GCS delete fails but DB succeeds.
-        // For now, log and continue to DB deletion.
-      }
-    } else {
-      console.warn(`[Routes/Projects] Could not delete from GCS. Bucket not init or invalid imagePath: ${image.imagePath}`);
-    }
-
-    // 3. Delete from database
-    await projectService.deleteImageMetadata(imageId, projectId, userId);
-    
-    res.status(204).send();
-
-  } catch (error) {
-    console.error(`[Routes/Projects] Error deleting image ${req.params.imageId}:`, error);
-    res.status(500).json({ error: 'Failed to delete image' });
-  }
-});
-
-/**
- * @route PATCH /api/projects/:projectId/images/:imageId/ocr
- * @summary Update OCR results for an image.
- * @description Manually updates the OCR-related fields for an image. This is typically used by backend processes
- * after OCR completion or for manual corrections, less often directly by a typical client.
- * The actual OCR processing is usually triggered via the `/api/ocr-invoice` route.
- *
- * @param {string} req.params.projectId - The UUID of the project.
- * @param {string} req.params.imageId - The client-generated ID of the image whose OCR results are to be updated.
- * @body {object} ocrData - The OCR data to update.
- * @body {string} [ocrData.status] - New status (e.g., `ocr_complete`, `ocr_failed`).
- * @body {string} [ocrData.ocr_text] - The extracted OCR text.
- * @body {number} [ocrData.ocr_confidence] - The confidence score of the OCR.
- * @body {object} [ocrData.ocr_text_blocks] - JSON object of text blocks from OCR.
- * @body {string} [ocrData.error_message] - Error message if OCR failed.
- *
- * @returns {object} 200 - The updated image metadata object.
- * @returns {Error} 404 - If the project or image is not found.
- * @returns {Error} 500 - If there's an error updating OCR results.
- */
-router.patch('/:projectId/images/:imageId/ocr', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    const imageId = req.params.imageId;
-    
-    const ocrData = req.body;
-    
-    const image = await projectService.updateImageOcrResults(
-      projectId, 
-      imageId, 
-      ocrData, 
-      userId
-    );
-    
-    res.status(200).json(image);
-  } catch (error) {
-    console.error(`Error updating OCR results for image ${req.params.imageId}:`, error);
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ error: 'Image not found' });
-    }
-    
-    res.status(500).json({ error: 'Failed to update OCR results' });
-  }
-});
-
-/**
- * @route PATCH /api/projects/:projectId/images/:imageId/analysis
- * @summary Update analysis details for an image.
- * @description Allows updating the AI-driven analysis details of an image, such as the extracted invoice data
- * or the `isInvoiceGuess`. This can be used by the client to reflect manual edits or corrections to Gemini's analysis.
- *
- * @param {string} req.params.projectId - The UUID of the project.
- * @param {string} req.params.imageId - The client-generated ID of the image whose analysis details are to be updated.
- * @body {object} analysisData - The analysis data to update. Structure should align with fields expected by `projectService.updateImageMetadata`,
- *                                which includes `gemini_analysis_json`, `is_invoice`, `status`, `analyzed_invoice_date`, etc.
- * @body {object} [analysisData.invoiceAnalysis] - The main structured analysis data, similar to Gemini output (becomes `gemini_analysis_json` in DB).
- * @body {boolean} [analysisData.isInvoiceGuess] - Client's assessment of whether it's an invoice (becomes `is_invoice` in DB).
- * @body {string} [analysisData.status] - New status for the image (e.g., `analysis_complete`, `manual_review`).
- * @body {string} [analysisData.invoiceDate] - ISO 8601 string for the invoice date (becomes `analyzed_invoice_date` in DB).
- * @body {number} [analysisData.totalAmount] - Total amount from invoice (becomes `invoice_sum` in DB after numeric conversion).
- *
- * @returns {object} 200 - The updated image metadata object.
- * @returns {Error} 404 - If the project or image is not found.
- * @returns {Error} 500 - If there's an error updating analysis details.
- * @example request body
- * {
- *   "invoiceAnalysis": { "totalAmount": 150.00, "currency": "USD", "merchantName": "Updated Store" },
- *   "isInvoiceGuess": true,
- *   "status": "analysis_complete",
- *   "invoiceDate": "2024-08-01T00:00:00.000Z"
- * }
- */
-router.patch('/:projectId/images/:imageId/analysis', async (req, res) => {
-  try {
-    const userId = req.user.id;
-    const projectId = req.params.projectId;
-    const imageId = req.params.imageId;
-    
-    const receivedAnalysisData = req.body; // Data from Flutter app
-
-    // Prepare the data for projectService.updateImageMetadata
-    const dataForDbUpdate = {
-      projectId: projectId, // For internal checks within updateImageMetadata if needed
-      gemini_analysis_json: receivedAnalysisData.invoiceAnalysis,
-      is_invoice: receivedAnalysisData.isInvoiceGuess,
-      analysis_processed_at: receivedAnalysisData.lastProcessedAt, // Ensure Flutter sends this key
-      status: receivedAnalysisData.status,
-      // analyzed_invoice_date is expected by updateImageMetadata if present
-      // Flutter sends 'invoiceDate', map it.
-      analyzed_invoice_date: receivedAnalysisData.invoiceDate 
-    };
-
-    // Remove undefined keys to prevent them from being set as null in the DB
-    // unless specifically intended. The updateImageMetadata service handles this.
-    // For example, if invoiceDate wasn't sent, analyzed_invoice_date will be undefined here.
-
-    console.log(`[Routes/Projects] Updating analysis for image ${imageId}. Data for DB:`, JSON.stringify(dataForDbUpdate, null, 2));
-    
-    const image = await projectService.updateImageMetadata( // Corrected service call
-      imageId, 
-      dataForDbUpdate, 
-      userId
-    );
-    
-    res.status(200).json(image);
-  } catch (error) {
-    console.error(`Error updating analysis details for image ${req.params.imageId}:`, error);
-    
-    if (error.message.includes('not found')) {
-      return res.status(404).json({ error: 'Image not found' });
-    }
-    
-    res.status(500).json({ error: 'Failed to update analysis details' });
-  }
-});
-
-// SSE Endpoint for Project Image Updates
 router.get('/:projectId/image-stream', async (req, res) => {
   const projectId = req.params.projectId;
-  const userId = req.user.id; // Restore userId
+  const userId = req.user.id;
 
   logger.info(`[SSE] Connection attempt for project ${projectId} by user ${userId}`);
 
@@ -674,9 +302,8 @@ router.get('/:projectId/image-stream', async (req, res) => {
   res.flushHeaders(); 
 
   // 2. Add client to the list for this project
-  // `addSseClient` will immediately send existing images and then listen for updates
   try {
-    await addSseClient(projectId, userId, res); // Pass userId and await
+    await addSseClient(projectId, userId, res);
   } catch (error) {
     logger.error(`[SSE] Error in addSseClient for project ${projectId}, user ${userId}:`, error);
     if (!res.writableEnded) {
@@ -694,14 +321,8 @@ router.get('/:projectId/image-stream', async (req, res) => {
 
   // 3. Handle client disconnect
   req.on('close', () => {
-    logger.info(`[SSE] Client disconnected for project ${projectId}, user ${userId}. Removing from SSE clients.`);
-    // sseService.removeSseClient(projectId, res); // removeSseClient now needs userId
-    // The sseService should handle removal internally based on 'res' or a unique client ID.
-    // For now, let's assume sseService.addSseClient also handles storing 'res' in a way
-    // that it can find and remove it, or it has a mechanism to clean up closed connections.
-    // A more robust system might involve passing a unique ID per connection.
-    // For now, the important part is that `addSseClient` has `res` and can manage its lifecycle.
-    // The `sseService.js` will need adjustment if it's not already handling removal on 'close' or error within `addSseClient`.
+    logger.info(`[SSE] Client disconnected for project ${projectId}, user ${userId}. (Note: sseService handles removal if needed)`);
+    // sseService.removeSseClient(projectId, userId, res); // Or however removal is handled
   });
 });
 
