@@ -59,6 +59,10 @@ fi
 echo "---- Pre-flight check completed. ----"
 # ---- End of Pre-flight Database Connection Test ----
 
+# Authenticate Docker with gcloud
+echo "Configuring Docker to use gcloud credential helper for ${PROJECT_ID}..."
+gcloud auth configure-docker "gcr.io" --quiet
+
 # Create a unique tag for this build
 BUILD_TAG=$(date +%s)
 
