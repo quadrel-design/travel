@@ -24,7 +24,6 @@ import 'screens/project/project_create.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/invoices/invoice_capture_overview_screen.dart';
 import 'screens/settings/app_settings_screen.dart';
-import 'repositories/auth_repository.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/screens/project/project_overview_screen.dart';
@@ -109,13 +108,32 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '${AppRoutes.projectDetail.split('/').last}/:projectId',
             builder: (context, state) {
               final projectId = state.pathParameters['projectId'];
-              final project = state.extra as Project?;
+              Project? project;
+
+              if (state.extra is Project) {
+                project = state.extra as Project?;
+              } else if (state.extra is Map) {
+                try {
+                  project =
+                      Project.fromJson(state.extra as Map<String, dynamic>);
+                } catch (e) {
+                  ref.read(loggerProvider).e(
+                      '[GoRouter] Error deserializing Project from state.extra for projectDetail: $e',
+                      error: e,
+                      stackTrace: StackTrace.current);
+                  project = null;
+                }
+              }
+
               if (projectId != null && project != null) {
                 return ProjectDetailOverviewScreen(project: project);
               } else {
+                ref.read(loggerProvider).w(
+                    '[GoRouter] Project data missing or invalid for projectDetail. ProjectId: $projectId, Project: $project');
                 return Scaffold(
-                  appBar: AppBar(title: const Text('Error')),
-                  body: const Center(child: Text('Project data missing.')),
+                  appBar: AppBar(title: const Text('Error - Project Missing')),
+                  body: const Center(
+                      child: Text('Project data missing or invalid.')),
                 );
               }
             },
@@ -123,15 +141,40 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.invoiceCaptureOverview.split('/').last,
                 builder: (context, state) {
-                  final project = state.extra as Project?;
+                  Project? project;
+                  // Attempt to get project from path parameters if available (e.g. deep linking)
+                  // This part might need adjustment based on how you structure project access for this route.
+                  // For now, we primarily rely on state.extra passed during navigation.
+
+                  if (state.extra is Project) {
+                    project = state.extra as Project?;
+                  } else if (state.extra is Map) {
+                    try {
+                      project =
+                          Project.fromJson(state.extra as Map<String, dynamic>);
+                    } catch (e) {
+                      ref.read(loggerProvider).e(
+                          '[GoRouter] Error deserializing Project from state.extra for invoiceCapture: $e',
+                          error: e,
+                          stackTrace: StackTrace.current);
+                      project = null;
+                    }
+                  }
+
+                  // If project came from a parent route's state.extra, it might already be a Project object.
+                  // If navigating directly with a Map, it needs deserialization.
+
                   if (project != null) {
                     return InvoiceCaptureOverviewScreen(project: project);
                   } else {
+                    ref.read(loggerProvider).w(
+                        '[GoRouter] Project data missing or invalid for invoiceCaptureOverview. Project: $project');
                     return Scaffold(
-                      appBar: AppBar(title: const Text('Error')),
+                      appBar:
+                          AppBar(title: const Text('Error - Project Missing')),
                       body: const Center(
-                        child:
-                            Text('Project not selected for invoice capture.'),
+                        child: Text(
+                            'Project not selected or data invalid for invoice capture.'),
                       ),
                     );
                   }

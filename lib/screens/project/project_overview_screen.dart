@@ -3,8 +3,10 @@ import 'package:go_router/go_router.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/models/project.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:travel/providers/user_subscription_provider.dart';
 
-class ProjectDetailOverviewScreen extends StatelessWidget {
+class ProjectDetailOverviewScreen extends ConsumerWidget {
   final Project project;
 
   const ProjectDetailOverviewScreen({
@@ -47,8 +49,10 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!; // Get l10n
+    final subscriptionStatus = ref.watch(userSubscriptionProvider);
+    final isProUser = subscriptionStatus == 'pro';
 
     return Scaffold(
       // Restore grey background color
@@ -61,6 +65,34 @@ class ProjectDetailOverviewScreen extends StatelessWidget {
         ),
         title: Text(project.title),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: Icon(isProUser ? Icons.star : Icons.star_border),
+            tooltip: isProUser
+                ? 'Pro User - Tap to Downgrade'
+                : 'Standard User - Tap to Upgrade',
+            onPressed: () async {
+              try {
+                await ref.read(userSubscriptionProvider.notifier).toggle();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(isProUser
+                        ? 'Subscription downgraded to Standard'
+                        : 'Subscription upgraded to Pro!'),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to toggle subscription: $e'),
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                );
+              }
+            },
+          ),
+        ],
         // Consider matching AppBar style (e.g., white background) if desired
       ),
       // Remove placeholder body
