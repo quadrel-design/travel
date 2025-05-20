@@ -4,18 +4,27 @@ set -e
 
 # Define your project ID and shared image name
 PROJECT_ID="${GCP_PROJECT_ID:-splitbase-7ec0f}"
-APP_IMAGE_NAME="travel-app-shared" # Single image for both services
-TARGET_GCS_BUCKET_NAME="travel-files" # Your GCS bucket name for invoice-service
+APP_IMAGE_NAME_VALUE="${GCP_APP_IMAGE_NAME:-travel-app-shared}" # Single image for both services
+TARGET_GCS_BUCKET_NAME_VALUE="${GCP_GCS_BUCKET_NAME:-travel-files}" # Your GCS bucket name for invoice-service
+GCP_REGION_VALUE="${GCP_REGION:-us-central1}"
 
 # --- Database Connection Parameters for Pre-flight Check ---
-DB_USER_VALUE="travel_user"
-DB_HOST_VALUE="37.148.202.133"
-DB_NAME_VALUE="travel_db"
+DB_USER_VALUE="${GCP_DB_USER:-travel_user}"
+DB_HOST_VALUE="${GCP_DB_HOST:-37.148.202.133}"
+DB_NAME_VALUE="${GCP_DB_NAME:-travel_db}"
+DB_PORT_VALUE="${GCP_DB_PORT:-5432}"
 # ---
 
 # --- IMPORTANT: Replace these with your actual Secret Manager secret names ---
 DB_PASSWORD_SECRET_NAME="gcs-backend-db-password" # e.g., "gcs-backend-db-password"
 GEMINI_API_KEY_SECRET_NAME="shared-gemini-api-key" # e.g., "shared-gemini-api-key"
+# ---
+
+# --- Cloud Run Configuration ---
+ALLOW_UNAUTHENTICATED_FLAG=""
+if [ "${GCP_ALLOW_UNAUTHENTICATED:-false}" == "true" ]; then
+  ALLOW_UNAUTHENTICATED_FLAG="--allow-unauthenticated"
+fi
 # ---
 
 # ---- Pre-flight Database Connection Test ----
@@ -54,11 +63,11 @@ echo "---- Pre-flight check completed. ----"
 BUILD_TAG=$(date +%s)
 
 # Build and push the Docker image
-echo "Building and pushing image for ${APP_IMAGE_NAME} with tag: ${BUILD_TAG} and :latest"
+echo "Building and pushing image for ${APP_IMAGE_NAME_VALUE} with tag: ${BUILD_TAG} and :latest"
 docker buildx build \
   --platform linux/amd64 \
-  -t "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:${BUILD_TAG}" \
-  -t "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:latest" \
+  -t "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME_VALUE}:${BUILD_TAG}" \
+  -t "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME_VALUE}:latest" \
   -f Dockerfile \
   . \
   --push
@@ -66,11 +75,11 @@ docker buildx build \
 # Deploy to gcs-backend
 echo "Deploying gcs-backend with image tag: ${BUILD_TAG}"
 gcloud run deploy gcs-backend \
-  --image "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME}:${BUILD_TAG}" \
+  --image "gcr.io/${PROJECT_ID}/${APP_IMAGE_NAME_VALUE}:${BUILD_TAG}" \
   --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DB_USER=travel_user,DB_HOST=37.148.202.133,DB_NAME=travel_db,DB_PORT=5432,GCS_BUCKET_NAME=${TARGET_GCS_BUCKET_NAME}" \
+  --region "${GCP_REGION_VALUE}" \
+  ${ALLOW_UNAUTHENTICATED_FLAG} \
+  --set-env-vars="GOOGLE_CLOUD_PROJECT=${PROJECT_ID},DB_USER=${DB_USER_VALUE},DB_HOST=${DB_HOST_VALUE},DB_NAME=${DB_NAME_VALUE},DB_PORT=${DB_PORT_VALUE},GCS_BUCKET_NAME=${TARGET_GCS_BUCKET_NAME_VALUE}" \
   --update-secrets="DB_PASSWORD=${DB_PASSWORD_SECRET_NAME}:latest,GEMINI_API_KEY=${GEMINI_API_KEY_SECRET_NAME}:latest"
 
 # Execute PostgreSQL specific tasks
