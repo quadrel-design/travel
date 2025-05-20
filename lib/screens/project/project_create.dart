@@ -11,7 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart'; // Import Riverpod
 import 'package:intl/intl.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:uuid/uuid.dart'; // For generating IDs
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/l10n/app_localizations.dart';
 // import 'package:travel/providers/logging_provider.dart'; // Import logger provider
 
 // Ensure Project model is imported

@@ -8,7 +8,7 @@ import 'package:travel/providers/repository_providers.dart';
 // import 'package:travel/providers/test_data_provider.dart'; // Remove incorrect import
 // import 'package:travel/utils/app_colors.dart'; // Remove incorrect import
 // import 'package:travel/widgets/confirm_dialog.dart'; // Remove incorrect import
-import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // Add this for l10n
+import 'package:travel/l10n/app_localizations.dart'; // Add this for l10n
 
 class AppSettingsScreen extends ConsumerWidget {
   const AppSettingsScreen({super.key});

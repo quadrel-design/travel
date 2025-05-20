@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel/constants/app_routes.dart';
 import 'package:travel/models/project.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/l10n/app_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/user_subscription_provider.dart';
 

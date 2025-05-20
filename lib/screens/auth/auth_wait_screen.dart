@@ -12,7 +12,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart'; // For localized text
+import 'package:travel/l10n/app_localizations.dart'; // For localized text
 
 /// A screen shown to the user after registration, prompting them to verify their email.
 ///
