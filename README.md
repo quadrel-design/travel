@@ -1,4 +1,4 @@
-# Travel Expense Tracker
+# Travel Tracker
 
 A Flutter mobile application for tracking travel expenses. This app helps users manage and monitor their travel-related spending.
 
