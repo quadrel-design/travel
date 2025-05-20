@@ -30,7 +30,7 @@ class ProjectDetailScreen extends ConsumerWidget {
     final logger = ref.watch(loggerProvider);
 
     // Watch the project stream for real-time updates
-    final projectStream = ref.watch(invoiceStreamProvider(project.id));
+    final projectStream = ref.watch(projectStreamProvider(project.id));
 
     // The 'invoiceId' parameter passed to ProjectDetailScreen is used here.
     // However, the invoiceImagesStreamProvider now only takes projectId.

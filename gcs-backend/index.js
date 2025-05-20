@@ -54,7 +54,6 @@ logger.debug('GOOGLE_CLOUD_PROJECT (in index.js route setup):', process.env.GOOG
 logger.debug('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS); // Replaced console.log, changed to debug
 
 // Pass the db instances to the routes/services
-// TODO: Refactor routes to accept and use postgresServiceInstance
 const ocrRoutes = require('./routes/ocr');
 const analysisRoutes = require('./routes/analysis');
 // Assuming gcs routes do not need db, or will be refactored similarly if they do
@@ -70,8 +69,8 @@ try {
   logger.error('[DEBUG] CRITICAL ERROR mounting /api/gcs routes:', e); // Replaced console.error
 }
 
-app.use(ocrRoutes);
-app.use(analysisRoutes);
+app.use('/api/ocr', ocrRoutes);
+app.use('/api/analysis', analysisRoutes);
 
 const projectRoutes = require('./routes/projects');
 app.use('/api/projects', projectRoutes);

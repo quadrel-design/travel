@@ -83,7 +83,7 @@ const projectService = {
       text: 'SELECT * FROM projects WHERE id = $1',
       values: [projectId],
     };
-
+    
     let project;
     try {
       logger.info(`[ProjectService] Checking existence of project ${projectId}`);
@@ -243,7 +243,7 @@ const projectService = {
       // Values array will only contain projectId for the WHERE clause
     } else {
       // Add updated_at to the columns to be updated
-      columnsToUpdate.push(`updated_at = NOW()`);
+    columnsToUpdate.push(`updated_at = NOW()`);
       queryText = `UPDATE projects SET ${columnsToUpdate.join(', ')} 
              WHERE id = $${placeholderIndex++}
              RETURNING *`;
@@ -253,7 +253,7 @@ const projectService = {
     // Add projectId to values for the WHERE clause
     values.push(projectId);
     // userId is no longer needed here for the WHERE clause as authorization is done by getProjectById
-
+    
     const query = {
       text: queryText,
       values: values,

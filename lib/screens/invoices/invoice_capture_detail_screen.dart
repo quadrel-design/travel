@@ -10,6 +10,7 @@ import 'package:travel/widgets/invoice_capture_detail_view.dart';
 import 'package:travel/providers/logging_provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/widgets/invoice_detail_bottom_bar.dart';
+import 'package:travel/l10n/app_localizations.dart';
 
 class InvoiceCaptureDetailScreen extends ConsumerWidget {
   final String projectId;
@@ -24,9 +25,11 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final projectImagesAsyncValue =
-        ref.watch(invoiceImagesStreamProvider(projectId));
+        ref.watch(projectImagesStreamProvider(projectId));
 
-    final projectAsyncValue = ref.watch(invoiceStreamProvider(projectId));
+    final projectAsyncValue = ref.watch(projectStreamProvider(projectId));
+
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
@@ -98,7 +101,7 @@ class InvoiceCaptureDetailScreen extends ConsumerWidget {
                   const SizedBox(height: 4),
                   ElevatedButton(
                     onPressed: () =>
-                        ref.invalidate(invoiceImagesStreamProvider(projectId)),
+                        ref.invalidate(projectImagesStreamProvider(projectId)),
                     child: const Text('Retry', style: TextStyle(fontSize: 10)),
                   ),
                 ],

@@ -63,25 +63,6 @@ class InvoiceImageProcess extends Equatable {
 
   @override
   List<Object?> get props {
-    // Temporary detailed logging for debugging Equatable
-    print('[EQUATABLE_DEBUG] --- InvoiceImageProcess props for ID: $id ---');
-    print('[EQUATABLE_DEBUG] id: $id');
-    print('[EQUATABLE_DEBUG] url: $url');
-    print('[EQUATABLE_DEBUG] imagePath: $imagePath');
-    print('[EQUATABLE_DEBUG] invoiceId: $invoiceId');
-    print('[EQUATABLE_DEBUG] ocrText: $ocrText');
-    if (invoiceAnalysis != null) {
-      print(
-          '[EQUATABLE_DEBUG] invoiceAnalysis: ${invoiceAnalysis!.props.join(", ")}');
-    } else {
-      print('[EQUATABLE_DEBUG] invoiceAnalysis: null');
-    }
-    print(
-        '[EQUATABLE_DEBUG] lastProcessedAt: ${lastProcessedAt?.toIso8601String()}');
-    print('[EQUATABLE_DEBUG] location: $location');
-    print('[EQUATABLE_DEBUG] isInvoiceGuess: $isInvoiceGuess');
-    print('[EQUATABLE_DEBUG] uploadedAt: ${uploadedAt?.toIso8601String()}');
-    print('[EQUATABLE_DEBUG] -----------------------------------------');
     return [
       id,
       url,
@@ -233,9 +214,6 @@ class InvoiceAnalysis extends Equatable {
       ];
 
   factory InvoiceAnalysis.fromJson(Map<String, dynamic> json) {
-    // For debugging - use this in production code with proper logging
-    print('InvoiceAnalysis.fromJson received: $json');
-
     // Try to handle different possible structures
     Map<String, dynamic> data = json;
 

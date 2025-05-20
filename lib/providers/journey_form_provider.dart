@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/models/project.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
-import 'package:travel/repositories/invoice_images_repository.dart';
+import 'package:travel/repositories/project_repository.dart';
 
 /// State class representing the current state of journey form operations.
 ///
@@ -61,7 +61,7 @@ class JourneyFormState {
 /// Provides methods for creating journeys and handling the related state transitions.
 /// Consider adding `updateJourney` method if form is used for editing.
 class JourneyFormNotifier extends StateNotifier<JourneyFormState> {
-  final InvoiceImagesRepository _repository;
+  final ProjectRepository _repository;
 
   JourneyFormNotifier(this._repository) : super(const JourneyFormState());
 
@@ -114,11 +114,11 @@ class JourneyFormNotifier extends StateNotifier<JourneyFormState> {
 /// Provider for the journey form state and operations.
 ///
 /// This provider creates and maintains a JourneyFormNotifier that manages the state
-/// of journey creation and editing operations. It uses the invoiceRepositoryProvider
+/// of journey creation and editing operations. It uses the projectRepositoryProvider
 /// to perform the actual data operations.
 ///
 /// Usage: `final formState = ref.watch(journeyFormProvider);`
 final journeyFormProvider =
     StateNotifierProvider.autoDispose<JourneyFormNotifier, JourneyFormState>(
-  (ref) => JourneyFormNotifier(ref.watch(invoiceRepositoryProvider)),
+  (ref) => JourneyFormNotifier(ref.watch(projectRepositoryProvider)),
 );

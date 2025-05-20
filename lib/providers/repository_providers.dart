@@ -18,6 +18,8 @@ import 'package:travel/repositories/auth_repository.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../repositories/invoice_images_repository.dart';
 import '../repositories/postgres_invoice_repository.dart';
+import '../repositories/project_repository.dart';
+import '../repositories/postgres_project_repository.dart';
 import 'service_providers.dart' as service;
 
 import '../providers/logging_provider.dart';
@@ -67,60 +69,52 @@ final invoiceRepositoryProvider = Provider<InvoiceImagesRepository>((ref) {
   );
 });
 
-/// Provider for accessing the current user's invoices.
+/// Provider for the project repository.
 ///
-/// This provider delivers data of the authenticated user's invoices.
+/// This provider creates and delivers an implementation of the ProjectRepository interface.
+/// It handles operations related to projects.
+final projectRepositoryProvider = Provider<ProjectRepository>((ref) {
+  final auth = ref.watch(firebaseAuthProvider);
+  final logger = ref.watch(loggerProvider);
+  final actualBaseUrl = ServiceConfig.gcsApiBaseUrl;
+
+  logger.i(
+      '[PROVIDER_INIT] PostgresProjectRepository WILL BE CREATED WITH baseUrl: $actualBaseUrl');
+
+  return PostgresProjectRepository(
+    auth,
+    logger,
+    baseUrl: actualBaseUrl,
+  );
+});
+
+/// Provider for accessing the current user's projects (renamed from invoices for clarity).
+///
+/// This provider delivers data of the authenticated user's projects.
 /// The data is fetched from the PostgreSQL database via REST API.
-final userInvoicesStreamProvider =
+final currentUserProjectsStreamProvider =
     StreamProvider.autoDispose<List<Project>>((ref) {
   // Get the repository
-  final repository = ref.watch(invoiceRepositoryProvider);
+  final repository = ref.watch(projectRepositoryProvider);
   // Return the stream from the repository method
   // Error handling should be done within the stream or by the UI watching this provider
   return repository.fetchUserProjects();
 });
 
-/// Provider for all images associated with an invoice.
+/// Provider for a single project by ID (renamed from invoiceStreamProvider).
 ///
-/// This provider delivers data of all images for a specific invoice.
+/// This provider delivers data of a specific project.
 /// The data is fetched from the PostgreSQL database via REST API.
 ///
 /// Parameters:
-///   - params: A map containing 'projectId' and 'invoiceId'
-final invoiceImagesStreamProvider =
-    StreamProvider.autoDispose.family<List<InvoiceImageProcess>, String>(
-  (ref, identifiers) {
-    final parts = identifiers.split('|');
-    final projectId = parts[0];
-    // final invoiceId = parts.length > 1 ? parts[1] : ''; // invoiceId is no longer used for the repo call
-    // final reloadKey = parts.length > 2 ? parts[2] : ''; // Keep reloadKey if used
-
-    final repository = ref.watch(invoiceRepositoryProvider);
-    // Call getProjectImagesStream instead
-    return repository.getProjectImagesStream(projectId);
-    // If filtering by a specific client-side invoiceId (grouping UUID) is still needed here,
-    // it would have to be done after fetching all project images.
-    // For example: return repository.getProjectImagesStream(projectId).map((images) =>
-    //    images.where((img) => img.invoiceId == invoiceId).toList());
-    // However, InvoiceImageProcess model itself no longer has invoiceId directly.
-    // The concept of invoiceId for grouping images was removed from the core data model.
-  },
-);
-
-/// Provider for a single invoice by ID.
-///
-/// This provider delivers data of a specific invoice.
-/// The data is fetched from the PostgreSQL database via REST API.
-///
-/// Parameters:
-///   - invoiceId: The ID of the invoice to fetch
-final invoiceStreamProvider =
-    StreamProvider.family<Project?, String>((ref, invoiceId) {
-  final repository = ref.watch(invoiceRepositoryProvider);
+///   - projectId: The ID of the project to fetch
+final projectStreamProvider =
+    StreamProvider.family<Project?, String>((ref, projectId) {
+  final repository = ref.watch(projectRepositoryProvider);
   final logger = ref.watch(loggerProvider);
   logger.d(
-      '[PROVIDER] invoiceStreamProvider executing for invoiceId: $invoiceId');
-  return repository.getProjectStream(invoiceId);
+      '[PROVIDER] projectStreamProvider executing for projectId: $projectId');
+  return repository.getProjectStream(projectId);
 });
 
 /// Provider for all expenses associated with an invoice.
@@ -170,28 +164,6 @@ final projectImagesStreamProvider = StreamProvider.autoDispose
   return repository.getProjectImagesStream(projectId);
 });
 
-final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {
-  final logger = ref.watch(loggerProvider);
-  return FirebaseAuthRepository(FirebaseAuth.instance, logger);
-});
-
-// Fetches a list of invoice images for a specific project and invoice (now just project)
-// This provider is kept for compatibility but might need to be refactored or removed
-// if the UI no longer thinks in terms of specific "invoiceId" for fetching.
-final specificInvoiceImagesProvider =
-    FutureProvider.autoDispose.family<List<InvoiceImageProcess>, String>(
-  (ref, identifiers) async {
-    final parts = identifiers.split('|');
-    final projectId = parts[0];
-    // final invoiceId = parts[1]; // invoiceId no longer used for fetching
-
-    final repository = ref.watch(invoiceRepositoryProvider);
-    // Use getProjectImagesStream and convert to Future for this provider type
-    return await repository.getProjectImagesStream(projectId).first;
-    // Again, if specific filtering was intended by a now-removed invoiceId, it needs re-evaluation.
-  },
-);
-
 /// Provider for all projects of the current user.
 ///
 /// This provider delivers data of all projects for the current user.
@@ -199,6 +171,6 @@ final specificInvoiceImagesProvider =
 /// Data is refreshed when reloadKey changes or when the provider is invalidated.
 final userProjectsStreamProvider =
     StreamProvider.family<List<Project>, int>((ref, reloadKey) {
-  final repository = ref.watch(invoiceRepositoryProvider);
+  final repository = ref.watch(projectRepositoryProvider);
   return repository.fetchUserProjects();
 });

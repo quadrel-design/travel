@@ -10,7 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/models/project.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
-import 'package:travel/repositories/invoice_images_repository.dart';
+import 'package:travel/repositories/project_repository.dart';
 
 /// State class representing the current state of project form operations.
 ///
@@ -61,7 +61,7 @@ class ProjectFormState {
 /// Provides methods for creating projects and handling the related state transitions.
 /// Consider adding `updateProject` method if form is used for editing.
 class ProjectFormNotifier extends StateNotifier<ProjectFormState> {
-  final InvoiceImagesRepository _repository;
+  final ProjectRepository _repository;
 
   ProjectFormNotifier(this._repository) : super(const ProjectFormState());
 
@@ -116,5 +116,5 @@ class ProjectFormNotifier extends StateNotifier<ProjectFormState> {
 /// Usage: `final formState = ref.watch(projectFormProvider);`
 final projectFormProvider =
     StateNotifierProvider.autoDispose<ProjectFormNotifier, ProjectFormState>(
-  (ref) => ProjectFormNotifier(ref.watch(invoiceRepositoryProvider)),
+  (ref) => ProjectFormNotifier(ref.watch(projectRepositoryProvider)),
 );

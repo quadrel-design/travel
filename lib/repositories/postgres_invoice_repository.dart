@@ -1,16 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
 import 'package:flutter/foundation.dart'; // For listEquals
 import 'package:logger/logger.dart';
 import 'package:travel/models/invoice_image_process.dart';
-import 'package:travel/models/project.dart';
 import 'package:travel/repositories/invoice_images_repository.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
 import 'package:travel/services/gcs_file_service.dart';
-import 'package:travel/repositories/base_repository_contracts.dart';
 import 'package:path/path.dart' as p;
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
@@ -24,9 +21,12 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
   final GcsFileService _gcsFileService;
   final String _baseUrl;
 
-  PostgresInvoiceImageRepository(this._auth, this._logger, this._gcsFileService,
-      {String baseUrl = 'https://gcs-backend-213342165039.us-central1.run.app'})
-      : _baseUrl = baseUrl;
+  PostgresInvoiceImageRepository(
+    this._auth,
+    this._logger,
+    this._gcsFileService, {
+    String baseUrl = 'https://gcs-backend-213342165039.us-central1.run.app',
+  }) : _baseUrl = baseUrl;
 
   // --- Implementation of BaseRepository & BaseRepositoryForImages contract requirements ---
   @override
@@ -43,9 +43,11 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
       _logger.w(
-          '[PostgresInvoiceRepoCore] Attempted to get user ID when no user was authenticated.');
+        '[PostgresInvoiceRepoCore] Attempted to get user ID when no user was authenticated.',
+      );
       throw NotAuthenticatedException(
-          'User not authenticated. Cannot get user ID.');
+        'User not authenticated. Cannot get user ID.',
+      );
     }
     return currentUser.uid;
   }
@@ -56,14 +58,19 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
       final token = await _auth.currentUser?.getIdToken(true); // Force refresh
       if (token == null) {
         _logger.e(
-            '[PostgresInvoiceRepoCore] Failed to get auth token: currentUser or token is null.');
+          '[PostgresInvoiceRepoCore] Failed to get auth token: currentUser or token is null.',
+        );
         throw NotAuthenticatedException(
-            'Failed to get authentication token: Token is null.');
+          'Failed to get authentication token: Token is null.',
+        );
       }
       return token;
     } catch (e, stackTrace) {
-      _logger.e('[PostgresInvoiceRepoCore] Error getting auth token',
-          error: e, stackTrace: stackTrace);
+      _logger.e(
+        '[PostgresInvoiceRepoCore] Error getting auth token',
+        error: e,
+        stackTrace: stackTrace,
+      );
       throw NotAuthenticatedException('Failed to get authentication token: $e');
     }
   }
@@ -77,302 +84,8 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
     };
   }
 
-  // --- Methods from ProjectRepositoryOperationsMixin ---
-
-  @override
-  Stream<List<Project>> fetchUserProjects() {
-    logger.d('[PostgresInvoiceRepo] fetchUserProjects called.');
-    return Stream.fromFuture(_fetchUserProjectsOnce());
-  }
-
-  Future<List<Project>> _fetchUserProjectsOnce() async {
-    final userId = getCurrentUserId();
-    logger.d('[PostgresInvoiceRepo] Fetching projects for user: $userId');
-
-    try {
-      final headers = await getAuthHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/projects'),
-        headers: headers,
-      );
-
-      if (response.statusCode != 200) {
-        logger.e(
-            '[PostgresInvoiceRepo] Error fetching user projects: ${response.statusCode}',
-            error: response.body);
-        throw DatabaseFetchException(
-          'Failed to fetch projects: HTTP ${response.statusCode}',
-          response.body,
-          StackTrace.current,
-        );
-      }
-
-      final data = json.decode(response.body) as List<dynamic>;
-      final projects = data.map((json) => Project.fromJson(json)).toList();
-
-      logger.d(
-          '[PostgresInvoiceRepo] Fetched ${projects.length} projects for user $userId');
-      return projects;
-    } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error in _fetchUserProjectsOnce',
-          error: e, stackTrace: stackTrace);
-      if (e is DatabaseFetchException) rethrow;
-      throw DatabaseFetchException(
-        'Failed to fetch projects: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  @override
-  Stream<Project?> getProjectStream(String projectId) {
-    logger.d(
-        '[PostgresInvoiceRepo] getProjectStream called for project ID: $projectId.');
-    return Stream.fromFuture(_getProjectOnce(projectId));
-  }
-
-  Future<Project?> _getProjectOnce(String projectId) async {
-    final userId = getCurrentUserId();
-    logger.d(
-        '[PostgresInvoiceRepo] Fetching single project: $projectId for user $userId');
-
-    try {
-      final headers = await getAuthHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/api/projects/$projectId'),
-        headers: headers,
-      );
-
-      if (response.statusCode == 404) {
-        logger.w('[PostgresInvoiceRepo] Project not found: $projectId');
-        return null;
-      }
-
-      if (response.statusCode != 200) {
-        logger.e(
-            '[PostgresInvoiceRepo] Error fetching project $projectId: ${response.statusCode}',
-            error: response.body);
-        throw DatabaseFetchException(
-          'Failed to fetch project $projectId: HTTP ${response.statusCode}',
-          response.body,
-          StackTrace.current,
-        );
-      }
-
-      final data = json.decode(response.body);
-      final project = Project.fromJson(data);
-
-      logger.d(
-          '[PostgresInvoiceRepo] Fetched project $projectId for user $userId');
-      return project;
-    } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error in _getProjectOnce for $projectId',
-          error: e, stackTrace: stackTrace);
-      if (e is DatabaseFetchException) rethrow;
-      throw DatabaseFetchException(
-        'Failed to fetch project $projectId: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  // Adding createProject to match the interface if it was expected from the mixin.
-  // The mixin had `createProject(String title, String description)`
-  // The interface InvoiceImagesRepository doesn't explicitly list it, but ProjectRepositoryOperationsMixin did.
-  // For now, I'm adding a basic version. This might need adjustment based on exact backend expectations.
-  Future<Project> createProject(String title,
-      {String? description,
-      String? location,
-      DateTime? startDate,
-      DateTime? endDate,
-      double? budget,
-      bool? isCompleted}) async {
-    final userId = getCurrentUserId();
-    logger.d(
-        '[PostgresInvoiceRepo] Creating project for user: $userId with title: $title');
-
-    final Map<String, dynamic> projectData = {
-      'title': title,
-      'description': description ?? '',
-      'location': location ?? '',
-      'start_date':
-          startDate?.toIso8601String() ?? DateTime.now().toIso8601String(),
-      'end_date': endDate?.toIso8601String() ??
-          DateTime.now().add(const Duration(days: 7)).toIso8601String(),
-      'budget': budget ?? 0.0,
-      'is_completed': isCompleted ?? false,
-    };
-
-    try {
-      final headers = await getAuthHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/projects'),
-        headers: headers,
-        body: json.encode(projectData),
-      );
-
-      if (response.statusCode != 201) {
-        logger.e(
-            '[PostgresInvoiceRepo] Error creating project: ${response.statusCode}',
-            error: response.body);
-        throw DatabaseOperationException(
-          'Failed to create project: HTTP ${response.statusCode}',
-          response.body,
-          StackTrace.current,
-        );
-      }
-
-      final data = json.decode(response.body);
-      final project = Project.fromJson(data);
-
-      logger.d(
-          '[PostgresInvoiceRepo] Created project ${project.id} for user $userId');
-      return project;
-    } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error creating project',
-          error: e, stackTrace: stackTrace);
-      if (e is DatabaseOperationException) rethrow;
-      throw DatabaseOperationException(
-        'Failed to create project: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  @override
-  Future<Project> addProject(Project project) async {
-    final userId = getCurrentUserId();
-    logger.d(
-        '[PostgresInvoiceRepo] Adding project "${project.title}" for user: $userId');
-
-    try {
-      final headers = await getAuthHeaders();
-      final response = await http.post(
-        Uri.parse('$baseUrl/api/projects'),
-        headers: headers,
-        body:
-            json.encode(project.toJson()), // Assumes Project model has toJson()
-      );
-
-      if (response.statusCode != 201) {
-        logger.e(
-            '[PostgresInvoiceRepo] Error adding project: ${response.statusCode}',
-            error: response.body);
-        throw DatabaseOperationException(
-          'Failed to add project: HTTP ${response.statusCode}',
-          response.body,
-          StackTrace.current,
-        );
-      }
-
-      final data = json.decode(response.body);
-      final createdProject = Project.fromJson(data);
-
-      logger.d(
-          '[PostgresInvoiceRepo] Added project ${createdProject.id} for user $userId');
-      return createdProject;
-    } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error adding project',
-          error: e, stackTrace: stackTrace);
-      if (e is DatabaseOperationException) rethrow;
-      throw DatabaseOperationException(
-        'Failed to add project: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  @override
-  Future<void> updateProject(Project project) async {
-    final userId = getCurrentUserId();
-    final projectId = project.id;
-    logger.d(
-        '[PostgresInvoiceRepo] Updating project: $projectId for user $userId');
-
-    try {
-      final headers = await getAuthHeaders();
-      final response = await http.patch(
-        Uri.parse('$baseUrl/api/projects/$projectId'),
-        headers: headers,
-        body:
-            json.encode(project.toJson()), // Assumes Project model has toJson()
-      );
-
-      if (response.statusCode != 200) {
-        logger.e(
-            '[PostgresInvoiceRepo] Error updating project $projectId: ${response.statusCode}',
-            error: response.body);
-        throw DatabaseOperationException(
-          'Failed to update project $projectId: HTTP ${response.statusCode}',
-          response.body,
-          StackTrace.current,
-        );
-      }
-
-      logger.d(
-          '[PostgresInvoiceRepo] Updated project $projectId for user $userId');
-    } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error updating project $projectId',
-          error: e, stackTrace: stackTrace);
-      if (e is DatabaseOperationException) rethrow;
-      throw DatabaseOperationException(
-        'Failed to update project $projectId: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
-
-  @override
-  Future<void> deleteProject(String projectId) async {
-    final userId = getCurrentUserId();
-    logger.d(
-        '[PostgresInvoiceRepo] Deleting project: $projectId for user $userId');
-
-    try {
-      final headers = await getAuthHeaders();
-      final response = await http.delete(
-        Uri.parse('$baseUrl/api/projects/$projectId'),
-        headers: headers,
-      );
-
-      if (response.statusCode != 204) {
-        logger.e(
-            '[PostgresInvoiceRepo] Error deleting project $projectId: ${response.statusCode}',
-            error: response.body);
-        // For DELETE, 404 might mean already deleted or not found, which could be acceptable.
-        // However, if it's not 204 (No Content) and not 404, it's likely an issue.
-        if (response.statusCode == 404) {
-          logger.w(
-              '[PostgresInvoiceRepo] Project $projectId not found for deletion, or already deleted.');
-          // Depending on desired behavior, you might return or throw a specific exception.
-          // For now, just log and consider it "handled" if it's a 404.
-          return;
-        }
-        throw DatabaseOperationException(
-          'Failed to delete project $projectId: HTTP ${response.statusCode}',
-          response.body,
-          StackTrace.current,
-        );
-      }
-
-      logger.d(
-          '[PostgresInvoiceRepo] Deleted project $projectId successfully for user $userId');
-    } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error deleting project $projectId',
-          error: e, stackTrace: stackTrace);
-      if (e is DatabaseOperationException) rethrow;
-      throw DatabaseOperationException(
-        'Failed to delete project $projectId: $e',
-        e,
-        stackTrace,
-      );
-    }
-  }
+  // Project-specific methods have been moved to PostgresProjectRepository
+  // The old comment "// --- Methods from ProjectRepositoryOperationsMixin ---" is also removed.
 
   // --- Methods from ImageRepositoryOperationsMixin ---
 
@@ -380,19 +93,23 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
   Stream<List<InvoiceImageProcess>> getProjectImagesStream(String projectId) {
     final userId = getCurrentUserId();
     logger.d(
-        '[PostgresInvoiceRepo][getProjectImagesStream] START for project ID: $projectId, User ID: $userId');
+      '[PostgresInvoiceRepo][getProjectImagesStream] START for project ID: $projectId, User ID: $userId',
+    );
 
     final controller = StreamController<List<InvoiceImageProcess>>.broadcast();
     EventFlux? eventFluxInstance;
-    StreamSubscription? _currentEventFluxStreamSubscription;
-    List<InvoiceImageProcess>? _lastEmittedImagesList;
+    StreamSubscription? currentEventFluxStreamSubscription;
+    List<InvoiceImageProcess>? lastEmittedImagesList;
 
     // Helper function to process image data
-    List<InvoiceImageProcess>? _processImageDataEventHelper(String jsonData,
-        List<InvoiceImageProcess>? currentLastEmittedImagesList) {
+    List<InvoiceImageProcess>? processImageDataEventHelper(
+      String jsonData,
+      List<InvoiceImageProcess>? currentLastEmittedImagesList,
+    ) {
       final trimmedJsonData = jsonData.trim(); // TRIM WHITESPACE
       logger.d(
-          "[PostgresInvoiceRepo][_processImageDataEventHelper] Processing data for $projectId: $trimmedJsonData");
+        "[PostgresInvoiceRepo][_processImageDataEventHelper] Processing data for $projectId: $trimmedJsonData",
+      );
       List<InvoiceImageProcess>? newEmittedList;
       try {
         final Map<String, dynamic> eventPayload = json.decode(trimmedJsonData)
@@ -401,60 +118,72 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
             eventPayload['images'] as List<dynamic>;
 
         final images = decodedImagesData
-            .map((jsonItem) => InvoiceImageProcess.fromJson({
-                  ...jsonItem as Map<String, dynamic>,
-                  'projectId': projectId,
-                }))
+            .map(
+              (jsonItem) => InvoiceImageProcess.fromJson({
+                ...jsonItem as Map<String, dynamic>,
+                'projectId': projectId,
+              }),
+            )
             .toList();
 
         if (!controller.isClosed) {
           logger.d(
-              "[PostgresInvoiceRepo][_processImageDataEventHelper] PRE-ADD CHECK for $projectId. New image count: ${images.length}. Last emitted count: ${currentLastEmittedImagesList?.length ?? 'N/A'}");
+            "[PostgresInvoiceRepo][_processImageDataEventHelper] PRE-ADD CHECK for $projectId. New image count: ${images.length}. Last emitted count: ${currentLastEmittedImagesList?.length ?? 'N/A'}",
+          );
 
           bool areListsEqual = false;
           if (currentLastEmittedImagesList != null) {
             logger.d(
-                '[EQUATABLE_DEBUG] Comparing new list (count: ${images.length}) with stored list (count: ${currentLastEmittedImagesList.length})');
+              '[EQUATABLE_DEBUG] Comparing new list (count: ${images.length}) with stored list (count: ${currentLastEmittedImagesList.length})',
+            );
             if (images.length != currentLastEmittedImagesList.length) {
               logger.d(
-                  '[EQUATABLE_DEBUG] Lists have different lengths. They are not equal.');
+                '[EQUATABLE_DEBUG] Lists have different lengths. They are not equal.',
+              );
               areListsEqual = false;
             } else {
               areListsEqual = listEquals(currentLastEmittedImagesList, images);
               if (!areListsEqual) {
                 logger.d(
-                    '[EQUATABLE_DEBUG] listEquals returned false. Logging element differences:');
+                  '[EQUATABLE_DEBUG] listEquals returned false. Logging element differences:',
+                );
                 for (int i = 0; i < images.length; i++) {
                   final img1 = currentLastEmittedImagesList[i];
                   final img2 = images[i];
                   if (img1 != img2) {
                     logger.d('[EQUATABLE_DEBUG] Difference at index $i:');
                     logger.d(
-                        '[EQUATABLE_DEBUG]   Stored: ${img1.props.join(" | ")}');
+                      '[EQUATABLE_DEBUG]   Stored: ${img1.props.join(" | ")}',
+                    );
                     logger.d(
-                        '[EQUATABLE_DEBUG]   New   : ${img2.props.join(" | ")}');
+                      '[EQUATABLE_DEBUG]   New   : ${img2.props.join(" | ")}',
+                    );
                   }
                 }
               }
             }
           } else {
             logger.d(
-                '[EQUATABLE_DEBUG] _lastEmittedImagesList is null. Lists are considered different.');
+              '[EQUATABLE_DEBUG] _lastEmittedImagesList is null. Lists are considered different.',
+            );
             areListsEqual = false; // First list is always new
           }
           logger.d(
-              '[EQUATABLE_DEBUG] Final result of listEquals check (areListsEqual variable): $areListsEqual');
+            '[EQUATABLE_DEBUG] Final result of listEquals check (areListsEqual variable): $areListsEqual',
+          );
 
           if (!areListsEqual) {
             logger.i(
-                "[PostgresInvoiceRepo][_processImageDataEventHelper] Image list is NEW or DIFFERENT for $projectId. Emitting ${images.length} images.");
+              "[PostgresInvoiceRepo][_processImageDataEventHelper] Image list is NEW or DIFFERENT for $projectId. Emitting ${images.length} images.",
+            );
             newEmittedList = List.from(images);
             _logger.wtf("[[[[[ BEFORE CONTROLLER.ADD for $projectId ]]]]]");
             controller.add(newEmittedList);
             _logger.wtf("[[[[[ AFTER CONTROLLER.ADD for $projectId ]]]]]");
           } else {
             logger.i(
-                "[PostgresInvoiceRepo][_processImageDataEventHelper] Image list is IDENTICAL to last emitted for $projectId. Suppressing emission. Count: ${images.length}");
+              "[PostgresInvoiceRepo][_processImageDataEventHelper] Image list is IDENTICAL to last emitted for $projectId. Suppressing emission. Count: ${images.length}",
+            );
           }
         }
         // This is where _lastEmittedImagesList was updated in the stream listener logic
@@ -464,23 +193,20 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         return newEmittedList; // Return the list that was added, or null if no new list was added
       } catch (e, stackTrace) {
         logger.e(
-            "[PostgresInvoiceRepo][_processImageDataEventHelper] Error decoding/processing image data for $projectId (data: '$trimmedJsonData'):",
-            error: e,
-            stackTrace: stackTrace);
+          "[PostgresInvoiceRepo][_processImageDataEventHelper] Error decoding/processing image data for $projectId (data: '$trimmedJsonData'):",
+          error: e,
+          stackTrace: stackTrace,
+        );
         if (!controller.isClosed) {
-          controller.addError(RepositoryException(
-              'Error processing SSE data: $e', e, stackTrace));
+          controller.addError(
+            RepositoryException('Error processing SSE data: $e', e, stackTrace),
+          );
         }
         return null;
       }
     }
 
     Future<void> connectAndListen() async {
-      if (_logger == null) {
-        print(
-            "CRITICAL_ERROR: _logger IS NULL IN connectAndListen for $projectId");
-        return;
-      }
       _logger.d('[PostgresInvoiceRepo][connectAndListen] START for $projectId');
 
       try {
@@ -495,14 +221,15 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         // final sseUrl = Uri.parse(sseUrlString); // No longer needed directly here
 
         _logger.d(
-            '[PostgresInvoiceRepo][connectAndListen] Target SSE URL: $sseUrlString');
+          '[PostgresInvoiceRepo][connectAndListen] Target SSE URL: $sseUrlString',
+        );
 
         // BASIC HTTP GET TEST (before EventFlux) - REMOVED
         // END OF BASIC HTTP GET TEST
 
         await eventFluxInstance?.disconnect();
-        await _currentEventFluxStreamSubscription?.cancel();
-        _currentEventFluxStreamSubscription = null;
+        await currentEventFluxStreamSubscription?.cancel();
+        currentEventFluxStreamSubscription = null;
 
         eventFluxInstance = EventFlux.spawn();
 
@@ -517,35 +244,43 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
             maxAttempts: -1,
             onReconnect: () async {
               logger.i(
-                  '[PostgresInvoiceRepo] SSE attempting to reconnect for project $projectId...');
-              await _currentEventFluxStreamSubscription?.cancel();
-              _currentEventFluxStreamSubscription = null;
+                '[PostgresInvoiceRepo] SSE attempting to reconnect for project $projectId...',
+              );
+              await currentEventFluxStreamSubscription?.cancel();
+              currentEventFluxStreamSubscription = null;
             },
           ),
           onSuccessCallback: (EventFluxResponse? response) {
             logger.i(
-                '[PostgresInvoiceRepo][onSuccessCallback] STEP 1: Entered onSuccessCallback for project $projectId.');
+              '[PostgresInvoiceRepo][onSuccessCallback] STEP 1: Entered onSuccessCallback for project $projectId.',
+            );
 
-            _currentEventFluxStreamSubscription?.cancel();
-            _currentEventFluxStreamSubscription = null;
+            currentEventFluxStreamSubscription?.cancel();
+            currentEventFluxStreamSubscription = null;
 
             logger.d(
-                '[PostgresInvoiceRepo][onSuccessCallback] STEP 2: Checking response object for $projectId.');
+              '[PostgresInvoiceRepo][onSuccessCallback] STEP 2: Checking response object for $projectId.',
+            );
             if (response == null || response.stream == null) {
               logger.w(
-                  '[PostgresInvoiceRepo][onSuccessCallback] STEP 2.1 (FAILURE): EventFluxResponse or its stream is NULL for $projectId.');
+                '[PostgresInvoiceRepo][onSuccessCallback] STEP 2.1 (FAILURE): EventFluxResponse or its stream is NULL for $projectId.',
+              );
               if (!controller.isClosed) {
-                controller.addError(RepositoryException(
+                controller.addError(
+                  RepositoryException(
                     'SSE connection failed: response or stream was null',
                     null,
-                    StackTrace.current));
+                    StackTrace.current,
+                  ),
+                );
               }
               return;
             }
 
             logger.d(
-                '[PostgresInvoiceRepo][onSuccessCallback] STEP 3: Response and stream are valid for $projectId. Setting up NEW listener.');
-            _currentEventFluxStreamSubscription = response.stream!.listen(
+              '[PostgresInvoiceRepo][onSuccessCallback] STEP 3: Response and stream are valid for $projectId. Setting up NEW listener.',
+            );
+            currentEventFluxStreamSubscription = response.stream!.listen(
               (eventData) {
                 // Robust RAW Event Logging
                 try {
@@ -559,99 +294,130 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
                       ? '${dataString.substring(0, 100)}...'
                       : dataString;
                   _logger.i(
-                      "[PostgresInvoiceRepo][RawSSE] Event: '$eventString', Data: '$dataPreview'");
+                    "[PostgresInvoiceRepo][RawSSE] Event: '$eventString', Data: '$dataPreview'",
+                  );
                 } catch (e, s) {
-                  _logger.e("Error during robust RawSSE logging: $e",
-                      stackTrace: s);
+                  _logger.e(
+                    "Error during robust RawSSE logging: $e",
+                    stackTrace: s,
+                  );
                 }
 
-                final eventType = eventData.event?.trim() ?? '';
-                final dataPayload = eventData.data?.trim() ?? '';
+                final eventType = eventData.event.trim() ?? '';
+                final dataPayload = eventData.data.trim() ?? '';
 
                 logger.d(
-                    '[PostgresInvoiceRepo][stream.listen ON_DATA] Received eventData for $projectId. Event: "$eventType", Data: "$dataPayload"');
+                  '[PostgresInvoiceRepo][stream.listen ON_DATA] Received eventData for $projectId. Event: "$eventType", Data: "$dataPayload"',
+                );
 
                 if (eventType == 'imagesUpdated' ||
                     eventType == 'initialImages' ||
                     eventType == 'message') {
                   logger.d(
-                      "[PostgresInvoiceRepo][stream.listen ON_DATA] Explicit data event ('$eventType') identified for $projectId.");
-                  final processedList = _processImageDataEventHelper(
-                      dataPayload, _lastEmittedImagesList);
+                    "[PostgresInvoiceRepo][stream.listen ON_DATA] Explicit data event ('$eventType') identified for $projectId.",
+                  );
+                  final processedList = processImageDataEventHelper(
+                    dataPayload,
+                    lastEmittedImagesList,
+                  );
                   if (processedList != null) {
-                    _lastEmittedImagesList = processedList;
+                    lastEmittedImagesList = processedList;
                   }
                 } else if (eventType.isEmpty && dataPayload.isNotEmpty) {
                   logger.i(
-                      "[PostgresInvoiceRepo][stream.listen ON_DATA] Event with empty type BUT NON-EMPTY DATA for $projectId. Processing as image data. EventType: '$eventType', Data: \"$dataPayload\"");
-                  final processedList = _processImageDataEventHelper(
-                      dataPayload, _lastEmittedImagesList);
+                    "[PostgresInvoiceRepo][stream.listen ON_DATA] Event with empty type BUT NON-EMPTY DATA for $projectId. Processing as image data. EventType: '$eventType', Data: \"$dataPayload\"",
+                  );
+                  final processedList = processImageDataEventHelper(
+                    dataPayload,
+                    lastEmittedImagesList,
+                  );
                   if (processedList != null) {
-                    _lastEmittedImagesList = processedList;
+                    lastEmittedImagesList = processedList;
                   }
                 } else if (eventType == 'error') {
                   logger.e(
-                      "[PostgresInvoiceRepo][stream.listen ON_DATA] Server-sent 'error' event for $projectId: $dataPayload");
+                    "[PostgresInvoiceRepo][stream.listen ON_DATA] Server-sent 'error' event for $projectId: $dataPayload",
+                  );
                   if (!controller.isClosed) {
-                    controller.addError(DatabaseOperationException(
-                        'SSE Server Error for $projectId: $dataPayload'));
+                    controller.addError(
+                      DatabaseOperationException(
+                        'SSE Server Error for $projectId: $dataPayload',
+                      ),
+                    );
                   }
                 } else if (eventType == 'connection_established') {
                   logger.i(
-                      "[PostgresInvoiceRepo][stream.listen ON_DATA] 'connection_established' event received for $projectId.");
+                    "[PostgresInvoiceRepo][stream.listen ON_DATA] 'connection_established' event received for $projectId.",
+                  );
                 } else if (eventType.isEmpty && dataPayload.isEmpty) {
                   logger.i(
-                      '[PostgresInvoiceRepo][stream.listen ON_DATA] Received event with empty type and empty data for $projectId (likely keep-alive or comment). Data: "$dataPayload". Ignoring.');
+                    '[PostgresInvoiceRepo][stream.listen ON_DATA] Received event with empty type and empty data for $projectId (likely keep-alive or comment). Data: "$dataPayload". Ignoring.',
+                  );
                 } else {
                   logger.w(
-                      '[PostgresInvoiceRepo][stream.listen ON_DATA] Unhandled event type: "$eventType" for $projectId. Data: "$dataPayload"');
+                    '[PostgresInvoiceRepo][stream.listen ON_DATA] Unhandled event type: "$eventType" for $projectId. Data: "$dataPayload"',
+                  );
                 }
               },
               onError: (error, stackTrace) {
                 logger.e(
-                    '[PostgresInvoiceRepo][stream.listen ON_ERROR] STEP 5 (ERROR): Stream error for $projectId:',
-                    error: error,
-                    stackTrace: stackTrace);
+                  '[PostgresInvoiceRepo][stream.listen ON_ERROR] STEP 5 (ERROR): Stream error for $projectId:',
+                  error: error?.toString() ?? 'Unknown error object',
+                  stackTrace: stackTrace,
+                );
                 if (!controller.isClosed) {
-                  controller.addError(DatabaseOperationException(
+                  controller.addError(
+                    DatabaseOperationException(
                       'SSE Stream Error: $error',
                       error is Exception ? error : null,
-                      stackTrace));
+                      stackTrace,
+                    ),
+                  );
                 }
               },
               onDone: () {
                 logger.i(
-                    '[PostgresInvoiceRepo][stream.listen ON_DONE] STEP 6 (DONE): Stream done for $projectId. Auto-reconnect may follow if not intentional.');
+                  '[PostgresInvoiceRepo][stream.listen ON_DONE] STEP 6 (DONE): Stream done for $projectId. Auto-reconnect may follow if not intentional.',
+                );
               },
               cancelOnError: false,
             );
             logger.d(
-                '[PostgresInvoiceRepo][onSuccessCallback] STEP 7: Listener setup complete for $projectId.');
+              '[PostgresInvoiceRepo][onSuccessCallback] STEP 7: Listener setup complete for $projectId.',
+            );
           },
           onError: (EventFluxException fluxException) {
             final currentStackTrace = StackTrace.current;
             logger.e(
-                '[PostgresInvoiceRepo][eventFlux.onError] Connection error for project $projectId: ${fluxException.message}',
-                error: fluxException,
-                stackTrace: currentStackTrace);
+              '[PostgresInvoiceRepo][eventFlux.onError] Connection error for project $projectId: ${fluxException.message}',
+              error: fluxException,
+              stackTrace: currentStackTrace,
+            );
             if (!controller.isClosed) {
-              controller.addError(DatabaseOperationException(
+              controller.addError(
+                DatabaseOperationException(
                   'SSE Connection Error (eventFlux.onError): ${fluxException.message}',
                   fluxException,
-                  currentStackTrace));
+                  currentStackTrace,
+                ),
+              );
             }
           },
         );
       } catch (e, stackTrace) {
         logger.e(
-            '[PostgresInvoiceRepo][connectAndListen] Outer catch: Failed to initialize SSE setup for project $projectId:',
-            error: e,
-            stackTrace: stackTrace);
+          '[PostgresInvoiceRepo][connectAndListen] Outer catch: Failed to initialize SSE setup for project $projectId:',
+          error: e,
+          stackTrace: stackTrace,
+        );
         if (!controller.isClosed) {
-          controller.addError(DatabaseOperationException(
+          controller.addError(
+            DatabaseOperationException(
               'Failed to set up SSE (outer catch in connectAndListen): $e',
               e is Exception ? e : Exception(e.toString()),
-              stackTrace));
+              stackTrace,
+            ),
+          );
         }
       }
     }
@@ -659,16 +425,18 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
     // Call connectAndListen and handle its potential immediate error
     connectAndListen().catchError((e, stackTrace) {
       _logger.wtf(
-          "[[[[[ connectAndListen() Future FAILED for $projectId: $e ]]]]]",
-          error: e,
-          stackTrace: stackTrace);
+        "[[[[[ connectAndListen() Future FAILED for $projectId: $e ]]]]]",
+        error: e,
+        stackTrace: stackTrace,
+      );
     });
 
     controller.onCancel = () {
       logger.i(
-          '[PostgresInvoiceRepo][controller.onCancel] Cancelling SSE stream for $projectId. Disposing EventFlux instance and stream subscription.');
-      _currentEventFluxStreamSubscription?.cancel();
-      _currentEventFluxStreamSubscription = null;
+        '[PostgresInvoiceRepo][controller.onCancel] Cancelling SSE stream for $projectId. Disposing EventFlux instance and stream subscription.',
+      );
+      currentEventFluxStreamSubscription?.cancel();
+      currentEventFluxStreamSubscription = null;
       eventFluxInstance?.disconnect();
       if (!controller.isClosed) {
         controller.close();
@@ -679,26 +447,32 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
 
   @override
   Future<InvoiceImageProcess> uploadInvoiceImage(
-      String projectId, Uint8List fileBytes, String fileName) async {
+    String projectId,
+    Uint8List fileBytes,
+    String fileName,
+  ) async {
     final userId = getCurrentUserId();
 
     String baseNameForId = p.basenameWithoutExtension(fileName);
-    if (baseNameForId.isEmpty)
+    if (baseNameForId.isEmpty) {
       baseNameForId = 'image_${DateTime.now().millisecondsSinceEpoch}';
+    }
 
     final String imageFileId =
         '${DateTime.now().millisecondsSinceEpoch}_$baseNameForId';
     final String extension = p.extension(fileName).toLowerCase();
 
     logger.d(
-        '[PostgresInvoiceRepo] Uploading image. Original: $fileName, ID for GCS: $imageFileId, Extension: $extension');
+      '[PostgresInvoiceRepo] Uploading image. Original: $fileName, ID for GCS: $imageFileId, Extension: $extension',
+    );
 
     final gcsPath =
         'users/$userId/projects/$projectId/invoice_images/$imageFileId$extension';
 
     try {
       logger.d(
-          '[PostgresInvoiceRepo] Attempting to upload to GCS at path: $gcsPath');
+        '[PostgresInvoiceRepo] Attempting to upload to GCS at path: $gcsPath',
+      );
 
       await _gcsFileService.uploadFile(
         fileBytes: fileBytes,
@@ -718,11 +492,12 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         'uploaded_at': DateTime.now().toIso8601String(),
         'originalFilename': p.basename(fileName),
         'contentType': fileContentType,
-        'size': fileSize
+        'size': fileSize,
       };
 
       logger.d(
-          '[PostgresInvoiceRepo] Creating image record in DB with body: ${json.encode(requestBody)}');
+        '[PostgresInvoiceRepo] Creating image record in DB with body: ${json.encode(requestBody)}',
+      );
 
       final headers = await getAuthHeaders();
       final response = await http.post(
@@ -732,27 +507,29 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
       );
 
       logger.d(
-          '[PostgresInvoiceRepo] Create image record response: ${response.statusCode}');
+        '[PostgresInvoiceRepo] Create image record response: ${response.statusCode}',
+      );
 
       if (response.statusCode == 201) {
         final Map<String, dynamic> data = json.decode(response.body);
         logger.i(
-            '[PostgresInvoiceRepo] Successfully uploaded and created record for image $imageFileId');
-        return InvoiceImageProcess.fromJson({
-          ...data,
-          'projectId': projectId,
-        });
+          '[PostgresInvoiceRepo] Successfully uploaded and created record for image $imageFileId',
+        );
+        return InvoiceImageProcess.fromJson({...data, 'projectId': projectId});
       } else {
         logger.e(
-            '[PostgresInvoiceRepo] Failed to create image record: ${response.statusCode} ${response.body}');
+          '[PostgresInvoiceRepo] Failed to create image record: ${response.statusCode} ${response.body}',
+        );
         try {
           logger.w(
-              '[PostgresInvoiceRepo] Attempting to delete orphaned GCS file: $gcsPath');
+            '[PostgresInvoiceRepo] Attempting to delete orphaned GCS file: $gcsPath',
+          );
           await _gcsFileService.deleteFile(fileName: gcsPath);
         } catch (gcsDeleteError) {
           logger.e(
-              '[PostgresInvoiceRepo] Failed to delete orphaned GCS file $gcsPath',
-              error: gcsDeleteError);
+            '[PostgresInvoiceRepo] Failed to delete orphaned GCS file $gcsPath',
+            error: gcsDeleteError,
+          );
         }
         throw DatabaseOperationException(
           'Failed to create image record: HTTP ${response.statusCode}',
@@ -762,9 +539,10 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
       }
     } catch (e, stackTrace) {
       logger.e(
-          '[PostgresInvoiceRepo] Error uploading image $fileName for project $projectId',
-          error: e,
-          stackTrace: stackTrace);
+        '[PostgresInvoiceRepo] Error uploading image $fileName for project $projectId',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (e is ImageUploadException ||
           e is DatabaseOperationException ||
           e is ArgumentError) {
@@ -782,7 +560,8 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
   Future<void> deleteInvoiceImage(String projectId, String imageId) async {
     final userId = getCurrentUserId();
     logger.d(
-        '[PostgresInvoiceRepo] Deleting image $imageId from project $projectId by user $userId');
+      '[PostgresInvoiceRepo] Deleting image $imageId from project $projectId by user $userId',
+    );
 
     try {
       final headers = await getAuthHeaders();
@@ -793,10 +572,12 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
 
       if (deleteResponse.statusCode != 204) {
         logger.e(
-            '[PostgresInvoiceRepo] Error deleting image $imageId from DB: ${deleteResponse.statusCode} ${deleteResponse.body}');
+          '[PostgresInvoiceRepo] Error deleting image $imageId from DB: ${deleteResponse.statusCode} ${deleteResponse.body}',
+        );
         if (deleteResponse.statusCode == 404) {
           logger.w(
-              '[PostgresInvoiceRepo] Image $imageId not found for deletion, or already deleted.');
+            '[PostgresInvoiceRepo] Image $imageId not found for deletion, or already deleted.',
+          );
           return; // Or throw a specific "NotFound" exception if the caller needs to know
         }
         throw DatabaseOperationException(
@@ -806,10 +587,14 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         );
       }
       logger.d(
-          '[PostgresInvoiceRepo] Deleted image $imageId from DB for project $projectId');
+        '[PostgresInvoiceRepo] Deleted image $imageId from DB for project $projectId',
+      );
     } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error deleting image $imageId',
-          error: e, stackTrace: stackTrace);
+      logger.e(
+        '[PostgresInvoiceRepo] Error deleting image $imageId',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (e is DatabaseOperationException) rethrow;
       throw DatabaseOperationException(
         'Failed to delete image $imageId: $e',
@@ -827,7 +612,8 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
     Map<String, dynamic>? invoiceAnalysis,
   }) async {
     logger.i(
-        '[PostgresInvoiceRepo] Updating OCR related fields for image $imageId in project $projectId');
+      '[PostgresInvoiceRepo] Updating OCR related fields for image $imageId in project $projectId',
+    );
 
     try {
       final Map<String, dynamic> updateData = {
@@ -837,12 +623,14 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
 
       if (updateData.isEmpty) {
         logger.w(
-            '[PostgresInvoiceRepo] No data provided to update OCR results for image $imageId. Skipping call.');
+          '[PostgresInvoiceRepo] No data provided to update OCR results for image $imageId. Skipping call.',
+        );
         return;
       }
 
       logger.d(
-          '[PostgresInvoiceRepo] Updating OCR for $imageId with data: ${json.encode(updateData)}');
+        '[PostgresInvoiceRepo] Updating OCR for $imageId with data: ${json.encode(updateData)}',
+      );
 
       final headers = await getAuthHeaders();
       final response = await http.patch(
@@ -853,8 +641,9 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
 
       if (response.statusCode != 200) {
         logger.e(
-            '[PostgresInvoiceRepo] Error updating OCR results for $imageId: ${response.statusCode}',
-            error: response.body);
+          '[PostgresInvoiceRepo] Error updating OCR results for $imageId: ${response.statusCode}',
+          error: response.body,
+        );
         throw DatabaseOperationException(
           'Failed to update OCR results for $imageId: HTTP ${response.statusCode}',
           response.body,
@@ -862,10 +651,14 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         );
       }
       logger.i(
-          '[PostgresInvoiceRepo] Successfully updated OCR results for image $imageId');
+        '[PostgresInvoiceRepo] Successfully updated OCR results for image $imageId',
+      );
     } catch (e, stackTrace) {
-      logger.e('[PostgresInvoiceRepo] Error updating OCR results for $imageId',
-          error: e, stackTrace: stackTrace);
+      logger.e(
+        '[PostgresInvoiceRepo] Error updating OCR results for $imageId',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (e is DatabaseOperationException) rethrow;
       throw DatabaseOperationException(
         'Failed to update OCR results for $imageId: $e',
@@ -884,7 +677,8 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
     String? status,
   }) async {
     logger.i(
-        '[PostgresInvoiceRepo] Updating analysis details for image $imageId in project $projectId');
+      '[PostgresInvoiceRepo] Updating analysis details for image $imageId in project $projectId',
+    );
 
     try {
       final Map<String, dynamic> updatePayload = {
@@ -895,7 +689,8 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
       };
 
       logger.d(
-          '[PostgresInvoiceRepo] Updating analysis for $imageId with payload: ${json.encode(updatePayload)}');
+        '[PostgresInvoiceRepo] Updating analysis for $imageId with payload: ${json.encode(updatePayload)}',
+      );
 
       final headers = await getAuthHeaders();
       final response = await http.patch(
@@ -906,8 +701,9 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
 
       if (response.statusCode != 200) {
         logger.e(
-            '[PostgresInvoiceRepo] Error updating analysis details for $imageId: ${response.statusCode}',
-            error: response.body);
+          '[PostgresInvoiceRepo] Error updating analysis details for $imageId: ${response.statusCode}',
+          error: response.body,
+        );
         throw DatabaseOperationException(
           'Failed to update analysis details for $imageId: HTTP ${response.statusCode}',
           response.body,
@@ -915,12 +711,14 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         );
       }
       logger.i(
-          '[PostgresInvoiceRepo] Successfully updated analysis details for image $imageId');
+        '[PostgresInvoiceRepo] Successfully updated analysis details for image $imageId',
+      );
     } catch (e, stackTrace) {
       logger.e(
-          '[PostgresInvoiceRepo] Error updating analysis details for $imageId',
-          error: e,
-          stackTrace: stackTrace);
+        '[PostgresInvoiceRepo] Error updating analysis details for $imageId',
+        error: e,
+        stackTrace: stackTrace,
+      );
       if (e is DatabaseOperationException) rethrow;
       throw DatabaseOperationException(
         'Failed to update analysis details for $imageId: $e',

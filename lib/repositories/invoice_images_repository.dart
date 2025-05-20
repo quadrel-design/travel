@@ -11,25 +11,25 @@ import 'dart:async';
 // import 'package:logger/logger.dart'; // Removed unused import
 import '../models/invoice_image_process.dart';
 // Import repository_exceptions.dart
-import '../models/project.dart';
+// import '../models/project.dart'; // Project model no longer needed for this interface
 // import '../services/gcs_file_service.dart'; // Removed unused import
 
 /// Interface for invoice image-related operations
 abstract class InvoiceImagesRepository {
-  /// Fetches a stream of all projects for the current user
-  Stream<List<Project>> fetchUserProjects();
+  // /// Fetches a stream of all projects for the current user
+  // Stream<List<Project>> fetchUserProjects();
 
-  /// Gets a stream for a specific project
-  Stream<Project?> getProjectStream(String projectId);
+  // /// Gets a stream for a specific project
+  // Stream<Project?> getProjectStream(String projectId);
 
-  /// Adds a new project
-  Future<Project> addProject(Project project);
+  // /// Adds a new project
+  // Future<Project> addProject(Project project);
 
-  /// Updates an existing project
-  Future<void> updateProject(Project project);
+  // /// Updates an existing project
+  // Future<void> updateProject(Project project);
 
-  /// Deletes a project
-  Future<void> deleteProject(String projectId);
+  // /// Deletes a project
+  // Future<void> deleteProject(String projectId);
 
   /// Updates image info with OCR results
   Future<void> updateImageWithOcrResults(

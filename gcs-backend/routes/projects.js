@@ -31,7 +31,7 @@ if (!invoiceService) {
   logger.error('[Routes/Projects] CRITICAL ERROR - invoiceService was not imported or is unavailable (needed for SSE).');
   // Depending on startup strategy, might throw an error to prevent app start
   // throw new Error('[Routes/Projects] invoiceService is critical and not available.');
-}
+  }
 
 // Apply authentication middleware to all routes in this router
 router.use(authenticateUser);

@@ -75,9 +75,9 @@ const pool = new Pool(dbConfig);
 pool.on('connect', (client) => {
   // console.log('[DB Pool] Client connected to the database.'); // Replaced console.log
   logger.info('[DB Pool] Client connected to the database.');
-  // You can set session parameters here if needed, e.g.:
+    // You can set session parameters here if needed, e.g.:
   // client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE;');
-});
+  });
 
 pool.on('acquire', (client) => {
   // console.log('[DB Pool] Client acquired from pool.'); // Replaced console.log
@@ -87,25 +87,25 @@ pool.on('acquire', (client) => {
 pool.on('remove', (client) => {
   // console.log('[DB Pool] Client removed from pool (released).'); // Replaced console.log
   logger.debug('[DB Pool] Client removed from pool (released).'); // Changed to debug for less noise
-});
+  });
 
-pool.on('error', (err, client) => {
+  pool.on('error', (err, client) => {
   // console.error('[DB Pool] Unexpected error on idle client', err); // Replaced console.error
   logger.error('[DB Pool] Unexpected error on idle client', { error: err, clientInfo: client ? client.processID : 'N/A' });
   // Recommended to exit the process if a serious error occurs with the pool
   // process.exit(-1);
-});
+  });
 
-// Test the connection (optional, but good for startup diagnostics)
-pool.query('SELECT NOW()', (err, res) => {
-  if (err) {
+  // Test the connection (optional, but good for startup diagnostics)
+  pool.query('SELECT NOW()', (err, res) => {
+    if (err) {
     logger.error('[DB Pool] Initial connection test query failed:', err.stack);
-    // This might indicate a problem with DB connectivity or credentials
-    // Depending on policy, you might want to throw an error here to stop app startup if DB is essential
-  } else {
+      // This might indicate a problem with DB connectivity or credentials
+      // Depending on policy, you might want to throw an error here to stop app startup if DB is essential
+    } else {
     logger.info('[DB Pool] Initial connection test query successful:', res.rows[0]);
-  }
-});
+    }
+  });
 
 module.exports = {
   query: (text, params) => pool.query(text, params),

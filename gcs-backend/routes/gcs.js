@@ -22,15 +22,15 @@ let bucket;
 const bucketName = process.env.GCS_BUCKET_NAME;
 
 if (!bucketName) {
-  console.error('[Routes/GCS] CRITICAL: GCS_BUCKET_NAME environment variable is not set. GCS operations will fail.');
+  logger.error('[Routes/GCS] CRITICAL: GCS_BUCKET_NAME environment variable is not set. GCS operations will fail.');
   // router will still be exported, but routes will fail
 } else {
   try {
     storage = new Storage();
     bucket = storage.bucket(bucketName);
-    console.log(`[Routes/GCS] GCS Storage client and bucket '${bucketName}' initialized successfully.`);
+    logger.info(`[Routes/GCS] GCS Storage client and bucket '${bucketName}' initialized successfully.`);
   } catch (error) {
-    console.error(`[Routes/GCS] CRITICAL ERROR initializing GCS Storage client or bucket '${bucketName}':`, error);
+    logger.error(`[Routes/GCS] CRITICAL ERROR initializing GCS Storage client or bucket '${bucketName}':`, error);
     // GCS operations will fail
     storage = null;
     bucket = null;
@@ -65,10 +65,10 @@ router.use(authenticateUser);
  * @returns {Error} 500 - If the GCS bucket is not initialized or if there's an error generating the signed URL.
  */
 router.post('/generate-upload-url', async (req, res) => {
-  console.log('[Routes/GCS] /generate-upload-url POST hit. Request body:', req.body);
+  logger.info('[Routes/GCS] /generate-upload-url POST hit. Request body:', req.body);
 
   if (!bucket) {
-    console.error('[Routes/GCS] GCS bucket is not initialized. Cannot generate upload URL.');
+    logger.error('[Routes/GCS] GCS bucket is not initialized. Cannot generate upload URL.');
     return res.status(500).json({ error: 'Server configuration error: File storage service not available.' });
   }
 
@@ -86,12 +86,12 @@ router.post('/generate-upload-url', async (req, res) => {
   };
 
   try {
-    console.log(`[Routes/GCS] Attempting to generate signed URL for: gs://${bucketName}/${filename}`);
+    logger.info(`[Routes/GCS] Attempting to generate signed URL for: gs://${bucketName}/${filename}`);
     const [url] = await bucket.file(filename).getSignedUrl(options);
-    console.log(`[Routes/GCS] Signed URL generated successfully for ${filename}`);
+    logger.info(`[Routes/GCS] Signed URL generated successfully for ${filename}`);
     res.status(200).json({ url: url });
   } catch (err) {
-    console.error('[Routes/GCS] Error generating signed URL:', err);
+    logger.error('[Routes/GCS] Error generating signed URL:', err);
     res.status(500).json({ error: 'Could not create signed URL.', details: err.message });
   }
 });
@@ -114,10 +114,10 @@ router.post('/generate-upload-url', async (req, res) => {
  * @returns {Error} 500 - If the GCS bucket is not initialized or if there's an error generating the signed URL.
  */
 router.get('/generate-download-url', async (req, res) => {
-  console.log('[Routes/GCS] /generate-download-url GET hit. Query params:', req.query);
+  logger.info('[Routes/GCS] /generate-download-url GET hit. Query params:', req.query);
 
   if (!bucket) {
-    console.error('[Routes/GCS] GCS bucket is not initialized. Cannot generate download URL.');
+    logger.error('[Routes/GCS] GCS bucket is not initialized. Cannot generate download URL.');
     return res.status(500).json({ error: 'Server configuration error: File storage service not available.' });
   }
 
@@ -134,12 +134,12 @@ router.get('/generate-download-url', async (req, res) => {
   };
 
   try {
-    console.log(`[Routes/GCS] Attempting to generate signed READ URL for: gs://${bucketName}/${filename}`);
+    logger.info(`[Routes/GCS] Attempting to generate signed READ URL for: gs://${bucketName}/${filename}`);
     const [url] = await bucket.file(filename).getSignedUrl(options);
-    console.log(`[Routes/GCS] Signed READ URL generated successfully for ${filename}`);
+    logger.info(`[Routes/GCS] Signed READ URL generated successfully for ${filename}`);
     res.status(200).json({ url: url });
   } catch (err) {
-    console.error('[Routes/GCS] Error generating signed READ URL:', err);
+    logger.error('[Routes/GCS] Error generating signed READ URL:', err);
     if (err.code === 404 || (err.message && err.message.includes('No such object'))) {
       return res.status(404).json({ error: 'File not found in GCS.', details: err.message });
     }
@@ -161,9 +161,9 @@ router.get('/generate-download-url', async (req, res) => {
  * @returns {Error} 500 - If the GCS bucket is not initialized.
  */
 router.post('/delete', async (req, res) => {
-  console.log('[Routes/GCS] /delete POST hit. Body:', req.body);
+  logger.info('[Routes/GCS] /delete POST hit. Body:', req.body);
   if (!bucket) {
-    console.error('[Routes/GCS] GCS bucket is not initialized. Cannot delete file.');
+    logger.error('[Routes/GCS] GCS bucket is not initialized. Cannot delete file.');
     return res.status(500).json({ error: 'Server configuration error: File storage service not available.' });
   }
 
@@ -171,14 +171,14 @@ router.post('/delete', async (req, res) => {
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required in the request body to delete.' });
   }
-  console.warn(`[Routes/GCS] Minimal /delete called for ${filename}. Actual GCS deletion NOT YET IMPLEMENTED here.`);
+  logger.warn(`[Routes/GCS] Minimal /delete called for ${filename}. Actual GCS deletion NOT YET IMPLEMENTED here.`);
   // TODO: Implement actual GCS file deletion
   // try {
   //   await bucket.file(filename).delete();
-  //   console.log(`[Routes/GCS] Successfully deleted gs://${bucketName}/${filename} from GCS.`);
+  //   logger.info(`[Routes/GCS] Successfully deleted gs://${bucketName}/${filename} from GCS.`);
   //   res.status(200).json({ message: `File ${filename} deleted successfully.` });
   // } catch (err) {
-  //   console.error(`[Routes/GCS] Error deleting file ${filename} from GCS:`, err);
+  //   logger.error(`[Routes/GCS] Error deleting file ${filename} from GCS:`, err);
   //   if (err.code === 404) {
   //     return res.status(404).json({ error: 'File not found in GCS.', details: err.message });
   //   }
@@ -228,5 +228,5 @@ router.get('/signed-url', async (req, res) => {
   }
 });
 
-console.log('[Routes/GCS] Routes defined, exporting router.');
+logger.info('[Routes/GCS] Routes defined, exporting router.');
 module.exports = router; 

@@ -67,7 +67,7 @@ class CloudRunOcrService {
 
       final response = await http
           .post(
-        Uri.parse('$_baseUrl/ocr-invoice'),
+        Uri.parse('$_baseUrl/api/ocr/ocr-invoice'),
         headers: authHeaders,
         body: jsonEncode({
           'imageUrl': imageUrl,
@@ -176,7 +176,7 @@ class CloudRunOcrService {
 
       final response = await http
           .post(
-        Uri.parse('$_baseUrl/analyze-invoice'),
+        Uri.parse('$_baseUrl/api/analysis/analyze-invoice'),
         headers: authHeaders,
         body: jsonEncode(requestBody),
       )

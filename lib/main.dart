@@ -39,37 +39,15 @@ Future<void> main() async {
   // Ensure Flutter bindings are initialized.
   WidgetsFlutterBinding.ensureInitialized();
   // It's tricky to use the Riverpod logger here before ProviderScope is initialized.
-  // These print statements are for initial debug and can be removed for cleaner startup.
-  // print('DEBUG: Firebase initialized.');
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
   // Load environment variables from .env file.
-  // print('DEBUG: dotenv loaded.');
   await dotenv.load();
 
   // Run the app within a ProviderScope for Riverpod state management.
-  // print('DEBUG: Calling runApp()...');
   runApp(const ProviderScope(child: MyApp()));
-  // print('DEBUG: runApp() finished.');
-}
-
-// Update redirect function to accept repository
-// NOTE: This function seems unused now that redirect logic is inside routerProvider.
-// Consider removing if it's definitely not called elsewhere.
-String? determineRedirect(AuthRepository authRepo, String? currentRoute) {
-  final loggingIn = currentRoute == AppRoutes.auth;
-  final splashing = currentRoute == AppRoutes.splash;
-
-  if (authRepo.currentUser == null && !loggingIn) {
-    return AppRoutes.auth;
-  }
-
-  if (authRepo.currentUser != null && (loggingIn || splashing)) {
-    return AppRoutes.home;
-  }
-  return null;
 }
 
 // --- GoRouter Configuration ---
@@ -145,9 +123,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: AppRoutes.invoiceCaptureOverview.split('/').last,
                 builder: (context, state) {
-                  final project = state.extra is Map
-                      ? (state.extra as Map)['project'] as Project?
-                      : state.extra as Project?;
+                  final project = state.extra as Project?;
                   if (project != null) {
                     return InvoiceCaptureOverviewScreen(project: project);
                   } else {
@@ -211,27 +187,6 @@ class MyApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-    );
-  }
-}
-
-// Add a debug version of your home screen for tracing
-class DebugHomeScreen extends ConsumerWidget {
-  const DebugHomeScreen({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final logger = ref.read(loggerProvider);
-    logger.d('DebugHomeScreen build() called');
-    // Example: If you use a provider for data
-    // final data = ref.watch(yourProvider);
-    // logger.d('DebugHomeScreen provider data: $data');
-
-    return Scaffold(
-      appBar: AppBar(title: const Text('Debug Home')),
-      body: Center(
-        child: Text('Debug: HomeScreen loaded'),
-      ),
     );
   }
 }

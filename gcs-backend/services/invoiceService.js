@@ -34,6 +34,7 @@ function _transformDbImageToApiV1Format(dbRow) {
     isInvoiceGuess: dbRow.is_invoice,
     ocrText: dbRow.ocr_text,
     ocrConfidence: dbRow.ocr_confidence,
+    ocrTextBlocks: dbRow.ocr_text_blocks,
     invoiceAnalysis: dbRow.gemini_analysis_json || {},
     analyzedInvoiceDate: dbRow.analyzed_invoice_date,
     invoiceSum: dbRow.invoice_sum,
