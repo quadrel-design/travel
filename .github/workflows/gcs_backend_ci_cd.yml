@@ -36,6 +36,13 @@ jobs:
 
       - name: Run tests
         run: npm test
+        env:
+          DB_HOST: ${{ secrets.TEST_DB_HOST }}
+          DB_USER: ${{ secrets.TEST_DB_USER }}
+          DB_PASSWORD: ${{ secrets.TEST_DB_PASSWORD }}
+          DB_NAME: ${{ secrets.TEST_DB_NAME }}
+          DB_PORT: ${{ secrets.TEST_DB_PORT }}
+          NODE_ENV: ${{ secrets.NODE_ENV }} # e.g., 'test' or 'ci'
 
   deploy_to_cloud_run:
     name: Deploy GCS Backend to Cloud Run
