@@ -11,6 +11,7 @@ mixin ProjectRepositoryOperationsMixin on BaseRepository {
   }
 
   Future<List<Project>> _fetchUserProjectsOnce() async {
+    // Original code starts below
     final userId = getCurrentUserId();
     logger.d(
         '[ProjectRepositoryOperationsMixin] Fetching projects for user: $userId');

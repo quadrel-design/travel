@@ -9,7 +9,8 @@
  * @module services/projectService
  */
 const pool = require('../config/db'); // Import the pool
-const { sendSseUpdateToProject } = require('./sseService'); // Added for SSE
+// const { sendSseUpdateToProject } = require('./sseService'); // Removed for lazy loading
+let sseServiceInstance; // For lazy loading
 const logger = require('../config/logger'); // Added for logging
 
 /**
@@ -480,8 +481,9 @@ const projectService = {
       // SSE Update
       if (savedImage) {
         try {
-          const updatedImages = await projectService.getProjectImages(projectId, userId);
-          sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+          if (!sseServiceInstance) sseServiceInstance = require('./sseService');
+          const updatedImages = await projectService.getProjectImages(projectId, userId); // projectService here refers to the whole exported object
+          sseServiceInstance.sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
         } catch (sseError) {
           logger.error(`[ProjectService] SSE Update failed after saving image ${id} for project ${projectId}:`, sseError);
           // Non-critical, main operation succeeded.
@@ -534,9 +536,10 @@ const projectService = {
       
       // SSE Update
       try {
+        if (!sseServiceInstance) sseServiceInstance = require('./sseService');
         logger.info(`[ProjectService] Image ${imageId} deleted for project ${projectId}. Triggering SSE update.`);
-        const updatedImages = await projectService.getProjectImages(projectId, userId);
-        sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+        const updatedImages = await projectService.getProjectImages(projectId, userId); // projectService here refers to the whole exported object
+        sseServiceInstance.sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
       } catch (sseError) {
         logger.error(`[ProjectService] SSE Update failed after deleting image ${imageId} for project ${projectId}:`, sseError);
         // Non-critical, main operation succeeded.
@@ -640,8 +643,9 @@ const projectService = {
       // SSE Update
       if (updatedImage) {
         try {
-          const updatedImages = await projectService.getProjectImages(projectId, userId);
-          sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+          if (!sseServiceInstance) sseServiceInstance = require('./sseService');
+          const updatedImages = await projectService.getProjectImages(projectId, userId); // projectService here refers to the whole exported object
+          sseServiceInstance.sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
         } catch (sseError) {
           logger.error(`[ProjectService] SSE Update failed after updating OCR for image ${imageId} project ${projectId}:`, sseError);
           // Non-critical, main operation succeeded.
@@ -738,8 +742,9 @@ const projectService = {
       // SSE Update
       if (updatedImage) {
         try {
-          const updatedImages = await projectService.getProjectImages(projectId, userId);
-          sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
+          if (!sseServiceInstance) sseServiceInstance = require('./sseService');
+          const updatedImages = await projectService.getProjectImages(projectId, userId); // projectService here refers to the whole exported object
+          sseServiceInstance.sendSseUpdateToProject(projectId, 'imagesUpdated', updatedImages);
         } catch (sseError) {
           logger.error(`[ProjectService] SSE Update failed after updating image ${imageId} for project ${projectId}:`, sseError);
           // Non-critical, main operation succeeded.

@@ -5,13 +5,10 @@ import 'package:intl/intl.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/constants/app_routes.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:travel/providers/logging_provider.dart';
-import 'package:travel/providers/service_providers.dart' as service_providers;
 import '../../models/project.dart';
 import '../../models/invoice_image_process.dart';
-import '../../providers/auth_providers.dart';
 
 class ProjectDetailScreen extends ConsumerWidget {
   final Project project;

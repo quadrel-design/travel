@@ -11,7 +11,6 @@ import 'package:travel/models/project.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
 import 'package:travel/repositories/invoice_images_repository.dart';
-import 'package:logger/logger.dart';
 
 /// State class representing the current state of project form operations.
 ///

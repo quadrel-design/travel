@@ -26,6 +26,7 @@ import 'package:travel/models/project.dart';
 import 'package:travel/models/expense.dart';
 import 'package:travel/models/invoice_image_process.dart';
 import 'package:flutter/foundation.dart'; // ADDED for listEquals
+import 'package:travel/config/service_config.dart'; // ADDED import
 
 /// Provider for accessing the Firebase Authentication instance.
 ///
@@ -53,8 +54,17 @@ final invoiceRepositoryProvider = Provider<InvoiceImagesRepository>((ref) {
   final auth = ref.watch(firebaseAuthProvider);
   final logger = ref.watch(loggerProvider);
   final gcsFileService = ref.watch(service.gcsFileServiceProvider);
+  final actualBaseUrl = ServiceConfig.gcsApiBaseUrl; // Get the value
 
-  return PostgresInvoiceImageRepository(auth, logger, gcsFileService);
+  logger.i(
+      '[PROVIDER_INIT] PostgresInvoiceImageRepository WILL BE CREATED WITH baseUrl: $actualBaseUrl'); // ADDED log
+
+  return PostgresInvoiceImageRepository(
+    auth,
+    logger,
+    gcsFileService,
+    baseUrl: actualBaseUrl, // Use the fetched value
+  );
 });
 
 /// Provider for accessing the current user's invoices.
@@ -152,25 +162,12 @@ final projectImagesStreamProvider = StreamProvider.autoDispose
   final projectId = parts[0];
   final repository = ref.watch(invoiceRepositoryProvider);
   final logger = ref.watch(loggerProvider);
-  final rawStream = repository.getProjectImagesStream(projectId);
 
-  List<InvoiceImageProcess>? previousList;
+  logger.d(
+      '[PROVIDER] projectImagesStreamProvider for $projectId initialized. Returning raw stream.');
 
-  logger
-      .d('[PROVIDER] projectImagesStreamProvider for $projectId initialized.');
-
-  return rawStream.where((newList) {
-    final isDifferent = !listEquals(previousList, newList);
-    if (isDifferent) {
-      logger.d(
-          '[PROVIDER] projectImagesStreamProvider for $projectId: List changed, emitting.');
-      previousList = newList;
-    } else {
-      logger.d(
-          '[PROVIDER] projectImagesStreamProvider for $projectId: List is the same, filtering out.');
-    }
-    return isDifferent;
-  });
+  // Return the raw stream directly. Riverpod will handle de-duplication.
+  return repository.getProjectImagesStream(projectId);
 });
 
 final firebaseAuthRepositoryProvider = Provider<FirebaseAuthRepository>((ref) {

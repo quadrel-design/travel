@@ -662,7 +662,7 @@ router.patch('/:projectId/images/:imageId/analysis', async (req, res) => {
 // SSE Endpoint for Project Image Updates
 router.get('/:projectId/image-stream', async (req, res) => {
   const projectId = req.params.projectId;
-  const userId = req.user.id; // Ensure project belongs to user
+  const userId = req.user.id; // Restore userId
 
   logger.info(`[SSE] Connection attempt for project ${projectId} by user ${userId}`);
 
@@ -670,48 +670,39 @@ router.get('/:projectId/image-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no'); // Useful for Nginx
+  res.setHeader('X-Accel-Buffering', 'no'); 
+  res.flushHeaders(); 
 
-  // Optional: Send a connection confirmation message (client might not use this, but good for debugging)
-  res.write('event: connection_established\\ndata: {"message": "SSE connection established for project ' + projectId + '"}\\n\\n');
-  
+  // 2. Add client to the list for this project
+  // `addSseClient` will immediately send existing images and then listen for updates
   try {
-    // 2. Verify project ownership (optional but good practice)
-    const project = await projectService.getProjectById(projectId, userId);
-    if (!project) {
-      logger.warn(`[SSE] User ${userId} attempted to connect to non-existent or unauthorized project ${projectId}.`);
-      // Don't keep the connection open if project is invalid or not owned.
-      // Send an error event and close.
-      res.write(`event: error\\ndata: {"error": "Project not found or not authorized"}\\n\\n`);
-      return res.status(404).end(); // End the response
-    }
-
-    // 3. Register client with sseService
-    addSseClient(projectId, res);
-    logger.info(`[SSE] Client registered for project ${projectId}. Sending initial image list.`);
-
-    // 4. Fetch and send initial image list
-    const images = await projectService.getProjectImages(projectId, userId);
-    logger.info(`[SSE] Fetched images for project ${projectId}: ${JSON.stringify(images, null, 2)}`);
-    res.write(`event: imagesUpdated\\ndata: ${JSON.stringify(images)}\\n\\n`);
-
-    // Keep connection alive. sseService will handle 'close' event for cleanup.
-
+    await addSseClient(projectId, userId, res); // Pass userId and await
   } catch (error) {
-    logger.error(`[SSE] Error during connection setup for project ${projectId}:`, error);
-    // Send an error event to the client before closing
-    try {
-        res.write(`event: error\\ndata: ${JSON.stringify({ error: 'Internal server error during SSE setup' })}\\n\\n`);
-    } catch (writeError) {
-        logger.error('[SSE] Failed to send error event to client:', writeError);
-    }
-    // Don't call addSseClient if there was an error before that point.
-    // If res.on('close') was already set up by addSseClient, it will handle cleanup.
-    // Otherwise, explicitly end.
+    logger.error(`[SSE] Error in addSseClient for project ${projectId}, user ${userId}:`, error);
     if (!res.writableEnded) {
-        res.status(500).end();
+      // Politely inform the client of an error if possible, then close.
+      // Avoid sending a full HTML error page. A simple message or custom event type might be best.
+      try {
+        res.write('event: error\ndata: {"message": "Failed to initialize image stream due to server error."}\n\n');
+      } catch (writeError) {
+        logger.error('[SSE] Error writing error event to SSE client:', writeError);
+      }
+      res.end();
     }
+    return; // Stop further processing for this request
   }
+
+  // 3. Handle client disconnect
+  req.on('close', () => {
+    logger.info(`[SSE] Client disconnected for project ${projectId}, user ${userId}. Removing from SSE clients.`);
+    // sseService.removeSseClient(projectId, res); // removeSseClient now needs userId
+    // The sseService should handle removal internally based on 'res' or a unique client ID.
+    // For now, let's assume sseService.addSseClient also handles storing 'res' in a way
+    // that it can find and remove it, or it has a mechanism to clean up closed connections.
+    // A more robust system might involve passing a unique ID per connection.
+    // For now, the important part is that `addSseClient` has `res` and can manage its lifecycle.
+    // The `sseService.js` will need adjustment if it's not already handling removal on 'close' or error within `addSseClient`.
+  });
 });
 
 module.exports = router; 

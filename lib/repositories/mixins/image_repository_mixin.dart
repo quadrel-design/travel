@@ -40,20 +40,38 @@ mixin ImageRepositoryOperationsMixin on BaseRepositoryForImages {
       logger.d(
           '[ImageRepositoryOperationsMixin][connectAndListen] START for $projectId');
       try {
-        final authToken = await getAuthToken(); // Now uses abstract method
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 1A: Before getAuthToken');
+        final authToken = await getAuthToken();
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 2A: After getAuthToken');
+
         final Map<String, String> sseHeaders = {
           'Authorization': 'Bearer $authToken',
           'Accept': 'text/event-stream',
           'Cache-Control': 'no-cache',
         };
-
-        final sseUrl =
-            Uri.parse('$baseUrl/api/projects/$projectId/image-stream');
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 3A: After sseHeaders');
 
         logger.d(
-            '[ImageRepositoryOperationsMixin][connectAndListen] Connecting to SSE URL: $sseUrl for project $projectId');
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 4A: Before Uri.parse');
+        final sseUrl =
+            Uri.parse('$baseUrl/api/projects/$projectId/image-stream');
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 5A: After Uri.parse');
 
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] Connecting to SSE URL (already logged above, this is a duplicate check): $sseUrl for project $projectId');
+
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 6A: Before eventFluxInstance?.disconnect()');
         await eventFluxInstance?.disconnect();
+        logger.d(
+            '[ImageRepositoryOperationsMixin][connectAndListen] STEP 7A: After eventFluxInstance?.disconnect()');
+
+        logger.i(
+            '[ImageRepositoryOperationsMixin][connectAndListen] PRE-SPAWN SIMPLE. Project $projectId'); // Simplified PRE-SPAWN
         eventFluxInstance = EventFlux.spawn();
         logger.d(
             '[ImageRepositoryOperationsMixin][connectAndListen] EventFlux.spawn() completed for $projectId');
@@ -109,8 +127,15 @@ mixin ImageRepositoryOperationsMixin on BaseRepositoryForImages {
 
             response.stream!.listen(
               (eventData) {
+                String rawDataForLog = eventData.toString();
+                if (rawDataForLog.length > 250) {
+                  rawDataForLog = "${rawDataForLog.substring(0, 250)}...";
+                }
                 logger.d(
-                    '[ImageRepositoryOperationsMixin][stream.listen RAW_EVENT_DATA] Received for $projectId: ${eventData.toString()}');
+                    '[ImageRepositoryOperationsMixin][stream.listen RAW_EVENT_DATA] Received for $projectId: $rawDataForLog');
+
+                logger.d(
+                    '[ImageRepositoryOperationsMixin][stream.listen ON_DATA] Event Name: ${eventData.event}, Project: $projectId');
 
                 logger.d(
                     '[ImageRepositoryOperationsMixin][stream.listen ON_DATA] START for $projectId. Event: ${eventData.event}');

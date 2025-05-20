@@ -33,15 +33,10 @@ class InvoiceAnalysisPanel extends ConsumerWidget {
     logger.d('invoiceAnalysis type: ${imageInfo.invoiceAnalysis.runtimeType}');
     logger.d('invoiceAnalysis null?: ${imageInfo.invoiceAnalysis == null}');
     if (imageInfo.invoiceAnalysis != null) {
+      logger.d('totalAmount: ${imageInfo.invoiceAnalysis!.totalAmount}');
+      logger.d('currency: ${imageInfo.invoiceAnalysis!.currency}');
       logger.d(
-          'invoiceAnalysis keys: ${imageInfo.invoiceAnalysis!.keys.toList()}');
-      logger.d(
-          'totalAmount present?: ${imageInfo.invoiceAnalysis!.containsKey('totalAmount')}');
-      logger
-          .d('totalAmount value: ${imageInfo.invoiceAnalysis!['totalAmount']}');
-      logger.d('currency value: ${imageInfo.invoiceAnalysis!['currency']}');
-      logger.d('Full invoiceAnalysis:');
-      logger.d(imageInfo.invoiceAnalysis.toString());
+          'Full invoiceAnalysis (object): ${imageInfo.invoiceAnalysis.toString()}');
     }
     logger.d('---------------------------------');
 
@@ -59,8 +54,7 @@ class InvoiceAnalysisPanel extends ConsumerWidget {
               const SizedBox(height: UIConstants.kSectionSpacing),
               _buildInvoiceStatus(),
               if (imageInfo.invoiceAnalysis != null)
-                _buildStructuredAnalysis(
-                    InvoiceAnalysis.fromJson(imageInfo.invoiceAnalysis!))
+                _buildStructuredAnalysis(imageInfo.invoiceAnalysis!)
               else
                 _buildNoAnalysisPanel(ref),
               if (imageInfo.location != null && imageInfo.location!.isNotEmpty)

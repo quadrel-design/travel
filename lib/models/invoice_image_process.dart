@@ -33,7 +33,7 @@ class InvoiceImageProcess extends Equatable {
   final String? ocrText;
 
   /// Structured analysis result from Gemini (if available)
-  final Map<String, dynamic>? invoiceAnalysis;
+  final InvoiceAnalysis? invoiceAnalysis;
 
   /// Last processed date
   final DateTime? lastProcessedAt;
@@ -62,18 +62,39 @@ class InvoiceImageProcess extends Equatable {
   });
 
   @override
-  List<Object?> get props => [
-        id,
-        url,
-        imagePath,
-        invoiceId,
-        ocrText,
-        invoiceAnalysis,
-        lastProcessedAt,
-        location,
-        isInvoiceGuess,
-        uploadedAt,
-      ];
+  List<Object?> get props {
+    // Temporary detailed logging for debugging Equatable
+    print('[EQUATABLE_DEBUG] --- InvoiceImageProcess props for ID: $id ---');
+    print('[EQUATABLE_DEBUG] id: $id');
+    print('[EQUATABLE_DEBUG] url: $url');
+    print('[EQUATABLE_DEBUG] imagePath: $imagePath');
+    print('[EQUATABLE_DEBUG] invoiceId: $invoiceId');
+    print('[EQUATABLE_DEBUG] ocrText: $ocrText');
+    if (invoiceAnalysis != null) {
+      print(
+          '[EQUATABLE_DEBUG] invoiceAnalysis: ${invoiceAnalysis!.props.join(", ")}');
+    } else {
+      print('[EQUATABLE_DEBUG] invoiceAnalysis: null');
+    }
+    print(
+        '[EQUATABLE_DEBUG] lastProcessedAt: ${lastProcessedAt?.toIso8601String()}');
+    print('[EQUATABLE_DEBUG] location: $location');
+    print('[EQUATABLE_DEBUG] isInvoiceGuess: $isInvoiceGuess');
+    print('[EQUATABLE_DEBUG] uploadedAt: ${uploadedAt?.toIso8601String()}');
+    print('[EQUATABLE_DEBUG] -----------------------------------------');
+    return [
+      id,
+      url,
+      imagePath,
+      invoiceId,
+      ocrText,
+      invoiceAnalysis,
+      lastProcessedAt,
+      location,
+      isInvoiceGuess,
+      uploadedAt,
+    ];
+  }
 
   /// Creates a InvoiceCaptureProcess instance from a JSON map.
   ///
@@ -83,10 +104,22 @@ class InvoiceImageProcess extends Equatable {
   factory InvoiceImageProcess.fromJson(Map<String, dynamic> json) {
     DateTime? parseDate(dynamic value) {
       if (value == null) return null;
-      if (value is DateTime) return value;
-      if (value is String) return DateTime.tryParse(value);
+      DateTime? dt;
+      if (value is DateTime) {
+        dt = value;
+      } else if (value is String) {
+        dt = DateTime.tryParse(value);
+      }
+      // Normalize to UTC and milliseconds precision
+      if (dt != null) {
+        return DateTime.utc(dt.year, dt.month, dt.day, dt.hour, dt.minute,
+            dt.second, dt.millisecond);
+      }
       return null;
     }
+
+    Map<String, dynamic>? analysisJson =
+        json['invoiceAnalysis'] as Map<String, dynamic>?;
 
     try {
       return InvoiceImageProcess(
@@ -95,7 +128,9 @@ class InvoiceImageProcess extends Equatable {
         imagePath: json['imagePath'] ?? json['image_path'] ?? '',
         invoiceId: json['id'] ?? '',
         ocrText: json['ocrText'],
-        invoiceAnalysis: json['invoiceAnalysis'],
+        invoiceAnalysis: analysisJson != null
+            ? InvoiceAnalysis.fromJson(analysisJson)
+            : null,
         lastProcessedAt: parseDate(json['lastProcessedAt']),
         location: json['location'],
         isInvoiceGuess:
@@ -120,7 +155,7 @@ class InvoiceImageProcess extends Equatable {
       'imagePath': imagePath,
       'invoiceId': invoiceId,
       'ocrText': ocrText,
-      'invoiceAnalysis': invoiceAnalysis,
+      'invoiceAnalysis': invoiceAnalysis?.toJson(),
       'lastProcessedAt': lastProcessedAt?.toIso8601String(),
       'location': location,
       'isInvoiceGuess': isInvoiceGuess,
@@ -142,7 +177,7 @@ class InvoiceImageProcess extends Equatable {
     String? imagePath,
     String? invoiceId,
     String? ocrText,
-    Map<String, dynamic>? invoiceAnalysis,
+    InvoiceAnalysis? invoiceAnalysis,
     DateTime? lastProcessedAt,
     String? location,
     bool? isInvoiceGuess,
@@ -163,7 +198,7 @@ class InvoiceImageProcess extends Equatable {
   }
 }
 
-class InvoiceAnalysis {
+class InvoiceAnalysis extends Equatable {
   final double? totalAmount;
   final String? currency;
   final String? merchantName;
@@ -174,7 +209,7 @@ class InvoiceAnalysis {
   final String? category;
   final String? taxonomy;
 
-  InvoiceAnalysis({
+  const InvoiceAnalysis({
     this.totalAmount,
     this.currency,
     this.merchantName,
@@ -184,6 +219,18 @@ class InvoiceAnalysis {
     this.category,
     this.taxonomy,
   });
+
+  @override
+  List<Object?> get props => [
+        totalAmount,
+        currency,
+        merchantName,
+        date,
+        location,
+        taxes,
+        category,
+        taxonomy,
+      ];
 
   factory InvoiceAnalysis.fromJson(Map<String, dynamic> json) {
     // For debugging - use this in production code with proper logging

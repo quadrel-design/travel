@@ -129,7 +129,7 @@ class InvoiceCaptureController {
       }
     } catch (e, stackTrace) {
       // Catch errors from scanImage or pre-scan steps
-      timeoutTimer?.cancel(); // Ensure timer is cancelled on any error too
+      timeoutTimer.cancel(); // Ensure timer is cancelled on any error too
       logger.e('[INVOICE_CAPTURE] Error during scan process:',
           error: e, stackTrace: stackTrace);
       ref.read(provider.notifier).setScanError(imageId, e.toString());

@@ -63,8 +63,12 @@ class _InvoiceCaptureOverviewScreenState
   }
 
   Widget _buildImageTile(BuildContext context, InvoiceImageProcess imageInfo) {
-    // Check if imagePath is empty
+    _logger.d(
+        "🖼️ [_buildImageTile] CALLED for image ID: ${imageInfo.id}, path: '${imageInfo.imagePath}'");
+
     if (imageInfo.imagePath.isEmpty) {
+      _logger.w(
+          "🖼️ [_buildImageTile] imagePath is EMPTY for image ID: ${imageInfo.id}");
       return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -84,11 +88,20 @@ class _InvoiceCaptureOverviewScreenState
       future: ref
           .read(service.gcsFileServiceProvider)
           .getSignedDownloadUrl(fileName: imageInfo.imagePath)
-          .catchError((error) {
-        _logger.e('[INVOICE_CAPTURE] Error getting signed URL:', error: error);
+          .then((url) {
+        _logger.d(
+            "🖼️ [_buildImageTile] getSignedDownloadUrl SUCCEEDED for '${imageInfo.imagePath}'. URL: '$url'");
+        return url;
+      }).catchError((error) {
+        _logger.e(
+            "🖼️ [_buildImageTile] getSignedDownloadUrl FAILED for '${imageInfo.imagePath}':",
+            error: error);
         return ''; // Return empty string to trigger error widget
       }),
       builder: (context, snapshot) {
+        _logger.d(
+            "🖼️ [_buildImageTile] FutureBuilder builder. ConnectionState: ${snapshot.connectionState}, HasError: ${snapshot.hasError}, HasData: ${snapshot.hasData}, Data: '${snapshot.data}'");
+
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
@@ -122,7 +135,8 @@ class _InvoiceCaptureOverviewScreenState
         }
 
         final signedUrl = snapshot.data!;
-        _logger.d('[DEBUG] Displaying image with signed URL: $signedUrl');
+        _logger.d(
+            "🖼️ [_buildImageTile] Attempting to load CachedNetworkImage with URL: '$signedUrl'");
 
         return CachedNetworkImage(
           imageUrl: signedUrl,
@@ -132,7 +146,9 @@ class _InvoiceCaptureOverviewScreenState
             'Cache-Control': 'no-cache',
           },
           errorWidget: (context, url, error) {
-            _logger.e('[INVOICE_CAPTURE] Error loading image:', error: error);
+            _logger.e(
+                "🖼️ [_buildImageTile] CachedNetworkImage FAILED for URL '$url':",
+                error: error);
             return Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -240,8 +256,6 @@ class _InvoiceCaptureOverviewScreenState
                   child: Text(stack.toString()),
                 ),
               ),
-              const SizedBox(height: 8),
-              const Text('Check Firestore rules and data for this project.'),
             ],
           ),
         );

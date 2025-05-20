@@ -183,8 +183,14 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
       // Extract the 'isInvoice' status from the analysis data to update 'isInvoiceGuess'
       final bool? newIsInvoiceGuess = newAnalysisData['isInvoice'] as bool?;
 
+      // MODIFIED: Convert Map to InvoiceAnalysis object
+      final InvoiceAnalysis? newInvoiceAnalysisObject =
+          newAnalysisData.isNotEmpty
+              ? InvoiceAnalysis.fromJson(newAnalysisData)
+              : null;
+
       final newImageInfo = oldImageInfo.copyWith(
-          invoiceAnalysis: newAnalysisData, // Store the full analysis map
+          invoiceAnalysis: newInvoiceAnalysisObject, // Pass the object
           isInvoiceGuess:
               newIsInvoiceGuess, // Update isInvoiceGuess based on analysis
           lastProcessedAt: DateTime.now() // Mark as processed now

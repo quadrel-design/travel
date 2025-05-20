@@ -6,7 +6,6 @@ library;
 
 import 'dart:async';
 
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/models/expense.dart';
 import 'package:travel/repositories/repository_exceptions.dart';
 import 'package:logger/logger.dart';

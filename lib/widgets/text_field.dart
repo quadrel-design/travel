@@ -96,7 +96,7 @@ class AppTextField extends StatelessWidget {
                     : null,
                 suffixIcon: suffixIconWidget,
                 filled: true,
-                fillColor: theme.colorScheme.surfaceVariant
+                fillColor: theme.colorScheme.surfaceContainerHighest
                     .withOpacity(0.3), // Light fill color
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 16.0, vertical: 12.0),
