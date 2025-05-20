@@ -2,7 +2,7 @@
  * @fileoverview OCR (Optical Character Recognition) Routes.
  * Handles API endpoints related to OCR processing of images, typically invoices or receipts.
  * It uses the Vision API (via `visionService`) for text detection and updates
- * image metadata in the database (via `projectService`).
+ * image metadata in the database (via invoiceService).
  * @module routes/ocr
  */
 
@@ -12,7 +12,7 @@ const axios = require('axios');
 const { detectTextInImage } = require('../services/visionService');
 // const projectService = require('../services/projectService'); // Removed as it's not directly used
 const invoiceService = require('../services/invoiceService'); // Changed from imageService, For Image DB interactions
-const firebaseAdmin = require('firebase-admin'); // For authentication. Keep this for other potential Firebase uses, even if auth is middleware.
+// const firebaseAdmin = require('firebase-admin'); // Removed: Not directly used; auth is via middleware.
 const logger = require('../config/logger'); // Import logger
 const authenticateUser = require('../middleware/authenticateUser'); // Import shared middleware
 

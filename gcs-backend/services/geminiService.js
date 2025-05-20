@@ -7,6 +7,7 @@
  * @module services/geminiService
  */
 const { GoogleGenerativeAI } = require('@google/generative-ai');
+const logger = require('../config/logger'); // Import logger
 
 const geminiApiKey = process.env.GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(geminiApiKey);
@@ -14,8 +15,8 @@ const genAI = new GoogleGenerativeAI(geminiApiKey);
 // Debug log to verify project ID and credentials
 // These are less relevant here as Gemini uses an API Key primarily for this client,
 // but keeping for consistency during current debugging phase.
-console.log('Gemini Service: GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
-console.log('Gemini Service: GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+logger.debug('Gemini Service: GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
+logger.debug('Gemini Service: GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
 
 /**
  * @async
@@ -50,7 +51,7 @@ console.log('Gemini Service: GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGL
  */
 async function analyzeDetectedText(ocrText) {
   if (!geminiApiKey) {
-    console.error("GEMINI_API_KEY is not set. Gemini analysis will be skipped.");
+    logger.error("GEMINI_API_KEY is not set. Gemini analysis will be skipped.");
     return {
       success: false,
       isInvoice: false,
@@ -97,21 +98,21 @@ async function analyzeDetectedText(ocrText) {
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
-        console.log(`[GeminiService] Attempting to generate content (Attempt ${attempt + 1}/${maxRetries + 1})`);
+        logger.info(`[GeminiService] Attempting to generate content (Attempt ${attempt + 1}/${maxRetries + 1})`);
         result = await model.generateContent(prompt);
         response = await result.response; // Assuming result.response is synchronous or a fast promise
         analysisText = response.text();   // Assuming response.text() is synchronous or a fast promise
         lastApiError = null; // Clear last error on success
-        console.log("[GeminiService] Content generated successfully.");
+        logger.info("[GeminiService] Content generated successfully.");
         break; // Success, exit retry loop
       } catch (apiError) {
         lastApiError = apiError;
-        console.error(`[GeminiService] API call failed (Attempt ${attempt + 1}/${maxRetries + 1}):`, apiError.message);
+        logger.error(`[GeminiService] API call failed (Attempt ${attempt + 1}/${maxRetries + 1}):`, apiError.message);
         if (attempt < maxRetries) {
-          console.log(`[GeminiService] Retrying in ${retryDelay / 1000}s...`);
+          logger.info(`[GeminiService] Retrying in ${retryDelay / 1000}s...`);
           await new Promise(resolve => setTimeout(resolve, retryDelay));
         } else {
-          console.error("[GeminiService] Max retries reached for Gemini API call.");
+          logger.error("[GeminiService] Max retries reached for Gemini API call.");
         }
       }
     }
@@ -128,13 +129,13 @@ async function analyzeDetectedText(ocrText) {
       try {
         invoiceAnalysis = JSON.parse(jsonText);
       } catch (parseError) {
-        console.warn("Initial JSON.parse failed for Gemini response. Attempting cleanup...", parseError);
-        console.warn("Original text from Gemini:", analysisText);
-        console.warn("Trimmed text:", jsonText);
+        logger.warn("Initial JSON.parse failed for Gemini response. Attempting cleanup...", parseError);
+        logger.warn("Original text from Gemini:", analysisText);
+        logger.warn("Trimmed text:", jsonText);
         const cleanedJson = jsonText
           .replace(/[\u0000-\u001F\u007F-\u009F]/gu, "")
           .trim();
-        console.warn("Cleaned text for parsing:", cleanedJson);
+        logger.warn("Cleaned text for parsing:", cleanedJson);
         invoiceAnalysis = JSON.parse(cleanedJson);
       }
 
@@ -163,8 +164,8 @@ async function analyzeDetectedText(ocrText) {
         isInvoice
       };
     } catch (e) {
-      console.error("Failed to parse Gemini analysis results into JSON:", e);
-      console.error("Original text from Gemini that failed parsing:", analysisText);
+      logger.error("Failed to parse Gemini analysis results into JSON:", e);
+      logger.error("Original text from Gemini that failed parsing:", analysisText);
       return {
         success: false,
         invoiceAnalysis: null,
@@ -174,7 +175,7 @@ async function analyzeDetectedText(ocrText) {
       };
     }
   } catch (error) {
-    console.error("Error during Gemini content generation:", error);
+    logger.error("Error during Gemini content generation:", error);
     return {
       success: false,
       invoiceAnalysis: null,

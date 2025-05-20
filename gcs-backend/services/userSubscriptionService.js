@@ -8,11 +8,13 @@
  */
 
 const firebaseAdmin = require('firebase-admin');
+const logger = require('../config/logger'); // Import logger
 
 // Ensure Firebase Admin SDK is initialized (usually done in main app entry point like index.js)
 // This check is a safeguard.
 if (firebaseAdmin.apps.length === 0) {
-  console.error('[UserSubscriptionService] Firebase Admin SDK has not been initialized. Service may not function.');
+  logger.error('[UserSubscriptionService] Firebase Admin SDK has not been initialized. Service may not function.');
+  logger.warn('[UserSubscriptionService] Ensure Firebase Admin is initialized in index.js or similar entry point.');
   // Depending on strategy, could throw an error here to prevent app startup if Firebase is critical.
 }
 

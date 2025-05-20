@@ -96,7 +96,7 @@ router.get('/:imageId', async (req, res) => {
  * @summary Create image metadata record after GCS upload.
  * @description (Mounted under /api/projects/:projectId/images) Called by client after GCS upload via signed URL.
  * Creates image metadata in PostgreSQL.
- * @body {object} imageMetadata - See original definition in projects.js.
+ * @body {object} imageMetadata - Object containing image metadata. Expected fields: `id` (client-generated imageId), `gcsPath` (full GCS path), `projectId`, `originalFilename`, `size`, `contentType`, `uploaded_at` (optional, defaults to now), `status` (optional, defaults to 'uploaded').
  * @returns {object} 201 - The newly created image metadata.
  */
 router.post('/metadata', async (req, res) => {
@@ -150,7 +150,19 @@ router.post('/metadata', async (req, res) => {
  * @description (Mounted under /api/projects/:projectId/images) Deletes image file from GCS and metadata from DB.
  * @param {string} req.params.imageId - The client-generated ID of the image.
  * @query {boolean} [deleteFromGCS=false] - If true, attempts to delete from GCS.
- * @returns {} 200 - Success message.
+ * @returns {object} 200 - JSON object with success message and GCS deletion status.
+ *   @example response - 200 - Success (GCS file deleted)
+ *   {
+ *     "message": "Image metadata deleted successfully",
+ *     "imageId": "client-img-uuid-123",
+ *     "gcsFileDeleted": true
+ *   }
+ *   @example response - 200 - Success (GCS file not deleted or not requested)
+ *   {
+ *     "message": "Image metadata deleted successfully",
+ *     "imageId": "client-img-uuid-123",
+ *     "gcsFileDeleted": false
+ *   }
  * @returns {Error} 404 - Not found.
  * @returns {Error} 500 - Server error.
  */
@@ -304,9 +316,12 @@ router.patch('/:imageId/analysis', async (req, res) => {
     logger.info(`[Routes/ProjectImages] Successfully updated analysis details for image ${imageId} in project ${projectId}`);
     res.status(200).json(updatedImage);
   } catch (error) {
-    logger.error(`[Routes/ProjectImages] Error updating image analysis details for ${imageId} in project ${projectId} (/analysis):`, error);
-    if (error.message && error.message.toLowerCase().includes('not found')) {
-        return res.status(404).json({ error: error.message });
+    logger.error(`[Routes/ProjectImages] Error updating image analysis details for ${imageId} in project ${projectId} (/analysis):`, { message: error.message, stack: error.stack, statusCode: error.statusCode });
+    if (error.statusCode === 404) {
+        return res.status(404).json({ error: error.message || 'Image not found or not authorized for update.' });
+    }
+    if (error.statusCode === 403) {
+        return res.status(403).json({ error: error.message || 'User not authorized for this operation.' });
     }
     res.status(500).json({ error: 'Failed to update image analysis details' });
   }

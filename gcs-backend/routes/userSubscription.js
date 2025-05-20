@@ -10,7 +10,7 @@
 
 const express = require('express');
 const router = express.Router();
-const firebaseAdmin = require('firebase-admin');
+// const firebaseAdmin = require('firebase-admin'); // Removed as it's not directly used here; service handles it.
 const subscriptionService = require('../services/userSubscriptionService');
 const logger = require('../config/logger');
 const authenticateUser = require('../middleware/authenticateUser');
@@ -70,7 +70,7 @@ router.get('/subscription-status', authenticateUser, async (req, res) => {
       return res.status(500).json({ error: 'Subscription service not configured correctly.' });
     }
     const status = await subscriptionService.getUserSubscription(uid);
-    res.json({ subscription: status });
+    res.json({ success: true, subscription: status });
   } catch (error) {
     logger.error('[Routes/UserSubscription] Error getting subscription status:', { message: error.message, stack: error.stack });
     res.status(500).json({ error: error.message || 'Failed to get subscription status' });

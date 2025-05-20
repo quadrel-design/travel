@@ -1,3 +1,10 @@
+/**
+ * @file Firebase Authentication Middleware
+ * Provides an Express middleware function to authenticate users based on Firebase ID tokens
+ * passed in the Authorization header.
+ * @module middleware/authenticateUser
+ */
+
 const firebaseAdmin = require('firebase-admin');
 const logger = require('../config/logger');
 

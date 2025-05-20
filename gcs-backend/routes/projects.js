@@ -12,7 +12,6 @@
  */
 const express = require('express');
 const router = express.Router();
-const firebaseAdmin = require('firebase-admin');
 
 const projectService = require('../services/projectService');
 const invoiceService = require('../services/invoiceService');
@@ -20,11 +19,6 @@ const projectImagesRouter = require('./projectImages');
 const { addSseClient } = require('../services/sseService');
 const logger = require('../config/logger');
 const authenticateUser = require('../middleware/authenticateUser');
-
-// Firebase Admin SDK initialization check
-if (firebaseAdmin.apps.length === 0) {
-  console.warn('[Routes/Projects] Firebase Admin SDK has not been initialized. Authentication will fail.');
-}
 
 // Check if invoiceService is available
 if (!invoiceService) {
@@ -35,6 +29,15 @@ if (!invoiceService) {
 
 // Apply authentication middleware to all routes in this router
 router.use(authenticateUser);
+
+// Helper function to sanitize budget for API responses
+function sanitizeBudgetForResponse(budget) {
+  if (budget == null) { // handles null or undefined
+    return null;
+  }
+  const parsedBudget = parseFloat(budget);
+  return isNaN(parsedBudget) ? null : parsedBudget;
+}
 
 /**
  * @route GET /api/projects/
@@ -72,7 +75,7 @@ router.get('/', async (req, res) => {
     
     const projectsWithParsedBudget = projects.map(project => ({
       ...project,
-      budget: project.budget !== null && project.budget !== undefined ? parseFloat(project.budget) : null
+      budget: sanitizeBudgetForResponse(project.budget)
     }));
     
     res.status(200).json(projectsWithParsedBudget);
@@ -109,7 +112,7 @@ router.get('/:projectId', async (req, res) => {
     }
     const project = await projectService.getProjectById(projectId, userId);
     
-    project.budget = project.budget !== null && project.budget !== undefined ? parseFloat(project.budget) : null;
+    project.budget = sanitizeBudgetForResponse(project.budget);
     
     res.status(200).json(project);
   } catch (error) {
@@ -168,18 +171,13 @@ router.post('/', async (req, res) => {
     };
     
     if (projectData.budget !== null && projectData.budget !== undefined) {
-      projectData.budget = parseFloat(projectData.budget);
-      if (isNaN(projectData.budget)) {
-        projectData.budget = 0;
-      }
+      const parsed = parseFloat(projectData.budget);
+      projectData.budget = isNaN(parsed) ? 0 : parsed; // Default to 0 for creation if parsing fails
     }
     
     const project = await projectService.createProject(projectData);
     
-    project.budget = project.budget !== null && project.budget !== undefined ? parseFloat(project.budget) : null;
-    if (isNaN(project.budget)) {
-      project.budget = null;
-    }
+    project.budget = sanitizeBudgetForResponse(project.budget);
     
     res.status(201).json(project);
   } catch (error) {
@@ -217,20 +215,14 @@ router.patch('/:projectId', async (req, res) => {
     const projectData = req.body;
     
     if (projectData.budget !== null && projectData.budget !== undefined) {
-      projectData.budget = parseFloat(projectData.budget);
-      if (isNaN(projectData.budget)) {
-        // Decide on behavior: error, or set to null/0? Current service sets to 0 if undefined.
-        // For now, let service handle default if not a valid number, or frontend should ensure valid numbers.
-        // Consider adding validation here if strictness is required.
-      }
+      const parsed = parseFloat(projectData.budget);
+      // For PATCH, if a budget is provided but is NaN, let it be null for saving.
+      projectData.budget = isNaN(parsed) ? null : parsed;
     }
     
     const updatedProject = await projectService.updateProject(projectId, projectData, userId);
     
-    updatedProject.budget = updatedProject.budget !== null && updatedProject.budget !== undefined ? parseFloat(updatedProject.budget) : null;
-    if (isNaN(updatedProject.budget)) {
-      updatedProject.budget = null; // Ensure consistent null for bad float parse outcome
-    }
+    updatedProject.budget = sanitizeBudgetForResponse(updatedProject.budget);
     
     res.status(200).json(updatedProject);
   } catch (error) {
@@ -264,7 +256,7 @@ router.delete('/:projectId', async (req, res) => {
       return res.status(500).json({ error: 'Project service not configured correctly.' });
     }
     const result = await projectService.deleteProject(projectId, userId);
-    res.status(200).json({ message: 'Project deleted successfully', id: result.id });
+    res.status(204).send(); // Changed to 204 No Content
   } catch (error) {
     logger.error(`[Routes/Projects] Error deleting project ${req.params.projectId}:`, error);
     if (error.statusCode === 404) {
@@ -322,7 +314,7 @@ router.get('/:projectId/image-stream', async (req, res) => {
   // 3. Handle client disconnect
   req.on('close', () => {
     logger.info(`[SSE] Client disconnected for project ${projectId}, user ${userId}. (Note: sseService handles removal if needed)`);
-    // sseService.removeSseClient(projectId, userId, res); // Or however removal is handled
+    // sseService.removeSseClient(projectId, userId, res); // Removed commented out line
   });
 });
 

@@ -45,7 +45,9 @@ require('dotenv').config(); // <-- Load environment variables from .env
 
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet'); // Import helmet
 const app = express();
+app.use(helmet()); // Use helmet for security headers
 app.use(cors());
 app.use(express.json());
 

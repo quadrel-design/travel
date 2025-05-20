@@ -68,8 +68,9 @@ const projectService = {
    * 
    * @param {string} projectId - The UUID of the project to fetch.
    * @param {string} userId - The UUID of the user who should own the project.
-   * @returns {Promise<object|undefined>} A promise that resolves to the project object if found
-   *                                     and owned by the user, otherwise `undefined`.
+   * @returns {Promise<object>} A promise that resolves to the project object if found and owned by the user.
+   * @throws {NotFoundError} If the project is not found.
+   * @throws {NotAuthorizedError} If the user is not authorized to access the project.
    * @throws {Error} If the database pool is not available or if the query fails.
    */
   getProjectById: async (projectId, userId) => {

@@ -370,13 +370,8 @@
   "projectCreateButtonLabel": "Create Project",
   "projectEditTitle": "Edit Project",
   "projectEditButtonLabel": "Save Changes",
-  "projectDeleteConfirmTitle": "Delete Project?",
   "projectDeleteConfirmMessage": "Are you sure you want to delete this project? This action cannot be undone.",
   "projectNotFound": "Project not found",
-  "projectSaveSuccess": "Project saved successfully",
-  "@projectSaveSuccess": {
-    "description": "Message shown when a project is saved successfully"
-  },
 
   "errorGeneric": "An error occurred",
   "@errorGeneric": { "description": "Generic error message" },

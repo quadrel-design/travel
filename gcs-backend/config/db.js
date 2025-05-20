@@ -61,76 +61,57 @@ const dbConfig = {
 // Cloud SQL specific configuration (for production)
 if (isProduction && process.env.DB_SOCKET_PATH) {
   dbConfig.host = process.env.DB_SOCKET_PATH;
-  // logger.info('[DB Config] Using Cloud SQL Socket Path:', dbConfig.host); // Replaced console.log
+  // logger.info('[DB Config] Using Cloud SQL Socket Path:', dbConfig.host); // This was already commented, removing for cleanliness
 }
 
 // Log the configuration being used (excluding password for security)
 const loggableConfig = { ...dbConfig };
 delete loggableConfig.password;
-// console.log('[DB Config] Database configuration:', loggableConfig); // Replaced console.log
 logger.info('[DB Config] Database configuration:', loggableConfig);
 
 const pool = new Pool(dbConfig);
 
 pool.on('connect', (client) => {
-  // console.log('[DB Pool] Client connected to the database.'); // Replaced console.log
   logger.info('[DB Pool] Client connected to the database.');
-    // You can set session parameters here if needed, e.g.:
+  // You can set session parameters here if needed, e.g.:
   // client.query('SET SESSION CHARACTERISTICS AS TRANSACTION READ WRITE;');
-  });
+});
 
 pool.on('acquire', (client) => {
-  // console.log('[DB Pool] Client acquired from pool.'); // Replaced console.log
-  logger.debug('[DB Pool] Client acquired from pool.'); // Changed to debug for less noise
+  logger.debug('[DB Pool] Client acquired from pool.');
 });
 
 pool.on('remove', (client) => {
-  // console.log('[DB Pool] Client removed from pool (released).'); // Replaced console.log
-  logger.debug('[DB Pool] Client removed from pool (released).'); // Changed to debug for less noise
-  });
+  logger.debug('[DB Pool] Client removed from pool (released).');
+});
 
-  pool.on('error', (err, client) => {
-  // console.error('[DB Pool] Unexpected error on idle client', err); // Replaced console.error
+pool.on('error', (err, client) => {
   logger.error('[DB Pool] Unexpected error on idle client', { error: err, clientInfo: client ? client.processID : 'N/A' });
   // Recommended to exit the process if a serious error occurs with the pool
   // process.exit(-1);
-  });
+});
 
-  // Test the connection (optional, but good for startup diagnostics)
-  pool.query('SELECT NOW()', (err, res) => {
-    if (err) {
+// Test the connection (optional, but good for startup diagnostics)
+pool.query('SELECT NOW()', (err, res) => {
+  if (err) {
     logger.error('[DB Pool] Initial connection test query failed:', err.stack);
-      // This might indicate a problem with DB connectivity or credentials
-      // Depending on policy, you might want to throw an error here to stop app startup if DB is essential
-    } else {
+    // This might indicate a problem with DB connectivity or credentials
+    // Depending on policy, you might want to throw an error here to stop app startup if DB is essential
+  } else {
     logger.info('[DB Pool] Initial connection test query successful:', res.rows[0]);
-    }
-  });
+  }
+});
 
 module.exports = {
   query: (text, params) => pool.query(text, params),
   getClient: async () => {
     const client = await pool.connect();
-    // console.log('[DB Pool] Manual client checkout.'); // Replaced console.log
     logger.debug('[DB Pool] Manual client checkout.');
-    const query = client.query;
-    const release = client.release;
-    // monkey patch the query method to keep track of when the client is busy
-    client.query = (...args) => {
-      // client.lastQuery = new Date(); // Example: track last query time
-      return query.apply(client, args);
-    };
-    // set a timeout one second before the idle_in_transaction_session_timeout fires
-    // client.release = () => {
-    //   // clear the timeout
-    //   // clearTimeout(timeout)
-    //   // set the client back to its old self
-    //   client.query = query;
-    //   client.release = release;
-    //   // console.log('[DB Pool] Manual client release.'); // Replaced console.log
-    //   logger.debug('[DB Pool] Manual client release.');
-    //   return release.apply(client);
-    // };
+    // The original query and release methods are preserved here if needed for direct use or restoration.
+    // const originalQuery = client.query;
+    // const originalRelease = client.release;
+    // For now, we are not applying any monkey-patching or advanced timeout logic.
+    // If specific needs arise, this section can be revisited.
     return client;
   },
   pool, // Export the pool itself if direct access is needed for specific pg features

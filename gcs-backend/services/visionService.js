@@ -7,10 +7,11 @@
  * @module services/visionService
  */
 const { ImageAnnotatorClient } = require('@google-cloud/vision');
+const logger = require('../config/logger'); // Import logger
 
 // Debug log to verify project ID and credentials
-console.log('GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
-console.log('GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+logger.debug('[VisionService] GOOGLE_CLOUD_PROJECT:', process.env.GOOGLE_CLOUD_PROJECT);
+logger.debug('[VisionService] GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
 
 // Initialize Vision client (uses ADC by default)
 const vision = new ImageAnnotatorClient();
@@ -46,52 +47,75 @@ const vision = new ImageAnnotatorClient();
  *   @property {string} [error] - An error message if `success` is false.
  */
 async function detectTextInImage(imageUrl, imageBuffer) {
-  try {
-    const [result] = await vision.textDetection(imageBuffer || imageUrl);
-    const detections = result.textAnnotations || [];
-    if (!detections.length) {
+  let lastApiError = null;
+  const maxRetries = 2; // Max 2 retries (total 3 attempts)
+  const retryDelay = 1500; // 1.5 seconds delay
+
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      logger.info(`[VisionService] Attempting text detection (Attempt ${attempt + 1}/${maxRetries + 1}) for image: ${imageUrl || 'buffer'}`);
+      const [result] = await vision.textDetection(imageBuffer || imageUrl);
+      const detections = result.textAnnotations || [];
+      
+      logger.info('[VisionService] Text detection API call successful.');
+
+      if (!detections.length) {
+        logger.info('[VisionService] No text detected in image.');
+        return {
+          success: true,
+          hasText: false,
+          extractedText: '',
+          confidence: 0,
+          textBlocks: [],
+          status: 'no invoice', // Consistent with original JSDoc, means no text for OCR stage
+        };
+      }
+      const fullText = detections[0].description || '';
+      const confidence = detections[0].confidence || 0;
+      const textBlocks = detections.slice(1).map((block) => ({
+        text: block.description || '',
+        confidence: block.confidence || 0,
+        boundingBox: block.boundingPoly?.vertices
+          ? {
+              left: Math.min(...block.boundingPoly.vertices.map((v) => v.x || 0)),
+              top: Math.min(...block.boundingPoly.vertices.map((v) => v.y || 0)),
+              right: Math.max(...block.boundingPoly.vertices.map((v) => v.x || 0)),
+              bottom: Math.max(...block.boundingPoly.vertices.map((v) => v.y || 0)),
+            }
+          : undefined,
+      }));
+      logger.info('[VisionService] Text successfully extracted and processed.');
       return {
         success: true,
-        hasText: false,
-        extractedText: '',
-        confidence: 0,
-        textBlocks: [],
-        status: 'no invoice',
+        hasText: true,
+        extractedText: fullText,
+        confidence,
+        textBlocks,
+        status: 'invoice', // Consistent with original JSDoc, means text found for OCR stage
       };
+    } catch (error) {
+      lastApiError = error;
+      logger.error(`[VisionService] Text detection API call failed (Attempt ${attempt + 1}/${maxRetries + 1}):`, { message: error.message, stack: error.stack });
+      if (attempt < maxRetries) {
+        logger.info(`[VisionService] Retrying in ${retryDelay / 1000}s...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      } else {
+        logger.error("[VisionService] Max retries reached for Vision API call.");
+      }
     }
-    const fullText = detections[0].description || '';
-    const confidence = detections[0].confidence || 0;
-    const textBlocks = detections.slice(1).map((block) => ({
-      text: block.description || '',
-      confidence: block.confidence || 0,
-      boundingBox: block.boundingPoly?.vertices
-        ? {
-            left: Math.min(...block.boundingPoly.vertices.map((v) => v.x || 0)),
-            top: Math.min(...block.boundingPoly.vertices.map((v) => v.y || 0)),
-            right: Math.max(...block.boundingPoly.vertices.map((v) => v.x || 0)),
-            bottom: Math.max(...block.boundingPoly.vertices.map((v) => v.y || 0)),
-          }
-        : undefined,
-    }));
-    return {
-      success: true,
-      hasText: true,
-      extractedText: fullText,
-      confidence,
-      textBlocks,
-      status: 'invoice',
-    };
-  } catch (error) {
-    return {
-      success: false,
-      hasText: false,
-      extractedText: '',
-      confidence: 0,
-      textBlocks: [],
-      status: 'Error',
-      error: error instanceof Error ? error.message : 'Unknown error occurred',
-    };
   }
+  
+  // If loop finished due to retries failing, lastApiError will be set
+  logger.error('[VisionService] Error detecting text after all retries:', lastApiError);
+  return {
+    success: false,
+    hasText: false,
+    extractedText: '',
+    confidence: 0,
+    textBlocks: [],
+    status: 'Error',
+    error: lastApiError instanceof Error ? lastApiError.message : 'Unknown error occurred during Vision API call',
+  };
 }
 
 module.exports = {

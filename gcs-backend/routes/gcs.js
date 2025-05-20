@@ -12,7 +12,7 @@
 const express = require('express');
 const router = express.Router();
 const { Storage } = require('@google-cloud/storage');
-const firebaseAdmin = require('firebase-admin');
+// const firebaseAdmin = require('firebase-admin'); // Removed as it's not directly used here; authenticateUser handles auth.
 const logger = require('../config/logger');
 const authenticateUser = require('../middleware/authenticateUser');
 
@@ -149,16 +149,19 @@ router.get('/generate-download-url', async (req, res) => {
 
 /**
  * @route POST /api/gcs/delete
- * @summary Delete a file from GCS. (MINIMAL IMPLEMENTATION - GCS Deletion Inactive)
- * @description Intended to delete a file from Google Cloud Storage. Currently, this endpoint logs the request
- * but **does not actually perform the GCS file deletion**. It returns a success-like message indicating this.
- * TODO: Implement actual GCS file deletion logic (e.g., `await bucket.file(filename).delete();`).
+ * @summary Delete a file from GCS.
+ * @description Deletes a file from Google Cloud Storage based on the provided filename (GCS object path).
+ * 
+ * @body {string} filename - The GCS object path of the file to be deleted (e.g., `users/uid/projectid/image.jpg`).
  *
- * @body {string} filename - The GCS object path of the file to be deleted.
- *
- * @returns {object} 200 - A message indicating the minimal operation was called.
+ * @returns {object} 200 - JSON object confirming successful deletion.
+ *   @example response - 200 - Success
+ *   {
+ *     "message": "File users/uid/projectid/image.jpg deleted successfully."
+ *   }
  * @returns {Error} 400 - If `filename` is missing in the request body.
- * @returns {Error} 500 - If the GCS bucket is not initialized.
+ * @returns {Error} 404 - If the file is not found in GCS.
+ * @returns {Error} 500 - If the GCS bucket is not initialized or if there's another error during deletion.
  */
 router.post('/delete', async (req, res) => {
   logger.info('[Routes/GCS] /delete POST hit. Body:', req.body);
@@ -171,62 +174,26 @@ router.post('/delete', async (req, res) => {
   if (!filename) {
     return res.status(400).json({ error: 'Filename is required in the request body to delete.' });
   }
-  logger.warn(`[Routes/GCS] Minimal /delete called for ${filename}. Actual GCS deletion NOT YET IMPLEMENTED here.`);
-  // TODO: Implement actual GCS file deletion
-  // try {
-  //   await bucket.file(filename).delete();
-  //   logger.info(`[Routes/GCS] Successfully deleted gs://${bucketName}/${filename} from GCS.`);
-  //   res.status(200).json({ message: `File ${filename} deleted successfully.` });
-  // } catch (err) {
-  //   logger.error(`[Routes/GCS] Error deleting file ${filename} from GCS:`, err);
-  //   if (err.code === 404) {
-  //     return res.status(404).json({ error: 'File not found in GCS.', details: err.message });
-  //   }
-  //   res.status(500).json({ error: 'Could not delete file from GCS.', details: err.message });
-  // }
-  res.status(200).json({ message: "MINIMAL delete OK - actual GCS deletion not implemented in this route yet" });
-});
 
-/**
- * @route GET /api/gcs/signed-url
- * @summary Generate a v4 signed URL for GCS object access (Read-only).
- * @deprecated This route is redundant with `/api/gcs/generate-download-url`. Consider using that instead or removing this one.
- * @description Creates a short-lived (15 minutes) signed URL that grants read access to a specific GCS object.
- *
- * @query {string} path - The GCS object path of the file (equivalent to `filename` in the other route).
- *
- * @returns {object} 200 - JSON object containing the signed URL for download.
- * @returns {Error} 400 - If the `path` query parameter is missing.
- * @returns {Error} 404 - If the specified file does not exist in GCS.
- * @returns {Error} 500 - If the GCS bucket is not initialized or if there's an error generating the URL.
- */
-router.get('/signed-url', async (req, res) => {
-  console.log('[Routes/GCS] /signed-url GET hit. Query params:', req.query);
-  if (!bucket) {
-    console.error('[Routes/GCS] GCS bucket is not initialized. Cannot generate signed URL.');
-    return res.status(500).json({ error: 'Server configuration error: File storage service not available.' });
-  }
-  const { path } = req.query;
-  if (!path) return res.status(400).json({ error: 'Missing path query parameter' });
-
-  const options = {
-    version: 'v4',
-    action: 'read',
-    expires: Date.now() + 15 * 60 * 1000, // 15 minutes
-  };
   try {
-    console.log(`[Routes/GCS] Attempting to generate signed READ URL for: gs://${bucketName}/${path}`);
-    const [url] = await bucket.file(path).getSignedUrl(options);
-    console.log(`[Routes/GCS] Signed READ URL generated successfully for ${path}`);
-    res.json({ url });
+    logger.info(`[Routes/GCS] Attempting to delete GCS object: gs://${bucketName}/${filename}`);
+    await bucket.file(filename).delete();
+    logger.info(`[Routes/GCS] Successfully deleted gs://${bucketName}/${filename} from GCS.`);
+    res.status(200).json({ message: `File ${filename} deleted successfully.` });
   } catch (err) {
-    console.error('[Routes/GCS] Error generating signed READ URL via /signed-url:', err);
-    if (err.code === 404 || (err.message && err.message.includes('No such object'))) {
+    logger.error(`[Routes/GCS] Error deleting file ${filename} from GCS:`, { message: err.message, code: err.code, stack: err.stack });
+    // GCS client typically throws an error with a `code` property for API errors.
+    // A common code for "Not Found" is 404.
+    if (err.code === 404) { 
       return res.status(404).json({ error: 'File not found in GCS.', details: err.message });
     }
-    res.status(500).json({ error: err.message });
+    // For other errors from GCS client or unexpected issues:
+    res.status(500).json({ error: 'Could not delete file from GCS.', details: err.message });
   }
 });
+
+// Deprecated /signed-url route has been removed.
+// Use /generate-download-url instead.
 
 logger.info('[Routes/GCS] Routes defined, exporting router.');
 module.exports = router; 

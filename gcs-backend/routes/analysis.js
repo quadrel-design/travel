@@ -1,5 +1,5 @@
 const logger = require('../config/logger'); // Moved up
-logger.info('[ANALYSIS.JS MODULE] File loaded by Node.js');
+// logger.info('[ANALYSIS.JS MODULE] File loaded by Node.js'); // Removed for cleaner startup logs
 
 /**
  * @fileoverview AI Analysis Routes.
@@ -14,7 +14,7 @@ const express = require('express');
 const router = express.Router();
 const geminiService = require('../services/geminiService');
 const invoiceService = require('../services/invoiceService'); // Changed from imageService
-const firebaseAdmin = require('firebase-admin'); // For authentication. Keep this for other potential Firebase uses.
+// const firebaseAdmin = require('firebase-admin'); // Removed: Not directly used; auth is via middleware, service handles its own FB interactions.
 const authenticateUser = require('../middleware/authenticateUser'); // Import shared middleware
 
 // Apply shared authentication middleware to all routes in this router
@@ -71,11 +71,10 @@ if (!invoiceService) {
  */
 router.post('/analyze-invoice', async (req, res) => {
   logger.info('[Routes/Analysis] /analyze-invoice hit');
-  const { projectId, imageId, ocrText } = req.body; // invoiceId is received but no longer explicitly used here
+  const { projectId, imageId, ocrText } = req.body;
   const userId = req.user ? req.user.id : null; // Get userId from authenticated user, handle if req.user is undefined
 
   logger.debug(`[Routes/Analysis] Received for /analyze-invoice - projectId: ${projectId}, imageId: ${imageId}, ocrText present: ${!!ocrText}, userId (from token): ${userId}`);
-  // console.log('[Routes/Analysis] Full req.body:', JSON.stringify(req.body)); // req.body.invoiceId might still appear here if sent by client
 
   if (!projectId || !imageId || !ocrText || !userId) {
     logger.error('[Routes/Analysis] Validation failed', { projectId, imageId, ocrTextPresent: !!ocrText, userId });
@@ -119,6 +118,7 @@ router.post('/analyze-invoice', async (req, res) => {
         // If analysis was successful and provided invoice details, map them
         if (analysisResult.success && analysisResult.invoiceAnalysis) {
           const ia = analysisResult.invoiceAnalysis;
+          
           /**
            * Helper function to parse and clean a string value representing a number.
            * It handles currency symbols, and different decimal/thousand separators (European vs. US).
