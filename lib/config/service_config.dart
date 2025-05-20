@@ -6,7 +6,7 @@ class ServiceConfig {
   // Cloud Run URL for backend services
   // Using the us-central1 region for the invoice service
   static const String gcsApiBaseUrl =
-      'https://gcs-backend-ykprlfkmpa-uc.a.run.app';
+      'https://gcs-backend-213342165039.us-central1.run.app';
 
   // NOTE: In production, these values should be retrieved from environment
   // variables or secure configuration rather than being hardcoded.

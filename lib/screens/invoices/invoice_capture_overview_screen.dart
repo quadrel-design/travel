@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:travel/providers/repository_providers.dart';
-import 'package:travel/providers/service_providers.dart' as service;
+import 'package:travel/providers/service_providers.dart' as service_providers;
 import 'package:travel/models/project.dart';
 import '../../models/invoice_image_process.dart';
 import 'package:image_picker/image_picker.dart';
@@ -84,32 +84,18 @@ class _InvoiceCaptureOverviewScreenState
       );
     }
 
-    return FutureBuilder<String>(
-      future: ref
-          .read(service.gcsFileServiceProvider)
-          .getSignedDownloadUrl(fileName: imageInfo.imagePath)
-          .then((url) {
-        _logger.d(
-            "🖼️ [_buildImageTile] getSignedDownloadUrl SUCCEEDED for '${imageInfo.imagePath}'. URL: '$url'");
-        return url;
-      }).catchError((error) {
-        _logger.e(
-            "🖼️ [_buildImageTile] getSignedDownloadUrl FAILED for '${imageInfo.imagePath}':",
-            error: error);
-        return ''; // Return empty string to trigger error widget
-      }),
-      builder: (context, snapshot) {
-        _logger.d(
-            "🖼️ [_buildImageTile] FutureBuilder builder. ConnectionState: ${snapshot.connectionState}, HasError: ${snapshot.hasError}, HasData: ${snapshot.hasData}, Data: '${snapshot.data}'");
+    // Watch the new signedUrlProvider
+    final asyncSignedUrl =
+        ref.watch(service_providers.signedUrlProvider(imageInfo.imagePath));
 
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        // Handle missing data or errors
-        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+    return asyncSignedUrl.when(
+      data: (signedUrl) {
+        _logger.d(
+            "🖼️ [_buildImageTile] Successfully got signed URL for '${imageInfo.imagePath}': '$signedUrl'");
+        if (signedUrl.isEmpty) {
           _logger.w(
-              '[INVOICE_CAPTURE] No valid URL for image: ${imageInfo.id}, path: ${imageInfo.imagePath}');
+              '[INVOICE_CAPTURE] Received empty URL for image: ${imageInfo.id}, path: ${imageInfo.imagePath}');
+          // Error widget for empty URL
           return Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -117,7 +103,7 @@ class _InvoiceCaptureOverviewScreenState
                 const Icon(Icons.image_not_supported, color: Colors.orange),
                 const SizedBox(height: 4),
                 Text(
-                  'Image not found',
+                  'Image URL invalid',
                   style: TextStyle(fontSize: 10, color: Colors.grey),
                 ),
                 const SizedBox(height: 4),
@@ -134,16 +120,17 @@ class _InvoiceCaptureOverviewScreenState
           );
         }
 
-        final signedUrl = snapshot.data!;
         _logger.d(
             "🖼️ [_buildImageTile] Attempting to load CachedNetworkImage with URL: '$signedUrl'");
-
         return CachedNetworkImage(
           imageUrl: signedUrl,
           fit: BoxFit.cover,
+          // Consider adding memCacheHeight/memCacheWidth for thumbnails
+          // memCacheHeight: 150, // Example: Adjust based on your tile size
+          // memCacheWidth: 150,  // Example: Adjust based on your tile size
           httpHeaders: const {
             'Accept': 'image/*',
-            'Cache-Control': 'no-cache',
+            // 'Cache-Control': 'no-cache', // You might not need this if GCS URLs are unique enough or short-lived
           },
           errorWidget: (context, url, error) {
             _logger.e(
@@ -156,7 +143,11 @@ class _InvoiceCaptureOverviewScreenState
                   const Icon(Icons.error_outline, color: Colors.redAccent),
                   const SizedBox(height: 4),
                   ElevatedButton(
-                    onPressed: () => setState(() {}),
+                    onPressed: () {
+                      // Invalidate the provider for this specific path to force a retry
+                      ref.invalidate(service_providers
+                          .signedUrlProvider(imageInfo.imagePath));
+                    },
                     style: ElevatedButton.styleFrom(
                       minimumSize: const Size(10, 24),
                       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -174,6 +165,31 @@ class _InvoiceCaptureOverviewScreenState
               ),
             );
           },
+        );
+      },
+      loading: () {
+        _logger.d(
+            "🖼️ [_buildImageTile] Loading signed URL for '${imageInfo.imagePath}'...");
+        return const Center(child: CircularProgressIndicator());
+      },
+      error: (err, stack) {
+        _logger.e(
+            "🖼️ [_buildImageTile] Error getting signed URL for '${imageInfo.imagePath}':",
+            error: err,
+            stackTrace: stack);
+        // Error widget for FutureProvider error
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.broken_image_outlined, color: Colors.red),
+              const SizedBox(height: 4),
+              Text(
+                'URL Error',
+                style: TextStyle(fontSize: 10, color: Colors.grey),
+              ),
+            ],
+          ),
         );
       },
     );

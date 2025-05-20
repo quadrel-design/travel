@@ -502,39 +502,12 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
         };
         final sseUrlString =
             '$_baseUrl/api/projects/$projectId/image-stream'; // Use _baseUrl
-        final sseUrl = Uri.parse(sseUrlString);
+        // final sseUrl = Uri.parse(sseUrlString); // No longer needed directly here
 
         _logger.d(
             '[PostgresInvoiceRepo][connectAndListen] Target SSE URL: $sseUrlString');
 
-        // BASIC HTTP GET TEST (before EventFlux)
-        try {
-          _logger.i(
-              '[PostgresInvoiceRepo][connectAndListen] Attempting BASIC HTTP GET to: $sseUrlString');
-          final http.Response httpGetResponse =
-              await http.get(sseUrl, headers: {
-            'Authorization': 'Bearer $authToken',
-            'Accept':
-                'text/event-stream', // Still request event-stream to mimic SSE negotiation
-            'Cache-Control': 'no-cache',
-          }).timeout(const Duration(seconds: 10));
-          _logger.i(
-              '[PostgresInvoiceRepo][connectAndListen] BASIC HTTP GET completed. Status: ${httpGetResponse.statusCode}');
-          if (httpGetResponse.statusCode == 200) {
-            _logger.i(
-                '[PostgresInvoiceRepo][connectAndListen] BASIC HTTP GET Headers: ${httpGetResponse.headers}');
-            _logger.i(
-                '[PostgresInvoiceRepo][connectAndListen] BASIC HTTP GET Body (first 100 chars): ${httpGetResponse.body.substring(0, (httpGetResponse.body.length < 100 ? httpGetResponse.body.length : 100))}');
-          } else {
-            _logger.w(
-                '[PostgresInvoiceRepo][connectAndListen] BASIC HTTP GET failed or non-200. Body: ${httpGetResponse.body}');
-          }
-        } catch (e, stackTrace) {
-          _logger.e(
-              '[PostgresInvoiceRepo][connectAndListen] BASIC HTTP GET FAILED:',
-              error: e,
-              stackTrace: stackTrace);
-        }
+        // BASIC HTTP GET TEST (before EventFlux) - REMOVED
         // END OF BASIC HTTP GET TEST
 
         await eventFluxInstance?.disconnect();
@@ -585,10 +558,22 @@ class PostgresInvoiceImageRepository extends RepositoryImplEssentials
             _currentEventFluxStreamSubscription = response.stream!.listen(
               (eventData) {
                 // Robust RAW Event Logging
-                final String rawEvent = eventData.event ?? 'NULL_EVENT_TYPE';
-                final String rawData = eventData.data ?? 'NULL_DATA_PAYLOAD';
-                _logger.i(
-                    "[PostgresInvoiceRepo][RawSSE] Event: '$rawEvent', Data: '$rawData'"); // Simplified WTF to INFO
+                try {
+                  // Ensure event and data are treated as strings, substituting a placeholder if null.
+                  final String eventString =
+                      eventData.event ?? "NULL_EVENT_TYPE";
+                  final String dataString =
+                      eventData.data ?? "NULL_DATA_PAYLOAD";
+                  // Log the type and the first 100 chars of data to keep logs manageable
+                  final String dataPreview = dataString.length > 100
+                      ? '${dataString.substring(0, 100)}...'
+                      : dataString;
+                  _logger.i(
+                      "[PostgresInvoiceRepo][RawSSE] Event: '$eventString', Data: '$dataPreview'");
+                } catch (e, s) {
+                  _logger.e("Error during robust RawSSE logging: $e",
+                      stackTrace: s);
+                }
 
                 final eventType = eventData.event?.trim() ?? '';
                 final dataPayload = eventData.data?.trim() ?? '';

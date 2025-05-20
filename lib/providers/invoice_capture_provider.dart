@@ -19,6 +19,14 @@ import 'package:travel/providers/logging_provider.dart';
 import 'package:travel/providers/repository_providers.dart';
 import 'package:flutter/foundation.dart';
 
+/// Enum to represent the loading status of the project's image list.
+enum ImageListStatus {
+  initial, // Before any loading has started
+  loading, // Actively fetching the image list
+  success, // Image list fetched successfully (might be empty)
+  error, // An error occurred fetching the image list
+}
+
 /// State class for the invoice capture feature.
 ///
 /// Tracks the current state of invoice scanning and processing, including:
@@ -35,10 +43,14 @@ class InvoiceCaptureState extends Equatable {
   /// General error message not specific to a particular image
   final String? generalError;
 
+  /// Loading status of the main image list for the project
+  final ImageListStatus imageListStatus;
+
   const InvoiceCaptureState({
     this.images = const [],
     this.scanError = const {},
     this.generalError,
+    this.imageListStatus = ImageListStatus.initial,
   });
 
   /// Creates a copy of this state with the specified fields replaced with new values.
@@ -48,6 +60,7 @@ class InvoiceCaptureState extends Equatable {
     List<InvoiceImageProcess>? images,
     Map<String, String?>? scanError,
     String? generalError,
+    ImageListStatus? imageListStatus,
     bool clearGeneralError = false,
   }) {
     return InvoiceCaptureState(
@@ -55,6 +68,7 @@ class InvoiceCaptureState extends Equatable {
       scanError: scanError ?? this.scanError,
       generalError:
           clearGeneralError ? null : generalError ?? this.generalError,
+      imageListStatus: imageListStatus ?? this.imageListStatus,
     );
   }
 
@@ -63,6 +77,7 @@ class InvoiceCaptureState extends Equatable {
         images,
         scanError,
         generalError,
+        imageListStatus,
       ];
 }
 
@@ -97,6 +112,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
 
   /// Loads the initial set of images for this project and invoice.
   Future<void> _loadInitialImages() async {
+    state = state.copyWith(imageListStatus: ImageListStatus.loading);
     try {
       _logger.d(
           '[INVOICE_CAPTURE] Loading initial images for project $_projectId, invoice $_invoiceId');
@@ -106,19 +122,17 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
         (newImages) {
           _logger.d(
               '[INVOICE_CAPTURE] Stream received ${newImages.length} images');
-          if (!listEquals(state.images, newImages)) {
-            _logger.d('[INVOICE_CAPTURE] Image list changed, updating state.');
-            state = state.copyWith(images: newImages);
-          } else {
-            _logger.d(
-                '[INVOICE_CAPTURE] Image list is the same, not updating state.');
-          }
+          state = state.copyWith(
+            images: newImages,
+            imageListStatus: ImageListStatus.success,
+          );
         },
         onError: (error, stackTrace) {
           _logger.e('[INVOICE_CAPTURE] Error in image stream:',
               error: error, stackTrace: stackTrace);
           state = state.copyWith(
             generalError: 'Failed to load images: ${error.toString()}',
+            imageListStatus: ImageListStatus.error,
           );
         },
       );
@@ -127,6 +141,7 @@ class InvoiceCaptureNotifier extends StateNotifier<InvoiceCaptureState> {
           error: e, stackTrace: stackTrace);
       state = state.copyWith(
         generalError: 'Failed to load images: \\${e.toString()}',
+        imageListStatus: ImageListStatus.error,
       );
     }
   }
