@@ -43,6 +43,8 @@ jobs:
           DB_NAME: ${{ secrets.TEST_DB_NAME }}
           DB_PORT: ${{ secrets.TEST_DB_PORT }}
           NODE_ENV: ${{ secrets.NODE_ENV }} # e.g., 'test' or 'ci'
+          GCS_BUCKET_NAME: ${{ secrets.TEST_GCS_BUCKET_NAME }}
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
 
   deploy_to_cloud_run:
     name: Deploy GCS Backend to Cloud Run
