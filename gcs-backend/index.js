@@ -91,6 +91,10 @@ app.use('/api/projects', projectRoutes);
 const userSubscriptionRoutes = require('./routes/userSubscription');
 app.use('/api/user', userSubscriptionRoutes);
 
+// Health check API endpoint
+const healthRoutes = require('./routes/health');
+app.use('/api', healthRoutes); // Mounts /api/health
+
 // Root health check
 app.get('/', (req, res) => {
   res.send('API is running!');
@@ -126,3 +130,5 @@ async function startServer() {
 }
 
 startServer();
+
+module.exports = app; // Export the app for testing purposes
