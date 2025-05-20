@@ -1,0 +1,77 @@
+name: GCS Backend CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths: # Only trigger if changes are in gcs-backend or this workflow file
+      - 'gcs-backend/**'
+      - '.github/workflows/gcs_backend_ci_cd.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'gcs-backend/**'
+      - '.github/workflows/gcs_backend_ci_cd.yml'
+
+jobs:
+  build_and_test:
+    name: Build & Test GCS Backend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./gcs-backend # Run all steps in this job within the gcs-backend directory
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x' # Using a recent LTS version, adjust if needed
+          cache: 'npm'
+          cache-dependency-path: gcs-backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci # Use npm ci for cleaner installs in CI
+
+      - name: Run tests
+        run: npm test
+
+  deploy_to_cloud_run:
+    name: Deploy GCS Backend to Cloud Run
+    needs: build_and_test # Ensure CI passes before deploying
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push' # Deploy only on push to main branch
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./gcs-backend # Run all steps in this job within the gcs-backend directory
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 1. Authenticate to Google Cloud
+      - id: 'auth'
+        uses: 'google-github-actions/auth@v2'
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      # 2. Set up Cloud SDK (gcloud) - required for the deploy script
+      - name: 'Set up Cloud SDK'
+        uses: 'google-github-actions/setup-gcloud@v2'
+        with:
+          project_id: '${{ secrets.GCP_PROJECT_ID }}'
+
+      # 3. Ensure the deployment script is executable
+      - name: Make deploy script executable
+        run: chmod +x build-push-deploy.sh
+        working-directory: ./gcs-backend # Explicitly set for this step if defaults isn't enough
+
+      # 4. Run your deployment script
+      - name: 'Deploy using script'
+        run: ./build-push-deploy.sh # Execute your script
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }} # Provides project ID to the script environment
+          # SERVICE_NAME: 'your-gcs-backend-service-name' # Example: if your script used this
+          # REGION: 'your-gcp-region' # Example: if your script used this
+        working-directory: ./gcs-backend # Ensure script runs in its directory 

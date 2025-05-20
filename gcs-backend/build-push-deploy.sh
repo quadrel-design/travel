@@ -3,7 +3,7 @@
 set -e
 
 # Define your project ID and shared image name
-PROJECT_ID="splitbase-7ec0f"
+PROJECT_ID="${GCP_PROJECT_ID:-splitbase-7ec0f}"
 APP_IMAGE_NAME="travel-app-shared" # Single image for both services
 TARGET_GCS_BUCKET_NAME="travel-files" # Your GCS bucket name for invoice-service
 
