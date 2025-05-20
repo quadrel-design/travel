@@ -13,7 +13,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'dart:async'; // For StreamSubscription
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/l10n/app_localizations.dart';
 
 // Generated files
 

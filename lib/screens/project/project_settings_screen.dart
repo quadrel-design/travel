@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/project.dart';
 // import '../providers/repository_providers.dart'; // Remove unused import
-import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:travel/l10n/app_localizations.dart';
 import 'package:logger/logger.dart';
 
 class ProjectSettingsScreen extends ConsumerStatefulWidget {
